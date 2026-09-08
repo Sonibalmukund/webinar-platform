@@ -1,0 +1,7 @@
+@extends('layouts.portal')
+@section('title','Event Permissions')
+@section('content')
+<div class="page-heading"><div><span class="eyebrow">SUPER ADMIN</span><h1>Event permissions</h1><p>Sub-admin permissions assigned event-wise.</p></div><a class="btn btn-gradient" href="{{ route('admin.permissions.create') }}"><i class="bi bi-plus"></i> Add permission</a></div>
+@if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
+<div class="panel-card table-responsive"><table class="premium-table"><thead><tr><th>Sub admin</th><th>Webinar / event</th><th>Permissions</th><th>Actions</th></tr></thead><tbody>@forelse($assignments as $assignment)<tr><td><strong>{{ $users[$assignment->user_id]->name ?? 'Unknown' }}</strong><br><small>{{ $users[$assignment->user_id]->email ?? '' }}</small></td><td>{{ $webinars[$assignment->webinar_id]->title ?? 'Deleted event' }}</td><td>{{ $assignment->permissions_count }} permissions</td><td><div class="d-flex gap-1"><a class="btn btn-sm btn-light" href="{{ route('admin.permissions.edit',[$assignment->user_id,$assignment->webinar_id]) }}">Edit</a><form method="POST" action="{{ route('admin.permissions.destroy',[$assignment->user_id,$assignment->webinar_id]) }}" onsubmit="return confirm('Delete this assignment?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Delete</button></form></div></td></tr>@empty<tr><td colspan="4" class="text-center py-5 text-muted">No event permissions assigned yet.</td></tr>@endforelse</tbody></table></div>
+@endsection

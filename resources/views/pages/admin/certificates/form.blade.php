@@ -1,0 +1,34 @@
+@extends('layouts.portal')
+@section('title','Certificate Template')
+@section('content')
+@php
+    $design=$template?->design ?? [];
+    $image=data_get($design,'template_image');
+    $font=data_get($design,'font_file');
+    $signature=data_get($design,'signature_image');
+    $defaults=['recipient'=>['x'=>50,'y'=>44,'width'=>55,'scale'=>100],'webinar'=>['x'=>50,'y'=>61,'width'=>55,'scale'=>100],'date'=>['x'=>20,'y'=>84,'width'=>25,'scale'=>100],'signature'=>['x'=>80,'y'=>76,'width'=>22,'scale'=>100],'signatory'=>['x'=>80,'y'=>86,'width'=>30,'scale'=>100]];
+    $positions=old('positions',data_get($design,'positions',$defaults));
+@endphp
+@if($font)<style>@font-face{font-family:'CustomCertificateFont';src:url('{{ $font }}')}#certificateCanvas{font-family:'CustomCertificateFont',Manrope,sans-serif}</style>@endif
+<div class="page-heading"><div><span class="eyebrow">CERTIFICATE DESIGNER</span><h1>{{ $webinar->title }}</h1><p>Upload a PNG/JPG template, optionally add a font, then drag text into position.</p></div><a class="btn btn-light" href="{{ route('admin.certificates.index') }}">Back</a></div>
+@if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
+<form method="POST" action="{{ route('admin.certificates.update',$webinar) }}" enctype="multipart/form-data">@csrf @method('PUT')
+<div class="certificate-designer-layout"><aside class="panel-card certificate-tools"><h3>Template settings</h3><div class="form-grid">
+<label class="full">Template name<input class="form-control" name="name" value="{{ old('name',$template?->name ?? $webinar->title.' Certificate') }}" required></label>
+<label class="full">Headline<input class="form-control" name="headline" value="{{ old('headline',data_get($design,'headline','Certificate of Completion')) }}" required></label>
+<label class="full">Signatory<input class="form-control" name="signatory" value="{{ old('signatory',data_get($design,'signatory')) }}" placeholder="Name, title"></label>
+<label class="full">Orientation<select class="form-select" name="orientation"><option value="landscape" @selected(old('orientation',$template?->orientation ?? 'landscape')==='landscape')>Landscape</option><option value="portrait" @selected(old('orientation',$template?->orientation)==='portrait')>Portrait</option></select></label>
+<label class="full">Certificate template image<input class="form-control" type="file" name="template_image" id="certificateImageInput" accept=".png,.jpg,.jpeg"><small class="text-muted">PNG or JPG, maximum 10 MB. {{ $image?'Current image will remain if none selected.':'' }}</small></label>
+<label class="full">Custom font file (optional)<input class="form-control" type="file" name="font_file" accept=".ttf,.otf,.woff,.woff2"><small class="text-muted">TTF, OTF, WOFF or WOFF2. Default font: <strong>Manrope</strong>.</small></label>
+<label class="full">Signature image (optional)<input class="form-control" type="file" name="signature_image" id="signatureImageInput" accept=".png,.jpg,.jpeg"><small class="text-muted">Transparent PNG recommended, maximum 5 MB.</small></label>
+</div><hr><h4>Element position and size</h4><label>Selected element<select class="form-select" id="certificateElementSelect"><option value="recipient">Attendee name</option><option value="webinar">Webinar title</option><option value="date">Date</option><option value="signature">Signature image</option><option value="signatory">Signatory name</option></select></label><div class="coordinate-grid"><label>X (%)<input class="form-control" id="certificateX" type="number" min="0" max="100" step="0.1"></label><label>Y (%)<input class="form-control" id="certificateY" type="number" min="0" max="100" step="0.1"></label><label>Box width (%)<input class="form-control" id="certificateWidth" type="number" min="5" max="90" step="1"></label><label>Size (%)<input class="form-control" id="certificateScale" type="number" min="50" max="200" step="5"></label></div><small class="text-muted">Drag an element to move it. Change box width and size to make any element larger or smaller.</small>
+@foreach($defaults as $key=>$default)<input type="hidden" data-position-x="{{ $key }}" name="positions[{{ $key }}][x]" value="{{ data_get($positions,$key.'.x',$default['x']) }}"><input type="hidden" data-position-y="{{ $key }}" name="positions[{{ $key }}][y]" value="{{ data_get($positions,$key.'.y',$default['y']) }}"><input type="hidden" data-position-width="{{ $key }}" name="positions[{{ $key }}][width]" value="{{ data_get($positions,$key.'.width',$default['width']) }}"><input type="hidden" data-position-scale="{{ $key }}" name="positions[{{ $key }}][scale]" value="{{ data_get($positions,$key.'.scale',$default['scale']) }}">@endforeach
+<button class="btn btn-gradient w-100 mt-4">Save & enable</button></aside>
+<div class="certificate-preview designer-preview"><div class="cert-inner draggable-certificate" id="certificateCanvas" style="--cert-accent:#334155;background-image:{{ $image?"url('$image')":'none' }}">
+<div class="certificate-drag-item recipient" data-certificate-element="recipient" style="left:{{ data_get($positions,'recipient.x',50) }}%;top:{{ data_get($positions,'recipient.y',44) }}%;width:{{ data_get($positions,'recipient.width',55) }}%;--element-scale:{{ data_get($positions,'recipient.scale',100)/100 }}">Attendee Name</div>
+<div class="certificate-drag-item webinar" data-certificate-element="webinar" style="left:{{ data_get($positions,'webinar.x',50) }}%;top:{{ data_get($positions,'webinar.y',61) }}%;width:{{ data_get($positions,'webinar.width',55) }}%;--element-scale:{{ data_get($positions,'webinar.scale',100)/100 }}">{{ $webinar->title }}</div>
+<div class="certificate-drag-item meta" data-certificate-element="date" style="left:{{ data_get($positions,'date.x',20) }}%;top:{{ data_get($positions,'date.y',84) }}%;width:{{ data_get($positions,'date.width',25) }}%;--element-scale:{{ data_get($positions,'date.scale',100)/100 }}">{{ now()->format('F d, Y') }}</div>
+<div class="certificate-drag-item signature-image {{ $signature?'':'d-none' }}" data-certificate-element="signature" style="left:{{ data_get($positions,'signature.x',80) }}%;top:{{ data_get($positions,'signature.y',76) }}%;width:{{ data_get($positions,'signature.width',22) }}%;--element-scale:{{ data_get($positions,'signature.scale',100)/100 }}"><img id="signaturePreview" src="{{ $signature ?: '' }}" alt="Signature"></div>
+<div class="certificate-drag-item meta" data-certificate-element="signatory" style="left:{{ data_get($positions,'signatory.x',80) }}%;top:{{ data_get($positions,'signatory.y',86) }}%;width:{{ data_get($positions,'signatory.width',30) }}%;--element-scale:{{ data_get($positions,'signatory.scale',100)/100 }}">{{ old('signatory',data_get($design,'signatory','Authorized Signatory')) }}</div>
+</div></div></div></form>
+@endsection

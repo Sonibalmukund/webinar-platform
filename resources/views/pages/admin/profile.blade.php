@@ -1,0 +1,8 @@
+@extends('layouts.portal')
+@section('title','Profile')
+@section('content')
+<div class="page-heading"><div><span class="eyebrow">MY ACCOUNT</span><h1>Edit profile</h1><p>Update your account and administrator information.</p></div><a class="btn btn-gradient" href="{{ route('admin.password') }}"><i class="bi bi-key"></i> Update password</a></div>
+@if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
+@if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+<section class="panel-card profile-edit-full"><div class="form-header"><span class="modal-icon"><i class="bi bi-person"></i></span><div><h2>Profile information</h2><p>These details appear across the admin workspace.</p></div></div><form method="POST" action="{{ route('admin.profile.update') }}" class="form-grid">@csrf @method('PUT')<label>Full name<input class="form-control" name="name" value="{{ old('name',$user->name) }}" required></label><label>Email address<input class="form-control" type="email" name="email" value="{{ old('email',$user->email) }}" required></label><label>Mobile number<input class="form-control" name="mobile" value="{{ old('mobile',$user->mobile) }}"></label><label>Job title<input class="form-control" name="job_title" value="{{ old('job_title',$user->job_title) }}"></label><label class="full">Company<input class="form-control" name="company" value="{{ old('company',$user->company) }}"></label><label class="full">Bio<textarea class="form-control" name="bio" rows="6">{{ old('bio',$user->bio) }}</textarea></label><div class="full d-flex justify-content-end"><button class="btn btn-gradient btn-lg">Save profile changes</button></div></form></section>
+@endsection

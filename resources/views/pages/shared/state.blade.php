@@ -1,0 +1,3 @@
+@extends('layouts.app')
+@section('title', strtoupper($state))
+@section('shell')<div class="state-page">@if($state==='loading')<div class="skeleton-state"><span></span><i></i><i></i><i></i></div><h2>Preparing your experience...</h2>@elseif($state==='empty')<span class="state-icon"><i class="bi bi-inbox"></i></span><h1>Nothing here yet</h1><p>When new content arrives, you’ll find it right here.</p><a href="/webinars" class="btn btn-gradient">Explore webinars</a>@else<span class="error-code">{{ $state }}</span><h1>{{ $state==='403'?'Access restricted':($state==='500'?'Something went wrong':'Page not found') }}</h1><p>Let’s get you back to a place you know.</p><a href="/" class="btn btn-gradient">Return home</a>@endif</div>@endsection
