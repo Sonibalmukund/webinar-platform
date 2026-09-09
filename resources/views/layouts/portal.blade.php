@@ -1,10 +1,11 @@
 @extends('layouts.app')
-@section('body-class', 'portal-body')
+@section('body-class', 'portal-body '.(auth()->user()->hasRole('sub-admin')?'sub-admin-portal':''))
 @section('shell')
-@php($isAdmin = request()->is('admin/*') || request()->is('sub-admin/*'))
+@php($isAdmin = request()->is('admin/*'))
 @php($isSubAdmin = auth()->user()->hasRole('sub-admin'))
-@php($notificationUrl = $isSubAdmin ? route('subadmin.dashboard') : ($isAdmin ? route('admin.notifications.index') : route('notifications.index')))
-@php($profileUrl = $isSubAdmin ? route('subadmin.dashboard') : ($isAdmin ? '/admin/profile' : '/profile'))
+@php($notificationUrl = $isAdmin ? (auth()->user()->hasPermission('notifications.view') ? route('admin.notifications.index') : route('admin.dashboard')) : route('notifications.index'))
+@php($profileUrl = $isAdmin ? '/admin/profile' : '/profile')
+<style>.sidebar-section-title{padding:18px 18px 7px;color:#77839a;font-size:.62rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}.sidebar-section-title:first-child{padding-top:6px}</style>
 <style>.sidebar-nav{scrollbar-width:none;-ms-overflow-style:none}.sidebar-nav::-webkit-scrollbar{display:none}.registration-switches{display:grid;gap:10px}.registration-switches>label{display:flex!important;align-items:center;justify-content:space-between;padding:13px 15px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc}.registration-switches span{display:grid}.registration-switches small{color:#64748b;font-weight:400}.registration-switches .form-check-input{width:2.4em;height:1.25em;cursor:pointer}.status-toggle-button{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:0;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:.7rem;font-weight:800}.status-toggle-button span{width:8px;height:8px;border-radius:50%;background:#94a3b8}.status-toggle-button.active{background:#dcfce7;color:#15803d}.status-toggle-button.active span{background:#22c55e}.chat-pending-file{position:absolute;left:66px;bottom:2px;color:#6d28d9;font-size:.58rem;font-weight:700}</style>
 <div class="portal-shell">
     <x-portal-sidebar :is-admin="$isAdmin" />

@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(fn (\Illuminate\Http\Request $request) => \App\Support\FrontendAuth::guestRedirect($request));
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserHasRole::class,
+            'admin.access' => \App\Http\Middleware\EnsureAdminAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

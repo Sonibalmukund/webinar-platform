@@ -5,34 +5,40 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\CertificateTemplate;
 use App\Models\Webinar;
+use App\Support\AuditTrail;
+use App\Support\WebinarExperience;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\DB;
-use App\Support\WebinarExperience;
-use App\Support\AuditTrail;
+use Illuminate\View\View;
 
 class CertificateController extends Controller
 {
     public function index(): View
     {
+        $user = request()->user();
+
         return view('pages.admin.certificates.index', [
-            'webinars' => Webinar::latest()->paginate(15),
+            'webinars' => Webinar::when($user->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $user->assignedWebinars()->pluck('webinars.id')))->latest()->paginate(15),
             'templates' => CertificateTemplate::orderBy('name')->get(),
         ]);
     }
 
     public function create(Request $request): View|RedirectResponse
     {
-        if ($request->filled('webinar_id')) return redirect()->route('admin.certificates.edit', Webinar::findOrFail($request->integer('webinar_id')));
-        return view('pages.admin.certificates.create', ['webinars'=>Webinar::orderBy('title')->get()]);
+        if ($request->filled('webinar_id')) {
+            return redirect()->route('admin.certificates.edit', Webinar::findOrFail($request->integer('webinar_id')));
+        }
+
+        return view('pages.admin.certificates.create', ['webinars' => Webinar::when($request->user()->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $request->user()->assignedWebinars()->pluck('webinars.id')))->orderBy('title')->get()]);
     }
 
     public function edit(Webinar $webinar): View
     {
         $templateId = data_get($webinar->settings, 'certificate_template_id');
+
         return view('pages.admin.certificates.form', [
             'webinar' => $webinar,
             'template' => $templateId ? CertificateTemplate::find($templateId) : null,
@@ -96,6 +102,7 @@ class CertificateController extends Controller
         $settings = $webinar->settings ?? [];
         $settings['certificate_template_id'] = $template->id;
         $webinar->update(['settings' => $settings, 'certificate_enabled' => 'yes']);
+
         return redirect()->route('admin.certificates.index')->with('status', 'Certificate template saved and enabled.');
     }
 
@@ -103,19 +110,35 @@ class CertificateController extends Controller
     {
         $data = $request->validate(['enabled' => ['required', 'boolean']]);
         $webinar->update(['certificate_enabled' => $data['enabled'] ? 'yes' : 'no']);
+
         return back()->with('status', $data['enabled'] ? 'Certificate enabled.' : 'Certificate hidden.');
     }
 
     public function queue(): View
     {
-        $webinars=Webinar::where('certificate_enabled','yes')->whereIn('status',['live','completed'])->get();
-        foreach($webinars as $webinar){$templateId=data_get($webinar->settings,'certificate_template_id');if(!$templateId)continue;foreach($webinar->registrations()->where('status','approved')->whereNotNull('user_id')->get() as $registration){$metrics=WebinarExperience::metrics($webinar,$registration->user_id);if($metrics['eligible'])DB::table('certificates')->insertOrIgnore(['webinar_id'=>$webinar->id,'user_id'=>$registration->user_id,'template_id'=>$templateId,'credential_id'=>(string)Str::uuid(),'status'=>'pending','created_at'=>now(),'updated_at'=>now()]);}}
-        $rows=DB::table('certificates')->join('users','users.id','=','certificates.user_id')->join('webinars','webinars.id','=','certificates.webinar_id')->select('certificates.*','users.name as user_name','users.email','webinars.title as webinar_title')->latest('certificates.created_at')->paginate(25);
-        return view('pages.admin.certificates.queue',compact('rows'));
+        $webinars = Webinar::where('certificate_enabled', 'yes')->whereIn('status', ['live', 'completed'])->get();
+        foreach ($webinars as $webinar) {
+            $templateId = data_get($webinar->settings, 'certificate_template_id');
+            if (! $templateId) {
+                continue;
+            }foreach ($webinar->registrations()->where('status', 'approved')->whereNotNull('user_id')->get() as $registration) {
+                $metrics = WebinarExperience::metrics($webinar, $registration->user_id);
+                if ($metrics['eligible']) {
+                    DB::table('certificates')->insertOrIgnore(['webinar_id' => $webinar->id, 'user_id' => $registration->user_id, 'template_id' => $templateId, 'credential_id' => (string) Str::uuid(), 'status' => 'pending', 'created_at' => now(), 'updated_at' => now()]);
+                }
+            }
+        }
+        $rows = DB::table('certificates')->join('users', 'users.id', '=', 'certificates.user_id')->join('webinars', 'webinars.id', '=', 'certificates.webinar_id')->select('certificates.*', 'users.name as user_name', 'users.email', 'webinars.title as webinar_title')->latest('certificates.created_at')->paginate(25);
+
+        return view('pages.admin.certificates.queue', compact('rows'));
     }
 
-    public function decision(Request $request,int $certificate):RedirectResponse
+    public function decision(Request $request, int $certificate): RedirectResponse
     {
-        $data=$request->validate(['status'=>['required','in:approved,rejected'],'review_notes'=>['nullable','string','max:1000']]);DB::table('certificates')->where('id',$certificate)->update(['status'=>$data['status'],'reviewed_by'=>$request->user()->id,'reviewed_at'=>now(),'review_notes'=>$data['review_notes']??null,'issued_at'=>$data['status']==='approved'?now():null,'updated_at'=>now()]);AuditTrail::record('certificate.'.$data['status'],null,'Certificate eligibility reviewed.',['certificate_id'=>$certificate]);return back()->with('status','Certificate '.$data['status'].'.');
+        $data = $request->validate(['status' => ['required', 'in:approved,rejected'], 'review_notes' => ['nullable', 'string', 'max:1000']]);
+        DB::table('certificates')->where('id', $certificate)->update(['status' => $data['status'], 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(), 'review_notes' => $data['review_notes'] ?? null, 'issued_at' => $data['status'] === 'approved' ? now() : null, 'updated_at' => now()]);
+        AuditTrail::record('certificate.'.$data['status'], null, 'Certificate eligibility reviewed.', ['certificate_id' => $certificate]);
+
+        return back()->with('status', 'Certificate '.$data['status'].'.');
     }
 }

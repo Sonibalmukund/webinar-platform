@@ -12,7 +12,19 @@ class WebinarPollUpdated implements ShouldBroadcastNow
     use Dispatchable, SerializesModels;
 
     public function __construct(public int $webinarId, public int $pollId, public array $options) {}
-    public function broadcastOn(): array { return [new PrivateChannel('webinar.room.'.$this->webinarId)]; }
-    public function broadcastAs(): string { return 'poll.updated'; }
-    public function broadcastWith(): array { return ['poll_id'=>$this->pollId,'options'=>$this->options]; }
+
+    public function broadcastOn(): array
+    {
+        return [new PrivateChannel('webinar.room.'.$this->webinarId)];
+    }
+
+    public function broadcastAs(): string
+    {
+        return 'poll.updated';
+    }
+
+    public function broadcastWith(): array
+    {
+        return ['poll_id' => $this->pollId, 'options' => $this->options];
+    }
 }

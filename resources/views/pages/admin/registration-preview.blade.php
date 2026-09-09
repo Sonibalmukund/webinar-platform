@@ -1,6 +1,6 @@
 @extends('layouts.portal')
 @section('title','Preview · '.$webinar->title)
 @section('content')
-<div class="page-heading"><div><span class="eyebrow">ADMIN PREVIEW</span><h1>{{ $webinar->registrationForm?->title ?: 'Registration Form' }}</h1><p>{{ $webinar->title }} · Preview only</p></div><a class="btn btn-light" href="{{ route('admin.registration-settings',['webinar_id'=>$webinar->id]) }}">Back</a></div>
+<div class="page-heading"><div><span class="eyebrow">ADMIN PREVIEW</span><h1>{{ $webinar->registrationForm?->title ?: 'Registration Form' }}</h1><p>{{ $webinar->title }} · Preview only</p></div><a class="btn btn-light" href="{{ route('admin.dynamic-fields.index',['webinar_id'=>$webinar->id]) }}">Back</a></div>
 <div class="panel-card form-panel"><div class="alert alert-info">This preview is available to administrators and does not submit a registration.</div><div class="form-grid"><label>Full name<input class="form-control" value="Sample Learner" disabled></label><label>Email<input class="form-control" value="learner@example.com" disabled></label>@foreach($webinar->registrationForm?->fields?->where('is_enabled',true) ?? [] as $field)<label class="{{ $field->field_type==='text'?'':'full' }}">{{ $field->label }}@if($field->field_type==='text')<input class="form-control" placeholder="{{ $field->placeholder }}" disabled>@else<select class="form-select" disabled><option>Select...</option>@foreach($field->options as $option)<option>{{ $option->label }}</option>@endforeach</select>@endif</label>@endforeach</div></div>
 @endsection

@@ -11,10 +11,11 @@ class LocationController extends Controller
 {
     public function states(Request $request): JsonResponse
     {
-        return response()->json(State::where('country_id', $request->integer('country_id'))->where('is_active', true)->orderBy('name')->get(['id','name']));
+        return response()->json(State::where('country_id', $request->integer('country_id'))->where('is_active', true)->orderBy('name')->get(['id', 'name']));
     }
+
     public function cities(Request $request): JsonResponse
     {
-        return response()->json(City::where('state_id', $request->integer('state_id'))->where('is_active', true)->orderBy('name')->get(['id','name']));
+        return response()->json(City::where('state_id', $request->integer('state_id'))->where('is_active', true)->orderBy('name')->get(['id', 'name']));
     }
 }

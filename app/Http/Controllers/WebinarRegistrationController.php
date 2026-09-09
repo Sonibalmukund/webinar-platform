@@ -3,34 +3,45 @@
 namespace App\Http\Controllers;
 
 use App\Models\Registration;
+use App\Models\RegistrationAnswer;
 use App\Models\Webinar;
+use App\Support\AuditTrail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use App\Models\RegistrationAnswer;
-use App\Support\AuditTrail;
 
 class WebinarRegistrationController extends Controller
 {
     public function store(Request $request, Webinar $webinar): RedirectResponse
     {
         abort_unless($webinar->registrationForm?->is_active, 403, 'Registration is disabled.');
-        $fields=$webinar->registrationForm->fields()->with('options')->where('is_enabled',true)->get();
-        $rules=[];
-        foreach($fields as $field) {
-            $conditionMet=true;
-            if($field->condition_field_id){$actual=data_get($request->input('fields',[]),(string)$field->condition_field_id);$conditionMet=$field->condition_operator==='not_equals' ? (string)$actual!==(string)$field->condition_value : (string)$actual===(string)$field->condition_value;}
-            $typeRule=match($field->field_type){'checkbox'=>'array','country'=>'exists:countries,id','state'=>'exists:states,id','city'=>'exists:cities,id',default=>'string'};
-            $rules['fields.'.$field->id]=[$field->is_required && $conditionMet?'required':'nullable',$typeRule];
+        $fields = $webinar->registrationForm->fields()->with('options')->where('is_enabled', true)->get();
+        $rules = [];
+        foreach ($fields as $field) {
+            $conditionMet = true;
+            if ($field->condition_field_id) {
+                $actual = data_get($request->input('fields', []), (string) $field->condition_field_id);
+                $conditionMet = $field->condition_operator === 'not_equals' ? (string) $actual !== (string) $field->condition_value : (string) $actual === (string) $field->condition_value;
+            }
+            $typeRule = match ($field->field_type) {
+                'checkbox' => 'array','country' => 'exists:countries,id','state' => 'exists:states,id','city' => 'exists:cities,id',default => 'string'
+            };
+            $rules['fields.'.$field->id] = [$field->is_required && $conditionMet ? 'required' : 'nullable', $typeRule];
         }
         $request->validate($rules);
-        $approvedCount=$webinar->registrations()->where('status','approved')->count();
-        $status=$webinar->max_attendees && $approvedCount >= $webinar->max_attendees ? 'waitlisted' : ($webinar->auto_approve?'approved':'pending');
-        $registration=Registration::updateOrCreate(
+        $approvedCount = $webinar->registrations()->where('status', 'approved')->count();
+        $status = $webinar->max_attendees && $approvedCount >= $webinar->max_attendees ? 'waitlisted' : ($webinar->auto_approve ? 'approved' : 'pending');
+        $registration = Registration::updateOrCreate(
             ['webinar_id' => $webinar->id, 'email' => $request->user()->email],
-            ['user_id' => $request->user()->id, 'status' => $status, 'source' => 'web', 'registered_at' => now(), 'approved_at' => $status==='approved'?now():null]
+            ['user_id' => $request->user()->id, 'status' => $status, 'source' => 'web', 'registered_at' => now(), 'approved_at' => $status === 'approved' ? now() : null]
         );
-        foreach($fields as $field){ $value=data_get($request->input('fields',[]),(string)$field->id); if($value!==null) RegistrationAnswer::updateOrCreate(['registration_id'=>$registration->id,'registration_field_id'=>$field->id],['value'=>is_array($value)?json_encode($value):$value]); }
-        AuditTrail::record('registration.created',$registration,'Webinar registration submitted.',['status'=>$status,'webinar_id'=>$webinar->id]);
-        return redirect()->route('webinars.dashboard',$webinar)->with('registration_status', $status==='waitlisted'?'The webinar is full. You have been added to the waitlist.':($status==='pending'?'Your registration is awaiting approval.':'Your seat has been reserved successfully.'));
+        foreach ($fields as $field) {
+            $value = data_get($request->input('fields', []), (string) $field->id);
+            if ($value !== null) {
+                RegistrationAnswer::updateOrCreate(['registration_id' => $registration->id, 'registration_field_id' => $field->id], ['value' => is_array($value) ? json_encode($value) : $value]);
+            }
+        }
+        AuditTrail::record('registration.created', $registration, 'Webinar registration submitted.', ['status' => $status, 'webinar_id' => $webinar->id]);
+
+        return redirect()->route('webinars.dashboard', $webinar)->with('registration_status', $status === 'waitlisted' ? 'The webinar is full. You have been added to the waitlist.' : ($status === 'pending' ? 'Your registration is awaiting approval.' : 'Your seat has been reserved successfully.'));
     }
 }

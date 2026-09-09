@@ -15,17 +15,26 @@ class PermissionController extends Controller
 {
     public function index(): View
     {
-        $assignments = DB::table('user_webinar_permissions')->select('user_id','webinar_id',DB::raw('COUNT(*) as permissions_count'))->groupBy('user_id','webinar_id')->get();
-        return view('pages.admin.permissions.index', ['assignments'=>$assignments, 'users'=>User::whereIn('id',$assignments->pluck('user_id'))->get()->keyBy('id'), 'webinars'=>Webinar::whereIn('id',$assignments->pluck('webinar_id'))->get()->keyBy('id')]);
+        $assignments = DB::table('user_webinar_permissions')->select('user_id', 'webinar_id', DB::raw('COUNT(*) as permissions_count'))->groupBy('user_id', 'webinar_id')->get();
+
+        return view('pages.admin.permissions.index', ['assignments' => $assignments, 'users' => User::whereIn('id', $assignments->pluck('user_id'))->get()->keyBy('id'), 'webinars' => Webinar::whereIn('id', $assignments->pluck('webinar_id'))->get()->keyBy('id')]);
     }
 
-    public function create(): View { return $this->form(); }
-    public function edit(User $user, Webinar $webinar): View { return $this->form($user, $webinar); }
-
-    private function form(?User $selectedUser=null, ?Webinar $selectedWebinar=null): View
+    public function create(): View
     {
-        $assigned = ($selectedUser && $selectedWebinar) ? DB::table('user_webinar_permissions')->where('user_id',$selectedUser->id)->where('webinar_id',$selectedWebinar->id)->pluck('permission_id') : collect();
-        return view('pages.admin.permissions.form', ['subAdmins'=>User::whereHas('roles',fn($q)=>$q->where('slug','sub-admin'))->orderBy('name')->get(), 'webinars'=>Webinar::orderBy('title')->get(), 'permissions'=>Permission::orderBy('module')->orderBy('name')->get()->groupBy('module'), 'selectedUserId'=>$selectedUser?->id, 'selectedWebinarId'=>$selectedWebinar?->id, 'assigned'=>$assigned]);
+        return $this->form();
+    }
+
+    public function edit(User $user, Webinar $webinar): View
+    {
+        return $this->form($user, $webinar);
+    }
+
+    private function form(?User $selectedUser = null, ?Webinar $selectedWebinar = null): View
+    {
+        $assigned = ($selectedUser && $selectedWebinar) ? DB::table('user_webinar_permissions')->where('user_id', $selectedUser->id)->where('webinar_id', $selectedWebinar->id)->pluck('permission_id') : collect();
+
+        return view('pages.admin.permissions.form', ['subAdmins' => User::whereHas('roles', fn ($q) => $q->where('slug', 'sub-admin'))->orderBy('name')->get(), 'webinars' => Webinar::orderBy('title')->get(), 'permissions' => Permission::orderBy('module')->orderBy('name')->get()->groupBy('module'), 'selectedUserId' => $selectedUser?->id, 'selectedWebinarId' => $selectedWebinar?->id, 'assigned' => $assigned]);
     }
 
     public function update(Request $request): RedirectResponse
@@ -43,18 +52,22 @@ class PermissionController extends Controller
                 ['user_id' => $data['user_id'], 'webinar_id' => $data['webinar_id']],
                 ['assigned_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now()]
             );
-            foreach ($data['permissions'] ?? [] as $permissionId) DB::table('user_webinar_permissions')->insert([
-                'user_id' => $data['user_id'], 'webinar_id' => $data['webinar_id'], 'permission_id' => $permissionId,
-                'assigned_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now(),
-            ]);
+            foreach ($data['permissions'] ?? [] as $permissionId) {
+                DB::table('user_webinar_permissions')->insert([
+                    'user_id' => $data['user_id'], 'webinar_id' => $data['webinar_id'], 'permission_id' => $permissionId,
+                    'assigned_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
         });
+
         return redirect()->route('admin.permissions.index')->with('status', 'Event permissions updated.');
     }
 
     public function destroy(User $user, Webinar $webinar): RedirectResponse
     {
-        DB::table('user_webinar_permissions')->where('user_id',$user->id)->where('webinar_id',$webinar->id)->delete();
-        DB::table('user_webinar_assignments')->where('user_id',$user->id)->where('webinar_id',$webinar->id)->delete();
-        return back()->with('status','Event permission assignment deleted.');
+        DB::table('user_webinar_permissions')->where('user_id', $user->id)->where('webinar_id', $webinar->id)->delete();
+        DB::table('user_webinar_assignments')->where('user_id', $user->id)->where('webinar_id', $webinar->id)->delete();
+
+        return back()->with('status', 'Event permission assignment deleted.');
     }
 }

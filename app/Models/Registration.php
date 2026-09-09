@@ -14,6 +14,13 @@ class Registration extends Model
         return ['registered_at' => 'datetime', 'approved_at' => 'datetime', 'cancelled_at' => 'datetime'];
     }
 
-    public function user(): BelongsTo { return $this->belongsTo(User::class); }
-    public function webinar(): BelongsTo { return $this->belongsTo(Webinar::class); }
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function webinar(): BelongsTo
+    {
+        return $this->belongsTo(Webinar::class);
+    }
 }

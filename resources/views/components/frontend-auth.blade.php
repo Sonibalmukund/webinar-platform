@@ -10,10 +10,9 @@
                 <input type="hidden" name="_auth_modal" value="login">
                 <input type="hidden" name="return_to" value="{{ $authReturn }}">
                 @if($authWebinar)<input type="hidden" name="webinar_id" value="{{ $authWebinar->id }}">@endif
-                @if($loginField)<input type="hidden" name="login_field_id" value="{{ $loginField->id }}">@endif
-                <div class="col-12"><label class="form-label" for="frontendLogin">{{ $loginField?->label ?? 'Email or mobile number' }}</label><input id="frontendLogin" class="form-control" name="login" value="{{ old('login') }}" placeholder="{{ $loginField?->placeholder ?: 'Enter your login details' }}" autocomplete="username" required></div>
-                <div class="col-12"><label class="form-label" for="frontendPassword">Password</label><input id="frontendPassword" class="form-control" name="password" type="password" autocomplete="current-password" required></div>
-                <div class="col-12 text-end"><button type="button" class="auth-modal-link" data-bs-toggle="modal" data-bs-target="#frontendForgotModal">Forgot password?</button></div>
+                <div class="col-12"><label class="form-label" for="frontendLogin">Email address</label><input id="frontendLogin" class="form-control" name="login" type="email" value="{{ old('login') }}" placeholder="you@example.com" autocomplete="email" required></div>
+                @if(($authSettings['registration_password_enabled']??'1')==='1')<div class="col-12"><label class="form-label" for="frontendPassword">Password</label><input id="frontendPassword" class="form-control" name="password" type="password" autocomplete="current-password" required></div>
+                <div class="col-12 text-end"><button type="button" class="auth-modal-link" data-bs-toggle="modal" data-bs-target="#frontendForgotModal">Forgot password?</button></div>@endif
                 <div class="col-12"><button class="btn btn-gradient w-100">Login <i class="bi bi-arrow-right"></i></button></div>
                 <div class="col-12 auth-modal-switch">New attendee? <button type="button" class="auth-modal-link" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Register here</button></div>
             </form>
@@ -47,8 +46,7 @@
 </button>
 </div>
 <div class="modal-body">
-<div class="auth-modal-switch mb-4">Already registered? <button type="button" class="auth-modal-link" data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">Login here</button>
-</div>@if(old('_auth_modal')==='register' && $errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif<form method="POST" action="{{ route('register') }}">
+@if(old('_auth_modal')==='register' && $errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif<form method="POST" action="{{ route('register') }}">
 <div class="row g-3">@csrf<input type="hidden" name="_auth_modal" value="register">@if($authWebinar)<input type="hidden" name="webinar_id" value="{{ $authWebinar->id }}">@endif<input type="hidden" name="return_to" value="{{ $authReturn }}">
 <div class="col-12">
 <label class="form-label">Full name</label>
@@ -87,10 +85,10 @@
 <div class="col-12">
 <button class="btn btn-gradient w-100">Continue Registration</button>
 </div>
+<div class="col-12 auth-modal-switch">Already registered? <button type="button" class="auth-modal-link" data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">Login here</button></div>
 </div>
 </form>
 </div>
 </div>
 </div>
 </div>
-

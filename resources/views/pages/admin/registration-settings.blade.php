@@ -1,8 +1,8 @@
 @extends('layouts.portal')
-@section('title','Registration Fields')
+@section('title','Dynamic Fields')
 @section('content')
 <div class="page-heading">
-    <div><span class="eyebrow">REGISTRATION</span><h1>Registration fields</h1><p>Select a webinar, then manage all of its registration fields in one simple list.</p></div>
+    <div><span class="eyebrow">REGISTRATION</span><h1>Dynamic fields</h1><p>Select a webinar, then manage all of its registration fields in one simple list.</p></div>
     @if($selectedWebinar)
         <a class="btn btn-gradient" href="{{ route('admin.registration.webinar.fields.create',$selectedWebinar) }}"><i class="bi bi-plus"></i> Add field</a>
     @endif
@@ -11,7 +11,7 @@
 @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
 
 <section class="panel-card mb-4">
-    <div class="d-flex gap-3 flex-wrap">
+    <div class="filter-bar module-filter-bar mb-0">
         <select class="form-select" id="registrationWebinarSelect" style="max-width:340px">
             <option value="">Select webinar</option>
             @foreach($webinars as $webinar)

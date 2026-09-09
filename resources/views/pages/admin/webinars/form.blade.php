@@ -5,7 +5,7 @@
 <div class="page-heading"><div><span class="eyebrow">ADMIN WORKSPACE</span><h1>{{ $webinar->exists?'Edit webinar':'Create webinar' }}</h1><p>Manage only the webinar's core information here.</p></div><a class="btn btn-light" href="{{ route('admin.webinars.index') }}">Back to webinars</a></div>
 @if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
 @if($errors->any())<div class="alert alert-danger"><strong>Please correct the form.</strong><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
-<form method="POST" action="{{ $webinar->exists?route('admin.webinars.update',$webinar):route('admin.webinars.store') }}">@csrf @if($webinar->exists)@method('PUT')@endif
+<form method="POST" enctype="multipart/form-data" action="{{ $webinar->exists?route('admin.webinars.update',$webinar):route('admin.webinars.store') }}">@csrf @if($webinar->exists)@method('PUT')@endif
 <section class="panel-card mb-4"><div class="form-grid"><label>Webinar icon<select class="form-select" name="icon">@foreach(['camera-video'=>'Video camera','broadcast'=>'Broadcast','people'=>'Community','mortarboard'=>'Education','lightbulb'=>'Ideas','cpu'=>'Technology','heart-pulse'=>'Healthcare','graph-up'=>'Business growth','megaphone'=>'Marketing'] as $icon=>$label)<option value="{{ $icon }}" @selected(old('icon',$webinar->icon?:'camera-video')===$icon)>{{ $label }}</option>@endforeach</select></label><div><span class="form-label d-block">Icon preview</span><span class="stat-icon tone-purple"><i class="bi bi-{{ old('icon',$webinar->icon?:'camera-video') }}"></i></span></div></div></section>
 <section class="panel-card"><div class="panel-title"><div><h3>Webinar information</h3><p>Polls, certificates and registration forms are managed from their own modules.</p></div></div><div class="form-grid">
 <label class="full">Title<input class="form-control" id="webinarTitle" name="title" value="{{ old('title',$webinar->title) }}" required></label>
@@ -27,9 +27,27 @@
 <label class="full" id="liveSourceField">Video URL, ID, or iframe code<textarea class="form-control" name="live_source" id="liveSource" rows="3" placeholder="Paste YouTube/Vimeo URL, video ID, or iframe code">{{ old('live_source',$webinar->live_url) }}</textarea><small class="text-muted">The secure iframe is generated automatically.</small></label>
 <div class="full live-embed-preview" id="liveEmbedPreview"><div><i class="bi bi-play-btn"></i><span>Select a player and paste the video source to preview it.</span></div></div>
 <label class="full">Session resources<textarea class="form-control" name="session_resources" rows="4" placeholder="Session guide | https://example.com/guide.pdf&#10;Presentation slides | https://example.com/slides.pdf">{{ old('session_resources',$sessionResourcesText) }}</textarea><small class="text-muted">Add one public resource per line in <strong>Title | URL</strong> format. It appears on the landing page and inside the webinar room.</small></label>
+<label class="full">Upload PDF resources<input class="form-control" type="file" name="resource_pdfs[]" accept="application/pdf,.pdf" multiple><small class="text-muted">Choose one or more PDF files. Uploaded PDFs appear in the same Session Resources area on both the landing page and webinar room.</small></label>
+<div class="full agenda-builder">
+    <input type="hidden" name="agenda_present" value="1">
+    <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+        <div><strong>Webinar agenda</strong><small class="d-block text-muted">Optional. Empty agenda dashboard par nahi dikhega.</small></div>
+        <button class="btn btn-sm btn-light" type="button" id="addAgendaItem"><i class="bi bi-plus-lg"></i> Add agenda item</button>
+    </div>
+    @php($agendaRows=collect(old('agenda',$agendaItems->map(fn($item)=>['starts_at'=>$item->starts_at?substr($item->starts_at,0,5):'','title'=>$item->title,'duration_minutes'=>$item->duration_minutes])->all())))
+    <div class="agenda-builder-rows" id="agendaBuilderRows">
+        @foreach($agendaRows as $index=>$item)
+            <div class="agenda-builder-row" data-agenda-row>
+                <label>Time<input class="form-control" type="time" name="agenda[{{ $index }}][starts_at]" value="{{ $item['starts_at']??'' }}"></label>
+                <label>Title<input class="form-control" name="agenda[{{ $index }}][title]" value="{{ $item['title']??'' }}" maxlength="255" placeholder="Session title"></label>
+                <label>Minutes<input class="form-control" type="number" min="1" max="1440" name="agenda[{{ $index }}][duration_minutes]" value="{{ $item['duration_minutes']??'' }}" placeholder="30"></label>
+                <button class="icon-btn text-danger" type="button" data-delete-agenda title="Delete agenda item"><i class="bi bi-trash3"></i></button>
+            </div>
+        @endforeach
+    </div>
+</div>
 <label class="setting-toggle"><span><strong>Live chat</strong><small>Show chat in the webinar room.</small></span><input type="checkbox" name="chat_enabled" value="1" @checked(old('chat_enabled',$webinar->chat_enabled ?? true))></label>
-<label class="setting-toggle"><span><strong>Q&A</strong><small>Allow attendees to submit questions.</small></span><input type="checkbox" name="qa_enabled" value="1" @checked(old('qa_enabled',$webinar->qa_enabled ?? true))></label>
-<label class="setting-toggle"><span><strong>Comments</strong><small>Enable event comments and show it in Comments module.</small></span><input type="checkbox" name="comments_enabled" value="1" @checked(old('comments_enabled',$webinar->comments_enabled ?? false))></label>
+<label class="setting-toggle"><span><strong>Comments</strong><small>Let attendees send private comments to the host.</small></span><input type="checkbox" name="comments_enabled" value="1" @checked(old('comments_enabled',$webinar->comments_enabled ?? true))></label>
 <label class="setting-toggle"><span><strong>Feedback</strong><small>Collect ratings and show it in Feedback module.</small></span><input type="checkbox" name="feedback_enabled" value="1" @checked(old('feedback_enabled',$webinar->feedback_enabled ?? false))></label>
 </div></section>
 @php($experience=(array)old('experience',data_get($webinar->settings,'experience',[])))
@@ -49,6 +67,17 @@
 </form>
 <script>
 document.addEventListener('DOMContentLoaded',()=>{
+    const agendaRows=document.querySelector('#agendaBuilderRows');
+    const addAgenda=document.querySelector('#addAgendaItem');
+    const bindAgendaDelete=row=>row.querySelector('[data-delete-agenda]')?.addEventListener('click',()=>row.remove());
+    agendaRows?.querySelectorAll('[data-agenda-row]').forEach(bindAgendaDelete);
+    addAgenda?.addEventListener('click',()=>{
+        const index=Date.now();
+        const row=document.createElement('div');
+        row.className='agenda-builder-row';row.dataset.agendaRow='';
+        row.innerHTML=`<label>Time<input class="form-control" type="time" name="agenda[${index}][starts_at]"></label><label>Title<input class="form-control" name="agenda[${index}][title]" maxlength="255" placeholder="Session title"></label><label>Minutes<input class="form-control" type="number" min="1" max="1440" name="agenda[${index}][duration_minutes]" placeholder="30"></label><button class="icon-btn text-danger" type="button" data-delete-agenda title="Delete agenda item"><i class="bi bi-trash3"></i></button>`;
+        agendaRows.appendChild(row);bindAgendaDelete(row);row.querySelector('input[type="time"]').focus();
+    });
     const title=document.querySelector('#webinarTitle');
     const slug=document.querySelector('#webinarSlug');
     if(!title||!slug)return;

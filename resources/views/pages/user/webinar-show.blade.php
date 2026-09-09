@@ -1,13 +1,6 @@
 @extends('layouts.public')
 @section('title',$webinar->title)
 @section('body-class','webinar-microsite-page')
-@section('toast')
-@php($landingToast=session('auth_status') ?: session('registration_status'))
-@if($landingToast)
-<span hidden data-app-flash="{{ $landingToast }}" data-app-flash-tone="success"></span>
-<div class="toast-container position-fixed end-0 p-3"><div id="appToast" class="toast border-0 shadow-lg" role="status" aria-live="polite"><div class="toast-body d-flex align-items-center gap-2"><i class="bi bi-check-circle-fill text-success"></i><span>{{ $landingToast }}</span></div></div></div>
-@endif
-@endsection
 @php($theme=data_get($webinar->settings,'experience',[]))
 @php($heroBanner=$banners->first())
 @php($bannerSlides=$banners->map(fn($banner)=>['type'=>$banner->media_type,'src'=>$banner->media_path?:$banner->media_url,'title'=>$banner->title])->filter(fn($slide)=>filled($slide['src']))->values())
@@ -31,10 +24,10 @@
 .event-hero .row>.col-lg-6:first-child h1 span{display:none!important}
 .event-hero .row>.col-lg-6:first-child h1{margin:0;font-size:clamp(1.5rem,3vw,2.25rem);line-height:1.15;letter-spacing:-.025em}
 .event-stats{display:none}
-.webinar-countdown,.registration-section{display:none!important}
 .event-banner-card{overflow:hidden;border-radius:28px;background:#fff;box-shadow:0 28px 70px color-mix(in srgb,var(--webinar-primary) 22%,transparent)}
 .event-banner-card .event-banner{height:clamp(320px,48vw,570px);min-height:0;border-radius:0;box-shadow:none}
 .event-banner .carousel,.event-banner .carousel-inner,.event-banner .carousel-item{width:100%;height:100%}
+.event-banner>iframe{width:100%;height:100%;border:0}
 .event-banner .carousel-item img,.event-banner .carousel-item video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .event-banner .carousel-control-prev,.event-banner .carousel-control-next{display:none!important}
 .event-banner .carousel-indicators{z-index:4}
@@ -42,7 +35,7 @@
 .carousel-progress{position:absolute;z-index:5;left:0;right:0;bottom:0;height:4px;background:#ffffff38}
 .carousel-progress span{display:block;width:0;height:100%;background:linear-gradient(90deg,#fff,var(--webinar-secondary));animation:bannerProgress 5s linear infinite}
 @keyframes bannerProgress{from{width:0}to{width:100%}}
-.banner-event-rail{display:grid;grid-template-columns:1fr 1fr 1.1fr;align-items:stretch;padding:18px 20px;background:#fff}
+.banner-event-rail{display:grid;grid-template-columns:1fr 1fr 1.45fr;align-items:stretch;padding:18px 20px;background:#fff}
 .banner-event-detail{display:flex;align-items:center;gap:11px;padding:4px 18px;border-right:1px solid #e8eaf0;min-width:0}
 .banner-event-detail:nth-child(3){flex-direction:row;border-right:0;justify-content:center;text-align:left}
 .banner-event-detail:nth-child(3)>span{order:1;display:grid;justify-items:center}
@@ -160,13 +153,6 @@ document.addEventListener('DOMContentLoaded',()=>{
             });
         });
     }
-    @guest
-    const mobileCta=document.createElement('div');
-    mobileCta.className='mobile-event-cta';
-    mobileCta.innerHTML='<button type="button" class="btn btn-gradient" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Register Now</button><button type="button" class="btn btn-outline-primary" data-mobile-login>Login</button>';
-    document.body.appendChild(mobileCta);
-    mobileCta.querySelector('[data-mobile-login]')?.addEventListener('click',()=>bootstrap.Modal.getOrCreateInstance(document.querySelector('#micrositeLoginModal')).show());
-    @endguest
 });
 </script>
 @endif
@@ -180,16 +166,12 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 <main data-public-webinar="{{ $webinar->id }}"><section class="hero-section event-hero"><div class="container"><div class="row align-items-center g-5"><div class="col-lg-6"><span class="hero-kicker"><i class="bi bi-stars"></i> {{ strtoupper($webinar->status) }} WEBINAR</span><h1>{{ $webinar->title }}<br><span>{{ $webinar->starts_at?->timezone($webinar->timezone)->format('M d, Y') ?: 'Coming soon' }}</span></h1><p class="hero-copy">{{ $webinar->short_description ?: $webinar->description }}</p><div class="d-flex flex-wrap gap-3">@guest<button class="btn btn-gradient btn-lg" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Register Now <i class="bi bi-arrow-right"></i></button>@else<a class="btn btn-gradient btn-lg" href="#registration">Register Now <i class="bi bi-arrow-right"></i></a>@endguest @if(filled($webinar->description) || filled($webinar->short_description))<a class="btn btn-play btn-lg" href="#about-event">View Event Details</a>@endif</div></div>@if($heroBanner)<div class="col-lg-6"><div class="event-banner"><span class="live-pill"><b></b> {{ strtoupper($webinar->status) }}</span>@if($heroBanner->media_type==='video')<video src="{{ $heroBanner->media_path?:$heroBanner->media_url }}" autoplay muted loop playsinline></video>@else<img src="{{ $heroBanner->media_path?:$heroBanner->media_url }}" alt="{{ $heroBanner->title }}">@endif</div></div>@endif</div></div></section>
 
-<section class="stats-strip event-stats"><div class="container"><div class="row g-0"><div class="col-6 col-lg-3 event-stat"><i class="bi bi-calendar3"></i><div><strong>{{ $webinar->starts_at?->timezone($webinar->timezone)->format('M d, Y') ?: 'TBA' }}</strong><small>Event Date</small></div></div><div class="col-6 col-lg-3 event-stat"><i class="bi bi-clock"></i><div><strong>{{ $webinar->starts_at?->timezone($webinar->timezone)->format('g:i A') ?: 'TBA' }}</strong><small>Event Time</small></div></div><div class="col-6 col-lg-3 event-stat"><i class="bi bi-mic"></i><div><strong>{{ $webinar->speakers->count() }}</strong><small>Expert Speakers</small></div></div><div class="col-6 col-lg-3 event-stat"><i class="bi bi-people"></i><div><strong>{{ $webinar->registrations_count }}</strong><small>Registered Attendees</small></div></div></div></div></section>
-
 <div class="container">@if($errors->any() && !old('_auth_modal'))<div class="alert alert-danger mt-4">{{ $errors->first() }}</div>@endif @if($isRegistered)<div class="alert alert-info mt-4 d-flex align-items-center justify-content-between gap-3"><span><strong>You are registered.</strong> Your event dashboard is ready.</span><a class="btn btn-gradient" href="{{ route('webinars.dashboard',$webinar) }}">Open Dashboard</a></div>@endif
 @if($webinar->status==='live')<section class="webinar-countdown text-center"><small>WEBINAR STATUS</small><h2 class="mb-0 mt-2 text-white">WEBINAR IS LIVE</h2></section>@elseif(in_array($webinar->status,['completed','cancelled']) || ($webinar->ends_at && now()->isAfter($webinar->ends_at)))<section class="webinar-countdown text-center"><small>WEBINAR STATUS</small><h2 class="mb-0 mt-2 text-white">WEBINAR HAS ENDED</h2></section>@elseif($webinar->starts_at)<section class="webinar-countdown" data-webinar-countdown="{{ $webinar->starts_at->copy()->utc()->toIso8601String() }}"><div><small>WEBINAR STARTS IN</small><strong data-countdown-status>{{ $webinar->starts_at->copy()->timezone($webinar->timezone)->format('M d, Y · g:i A') }}</strong></div><div class="countdown-units"><span><b data-countdown-days>00</b><small>Days</small></span><span><b data-countdown-hours>00</b><small>Hours</small></span><span><b data-countdown-minutes>00</b><small>Minutes</small></span><span><b data-countdown-seconds>00</b><small>Seconds</small></span></div></section>@endif</div>
 
 @if(filled($webinar->description) || filled($webinar->short_description))<section class="content-section microsite-section" id="about-event"><div class="container"><div class="section-head"><span class="eyebrow">ABOUT THE EVENT</span><h2>About this webinar</h2></div><div class="about-copy">{!! nl2br(e($webinar->description ?: $webinar->short_description)) !!}</div></div></section>@endif
 
 @if($webinar->speakers->isNotEmpty())<section class="content-section microsite-section" id="speakers"><div class="container"><div class="section-head"><span class="eyebrow">MEET THE EXPERTS</span><h2>Our speakers</h2></div><div class="speaker-grid">@foreach($webinar->speakers as $speaker)@php($speakerBrand=$brands->isNotEmpty()?$brands->get($loop->index % $brands->count()):null)<article class="speaker-profile"><div class="speaker-image">@if($speaker->photo_path)<img src="{{ $speaker->photo_path }}" alt="{{ $speaker->name }}" loading="lazy" onerror="this.remove()">@else{{ Str::of($speaker->name)->substr(0,2)->upper() }}@endif</div><div class="speaker-info"><h3>{{ $speaker->name }}</h3>@if($speaker->headline)<span class="designation">{{ $speaker->headline }}</span>@endif @if($speaker->company)<span class="organization">{{ $speaker->company }}</span>@endif @if($speaker->bio)<p>{{ Str::limit($speaker->bio,150) }}</p>@endif @if($speakerBrand)<div class="speaker-brand">@if($speakerBrand->logo_path)<img src="{{ $speakerBrand->logo_path }}" alt="{{ $speakerBrand->name }}">@else<span>{{ $speakerBrand->name }}</span>@endif</div>@endif</div></article>@endforeach</div></div></section>@endif
-
-@if($agenda->isNotEmpty())<section class="content-section" id="landing-agenda"><div class="container"><div class="section-head"><span class="eyebrow">EVENT PROGRAM</span><h2>Agenda</h2></div><div class="agenda-list">@foreach($agenda as $item)<article class="agenda-item"><time>{{ $item->starts_at ? Carbon\Carbon::parse($item->starts_at)->format('g:i A') : 'TBA' }}</time><div><strong>{{ $item->title }}</strong>@if($item->description)<p class="text-muted mb-0 mt-1">{{ $item->description }}</p>@endif</div></article>@endforeach</div></div></section>@endif
 
 @if($resources->isNotEmpty())<section class="content-section" id="session-resources"><div class="container"><div class="section-head"><span class="eyebrow">TAKE IT WITH YOU</span><h2>Session resources</h2><p class="text-muted">Guides, slides and useful links prepared for this session.</p></div><div class="landing-resource-grid">@foreach($resources as $resource)@php($extension=strtolower(pathinfo(parse_url($resource->path_or_url,PHP_URL_PATH)??'',PATHINFO_EXTENSION)))<a class="landing-resource-card" href="{{ $resource->path_or_url }}" target="_blank" rel="noopener"><i class="bi bi-{{ $extension==='pdf'?'file-earmark-pdf':(in_array($extension,['ppt','pptx'])?'file-earmark-slides':'link-45deg') }}"></i><span><strong>{{ $resource->title }}</strong><small>{{ $extension?strtoupper($extension):'Open resource' }}</small></span><i class="bi bi-arrow-up-right ms-auto"></i></a>@endforeach</div></div></section>@endif
 
@@ -205,4 +187,3 @@ document.addEventListener('DOMContentLoaded',()=>{
 @section('auth-modals')
 @guest @include('components.frontend-auth', ['authWebinar'=>$webinar]) @endguest
 @endsection
-

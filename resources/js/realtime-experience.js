@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('beforeunload', () => clearInterval(timer));
         if (window.Echo) window.Echo.private(`webinar.room.${attendee.dataset.webinarId}`)
             .listen('.room.updated', event => { if (['status','controls','poll'].includes(event.change))window.location.reload(); })
+            .listen('.attendance.updated', event => document.querySelectorAll('[data-room-online]').forEach(node=>node.textContent=event.live_viewers))
             .listen('.poll.updated', event => {
                 const form=document.querySelector('[data-instant-poll]'); if(!form)return;
                 const total=Math.max(1,event.options.reduce((sum,option)=>sum+Number(option.count),0));

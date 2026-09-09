@@ -35,7 +35,7 @@ class DatabaseSeeder extends Seeder
             'description'=>'Future of Digital Healthcare 2026 brings clinicians, technology leaders, and innovators together for an expert-led conversation on responsible AI, connected care, and patient-first transformation. Discover practical strategies, real-world use cases, and the decisions healthcare teams must make today to build a more accessible and intelligent future.',
             'status'=>'scheduled','language'=>'en','timezone'=>'Asia/Kolkata','starts_at'=>$starts,'ends_at'=>$starts->copy()->addMinutes(90),'max_attendees'=>500,
             'registration_type'=>'free','published_at'=>now(),'registration_deadline'=>$starts->copy()->subHour(),'live_provider'=>'youtube','live_url'=>'https://www.youtube.com/embed/jNQXAC9IVRw',
-            'certificate_enabled'=>'yes','chat_enabled'=>true,'qa_enabled'=>true,'polls_enabled'=>true,'comments_enabled'=>false,'feedback_enabled'=>true,'auto_approve'=>true,'early_entry_minutes'=>30,
+            'certificate_enabled'=>'yes','chat_enabled'=>true,'qa_enabled'=>false,'polls_enabled'=>true,'comments_enabled'=>true,'feedback_enabled'=>true,'auto_approve'=>true,'early_entry_minutes'=>30,
             'settings'=>['experience'=>['primary'=>'#5B3DF5','secondary'=>'#00A7B5','background'=>'#F5F7FF','text'=>'#101828','button'=>'#5B3DF5','layout'=>'presentation','logo_url'=>'https://placehold.co/260x90/5B3DF5/FFFFFF?text=NEXA+HEALTH','waiting_message'=>'The Digital Healthcare Summit will begin shortly.','post_message'=>'Thank you for joining Future of Digital Healthcare 2026.','registration_success_title'=>'Your seat is confirmed!','registration_success_message'=>'You are registered for Future of Digital Healthcare 2026.']],
         ]);
 
@@ -68,22 +68,27 @@ class DatabaseSeeder extends Seeder
             ['title'=>'Welcome and opening remarks','description'=>'Event overview and key themes.','starts_at'=>'18:00','duration_minutes'=>10],
             ['title'=>'AI-powered patient care','description'=>'Clinical use cases and responsible adoption.','starts_at'=>'18:10','duration_minutes'=>30],
             ['title'=>'Expert panel discussion','description'=>'Connected care, data, and patient experience.','starts_at'=>'18:40','duration_minutes'=>30],
-            ['title'=>'Live Q&A','description'=>'Questions from attendees.','starts_at'=>'19:10','duration_minutes'=>20],
+            ['title'=>'Audience comments','description'=>'Private comments from attendees.','starts_at'=>'19:10','duration_minutes'=>20],
         ] as $order=>$item) DB::table('webinar_agenda_items')->insert($item+['webinar_id'=>$webinar->id,'display_order'=>$order+1,'created_at'=>now(),'updated_at'=>now()]);
 
         $poll=Poll::create(['webinar_id'=>$webinar->id,'created_by'=>$admin->id,'question'=>'Which digital health area will have the greatest impact in 2026?','allow_multiple'=>false,'status'=>'active','started_at'=>now()]);
-        foreach(['Clinical AI','Remote patient monitoring','Connected health records','Patient experience'] as $order=>$label) $poll->options()->create(['label'=>$label,'display_order'=>$order+1]);
+        foreach(['Clinical AI','Remote patient monitoring','Connected health records','Patient experience'] as $order=>$label) $poll->options()->create(['label'=>$label,'is_correct'=>false,'display_order'=>$order+1]);
+        $quiz=Poll::create(['webinar_id'=>$webinar->id,'created_by'=>$admin->id,'question'=>'Which HTML tag creates the largest heading?','allow_multiple'=>false,'status'=>'active','started_at'=>now()]);
+        foreach(['<h1>','<h6>','<p>','<span>'] as $order=>$label) $quiz->options()->create(['label'=>$label,'is_correct'=>$order===0,'display_order'=>$order+1]);
+        $registration=$webinar->registrations()->create(['user_id'=>$learner->id,'email'=>$learner->email,'status'=>'approved','source'=>'demo-seeder','registered_at'=>now(),'approved_at'=>now()]);
+        $correctOption=$quiz->options()->where('is_correct',true)->firstOrFail();
+        $quiz->responses()->create(['poll_option_id'=>$correctOption->id,'user_id'=>$learner->id,'is_correct'=>true,'voted_at'=>now()]);
         DB::table('chat_messages')->insert(['webinar_id'=>$webinar->id,'user_id'=>$subAdmin->id,'message'=>'Welcome to Future of Digital Healthcare 2026. Introduce yourself in the chat!','sent_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);
 
         $subAdmin->assignedWebinars()->attach($webinar->id,['assigned_by'=>$admin->id]);
-        foreach(Permission::whereIn('module',['webinars','registrations','polls','live-control','reports'])->pluck('id') as $permissionId) DB::table('user_webinar_permissions')->insert(['user_id'=>$subAdmin->id,'webinar_id'=>$webinar->id,'permission_id'=>$permissionId,'assigned_by'=>$admin->id,'created_at'=>now(),'updated_at'=>now()]);
+        foreach(Permission::whereIn('module',['dashboard','webinars','speakers','registrations','polls','live-control','reports','chat','attendance'])->pluck('id') as $permissionId) DB::table('user_webinar_permissions')->insert(['user_id'=>$subAdmin->id,'webinar_id'=>$webinar->id,'permission_id'=>$permissionId,'assigned_by'=>$admin->id,'created_at'=>now(),'updated_at'=>now()]);
 
         $india=\App\Models\Country::where('iso2','IN')->first();
         $gujarat=\App\Models\State::where('country_id',$india?->id)->where('name','Gujarat')->first();
         foreach([
             ['group'=>'registration','key'=>'registration_email_enabled','value'=>'1','is_public'=>false],['group'=>'registration','key'=>'registration_email_required','value'=>'1','is_public'=>false],
             ['group'=>'registration','key'=>'registration_mobile_enabled','value'=>'1','is_public'=>false],['group'=>'registration','key'=>'registration_mobile_required','value'=>'0','is_public'=>false],
-            ['group'=>'registration','key'=>'registration_password_enabled','value'=>'1','is_public'=>false],['group'=>'registration','key'=>'registration_password_required','value'=>'1','is_public'=>false],
+            ['group'=>'registration','key'=>'registration_password_enabled','value'=>'0','is_public'=>false],['group'=>'registration','key'=>'registration_password_required','value'=>'0','is_public'=>false],
             ['group'=>'registration','key'=>'registration_country_enabled','value'=>'1','is_public'=>false],['group'=>'registration','key'=>'registration_state_enabled','value'=>'1','is_public'=>false],
             ['group'=>'registration','key'=>'registration_city_enabled','value'=>'1','is_public'=>false],['group'=>'registration','key'=>'registration_default_country_id','value'=>(string)$india?->id,'is_public'=>false],
             ['group'=>'registration','key'=>'registration_default_state_id','value'=>(string)$gujarat?->id,'is_public'=>false],['group'=>'site','key'=>'site_name','value'=>'Nexa Health Events','is_public'=>true],

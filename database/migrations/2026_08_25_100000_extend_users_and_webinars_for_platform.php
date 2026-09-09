@@ -4,7 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
@@ -32,7 +33,7 @@ return new class extends Migration {
 
     public function down(): void
     {
-        Schema::table('webinars', fn (Blueprint $table) => $table->dropColumn(['registration_deadline','live_provider','live_url','promo_video_path','certificate_enabled','chat_enabled','qa_enabled','polls_enabled','auto_approve']));
-        Schema::table('users', fn (Blueprint $table) => $table->dropColumn(['mobile','avatar_path','job_title','company','bio','timezone','status','last_login_at']));
+        Schema::table('webinars', fn (Blueprint $table) => $table->dropColumn(['registration_deadline', 'live_provider', 'live_url', 'promo_video_path', 'certificate_enabled', 'chat_enabled', 'qa_enabled', 'polls_enabled', 'auto_approve']));
+        Schema::table('users', fn (Blueprint $table) => $table->dropColumn(['mobile', 'avatar_path', 'job_title', 'company', 'bio', 'timezone', 'status', 'last_login_at']));
     }
 };

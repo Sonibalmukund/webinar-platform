@@ -2,20 +2,24 @@
 
 namespace App\Support;
 
-use Illuminate\Support\Str;
+use App\Helpers\AdminSidebarHelper;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 final class SidebarNavigation
 {
     public static function forPortal(bool $isAdmin): array
     {
-        if ($isAdmin && auth()->check() && auth()->user()->hasRole('sub-admin')) return self::subAdmin();
-        return $isAdmin ? self::admin() : self::learner();
+        if ($isAdmin) {
+            return AdminSidebarHelper::menu();
+        }
+
+        return self::learner();
     }
 
     public static function sectionLabel(bool $isAdmin): string
     {
-        return $isAdmin ? 'MANAGEMENT' : 'LEARNING SPACE';
+        return $isAdmin ? 'ADMIN WORKSPACE' : 'LEARNING SPACE';
     }
 
     private static function admin(): array
@@ -51,17 +55,18 @@ final class SidebarNavigation
     private static function subAdmin(): array
     {
         return [
-            self::item('Dashboard','grid-1x2','/sub-admin/dashboard'),
-            self::item('Assigned chats','chat-dots','/sub-admin/chats'),
+            self::item('Dashboard', 'grid-1x2', '/sub-admin/dashboard'),
+            self::item('Assigned chats', 'chat-dots', '/sub-admin/chats'),
         ];
     }
 
     private static function learner(): array
     {
-        $userId=auth()->id();
-        $hasRecordings=$userId && DB::table('webinar_recordings')->join('webinars','webinars.id','=','webinar_recordings.webinar_id')->join('registrations','registrations.webinar_id','=','webinars.id')->where('registrations.user_id',$userId)->where('webinars.status','completed')->where('webinar_recordings.status','published')->exists();
-        $hasCertificates=$userId && DB::table('certificates')->where('user_id',$userId)->where('status','approved')->whereNull('revoked_at')->exists();
-        $hasBookmarks=$userId && DB::table('webinar_bookmarks')->where('user_id',$userId)->exists();
+        $userId = auth()->id();
+        $hasRecordings = $userId && DB::table('webinar_recordings')->join('webinars', 'webinars.id', '=', 'webinar_recordings.webinar_id')->join('registrations', 'registrations.webinar_id', '=', 'webinars.id')->where('registrations.user_id', $userId)->where('webinars.status', 'completed')->where('webinar_recordings.status', 'published')->exists();
+        $hasCertificates = $userId && DB::table('certificates')->where('user_id', $userId)->where('status', 'approved')->whereNull('revoked_at')->exists();
+        $hasBookmarks = $userId && DB::table('webinar_bookmarks')->where('user_id', $userId)->exists();
+
         return array_values(array_filter([
             self::item('Dashboard', 'grid-1x2', '/dashboard', true),
             self::item('Discover', 'compass', '/webinars'),
@@ -77,6 +82,7 @@ final class SidebarNavigation
     {
         $path = '/'.ltrim(request()->path(), '/');
         $active = $exact ? $path === $url : ($path === $url || Str::startsWith($path, rtrim($url, '/').'/'));
+
         return compact('label', 'icon', 'url', 'active') + ['type' => 'item'];
     }
 
