@@ -20,7 +20,8 @@ class EnsureAdminAccess
         }
 
         $permission ??= $this->permissionFor($request);
-        abort_unless($permission && $user->hasPermission($permission), 403, 'You do not have permission to access this module.');
+        $hasPermission = $user->hasPermission($permission) || ($permission === 'users.view' && $user->hasPermission('registrations.view'));
+        abort_unless($permission && $hasPermission, 403, 'You do not have permission to access this module.');
 
         $webinar = $request->route('webinar');
         $poll = $request->route('poll');
@@ -50,6 +51,7 @@ class EnsureAdminAccess
             str_contains($name, '.dynamic-fields.') || (str_contains($name, '.registration.') && $name !== 'admin.registration-settings') => 'dynamic-fields',
             str_contains($name, '.webinars.') => 'webinars',
             str_contains($name, '.polls.') => 'polls',
+            str_contains($name, '.users') => 'users',
             str_contains($name, '.registrations') || $name === 'admin.registration-settings' => 'registrations',
             str_contains($name, '.speakers.') => 'speakers',
             str_contains($name, '.reports.') => 'reports',

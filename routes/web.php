@@ -23,6 +23,7 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 Route::get('/locations/states', [LocationController::class, 'states'])->name('locations.states');
 Route::get('/locations/cities', [LocationController::class, 'cities'])->name('locations.cities');
+Route::get('/csrf-token', fn () => response()->json(['token' => csrf_token()]))->name('csrf.token');
 Route::get('/webinars', [WebinarController::class, 'index'])->name('webinars.index');
 Route::get('/webinars/{webinar:slug}', fn (Webinar $webinar) => redirect()->route('webinars.show', $webinar, 301));
 
@@ -31,10 +32,17 @@ Route::middleware(['auth', 'role:learner'])->group(function () {
     Route::get('/{webinar:slug}/dashboard', [WebinarController::class, 'dashboard'])->where('webinar', '(?!(?:admin|sub-admin)/)[A-Za-z0-9-]+')->name('webinars.dashboard');
     Route::post('/webinars/{webinar:slug}/chat', [WebinarController::class, 'sendChat'])->name('webinars.chat.store');
     Route::get('/webinars/{webinar:slug}/chat', [WebinarController::class, 'chatMessages'])->name('webinars.chat.index');
+    Route::post('/webinars/{webinar:slug}/chat/{message}/vote', [WebinarController::class, 'voteChat'])->name('webinars.chat.vote');
     Route::post('/webinars/{webinar:slug}/comments', [WebinarController::class, 'storeComment'])->name('webinars.comments.store');
     Route::post('/webinars/{webinar:slug}/feedback', [WebinarController::class, 'storeFeedback'])->name('webinars.feedback.store');
     Route::post('/webinars/{webinar:slug}/polls/{poll}/vote', [WebinarController::class, 'vote'])->name('webinars.polls.vote');
+    Route::get('/webinars/{webinar:slug}/polls/active', [WebinarController::class, 'activePoll'])->name('webinars.polls.active');
+    Route::get('/webinars/{webinar:slug}/polls/{poll}/results', [WebinarController::class, 'pollResults'])->name('webinars.polls.results');
+    Route::get('/webinars/{webinar:slug}/questions', [WebinarController::class, 'questions'])->name('webinars.questions.index');
+    Route::post('/webinars/{webinar:slug}/questions', [WebinarController::class, 'askQuestion'])->name('webinars.questions.store');
+    Route::post('/webinars/{webinar:slug}/questions/{question}/vote', [WebinarController::class, 'voteQuestion'])->name('webinars.questions.vote');
     Route::get('/webinars/{webinar:slug}/certificate', [WebinarController::class, 'downloadCertificate'])->name('webinars.certificate.download');
+    Route::get('/webinars/{webinar:slug}/resources/{resource}/download', [WebinarController::class, 'downloadResource'])->name('webinars.resources.download');
     Route::post('/webinars/{webinar:slug}/attendance/join', [WebinarAttendanceController::class, 'join'])->name('webinars.attendance.join');
     Route::post('/webinars/{webinar:slug}/attendance/heartbeat', [WebinarAttendanceController::class, 'heartbeat'])->name('webinars.attendance.heartbeat');
     Route::post('/webinars/{webinar:slug}/attendance/leave', [WebinarAttendanceController::class, 'leave'])->name('webinars.attendance.leave');

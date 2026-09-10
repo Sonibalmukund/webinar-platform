@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\GeneralSettingsController;
 use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\Admin\PermissionController;
 use App\Http\Controllers\Admin\PollController;
+use App\Http\Controllers\Admin\QuestionController;
 use App\Http\Controllers\Admin\RegistrationController;
 use App\Http\Controllers\Admin\RegistrationSettingsController;
 use App\Http\Controllers\Admin\ReportController;
@@ -40,6 +41,7 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::get('/admin/activity-logs', [ActivityLogController::class, 'index'])->name('admin.activity-logs');
     Route::get('/admin/registrations', [RegistrationController::class, 'index'])->name('admin.registrations');
     Route::get('/admin/registrations/{registration}', [RegistrationController::class, 'show'])->name('admin.registrations.show');
+    Route::delete('/admin/registrations/{registration}', [RegistrationController::class, 'destroy'])->name('admin.registrations.destroy');
     Route::get('/admin/registration-settings', [RegistrationSettingsController::class, 'index'])->name('admin.registration-settings');
     Route::get('/admin/dynamic-fields', [RegistrationSettingsController::class, 'index'])->name('admin.dynamic-fields.index');
     Route::get('/admin/registration-settings/{webinar}/preview', [RegistrationSettingsController::class, 'preview'])->name('admin.registration.preview');
@@ -63,6 +65,7 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::get('/admin/webinars/{webinar}/edit', [WebinarController::class, 'edit'])->name('admin.webinars.edit');
     Route::get('/admin/webinars/{webinar}/live-control', [WebinarController::class, 'live'])->name('admin.webinars.live');
     Route::put('/admin/webinars/{webinar}/live-control', [WebinarController::class, 'controls'])->name('admin.webinars.controls');
+    Route::put('/admin/webinars/{webinar}/announcement', [WebinarController::class, 'announcement'])->name('admin.webinars.announcement');
     Route::get('/admin/webinars/{webinar}', [WebinarController::class, 'show'])->name('admin.webinars.show');
     Route::put('/admin/webinars/{webinar}', [WebinarController::class, 'update'])->name('admin.webinars.update');
     Route::patch('/admin/webinars/{webinar}/status', [WebinarController::class, 'status'])->name('admin.webinars.status');
@@ -84,6 +87,7 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::patch('/admin/certificates/{webinar}/visibility', [CertificateController::class, 'visibility'])->name('admin.certificates.visibility');
     Route::get('/admin/certificate-queue', [CertificateController::class, 'queue'])->name('admin.certificates.queue');
     Route::patch('/admin/certificate-queue/{certificate}', [CertificateController::class, 'decision'])->name('admin.certificates.decision');
+    Route::get('/admin/certificates/logs', [CertificateController::class, 'logs'])->name('admin.certificates.logs');
     Route::get('/admin/permissions', [PermissionController::class, 'index'])->name('admin.permissions.index');
     Route::get('/admin/permissions/create', [PermissionController::class, 'create'])->name('admin.permissions.create');
     Route::get('/admin/permissions/{user}/{webinar}/edit', [PermissionController::class, 'edit'])->name('admin.permissions.edit');
@@ -134,6 +138,9 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::get('/admin/feedback', [EngagementController::class, 'feedback'])->name('admin.feedback.index');
     Route::get('/admin/feedback/{webinar}', [EngagementController::class, 'feedbackShow'])->name('admin.feedback.show');
     Route::patch('/admin/feedback/{webinar}/{item}', [EngagementController::class, 'updateFeedback'])->name('admin.feedback.update');
+    Route::get('/admin/questions', [QuestionController::class, 'index'])->name('admin.questions.index');
+    Route::patch('/admin/questions/{question}', [QuestionController::class, 'update'])->name('admin.questions.update');
+    Route::post('/admin/questions/{question}/answer', [QuestionController::class, 'answer'])->name('admin.questions.answer');
     Route::get('/admin/notifications', [NotificationController::class, 'index'])->name('admin.notifications.index');
     Route::get('/admin/notifications/create', [NotificationController::class, 'create'])->name('admin.notifications.create');
     Route::post('/admin/notifications', [NotificationController::class, 'store'])->name('admin.notifications.store');

@@ -37,5 +37,5 @@
         </tbody>
     </table>
 </section>
-<div class="mt-3">{{ $questions->links() }}</div>
+<x-admin-pagination :paginator="$questions" />
 @endsection

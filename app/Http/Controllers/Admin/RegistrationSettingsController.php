@@ -70,7 +70,7 @@ class RegistrationSettingsController extends Controller
     public function storeField(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'label' => ['required', 'string', 'max:255'], 'icon' => ['nullable', 'string', 'max:60'], 'field_type' => ['required', 'in:text,dropdown,radio,checkbox'],
+            'label' => ['required', 'string', 'max:255'], 'icon' => ['nullable', 'string', 'max:60'], 'field_type' => ['required', 'in:text,password,dropdown,radio,checkbox'],
             'placeholder' => ['nullable', 'string', 'max:255'], 'options' => ['nullable', 'string'],
         ]);
         $field = SignupField::create([
@@ -212,6 +212,6 @@ class RegistrationSettingsController extends Controller
 
     private function validateWebinarField(Request $request, ?RegistrationField $field = null): array
     {
-        return $request->validate(['label' => ['required', 'string', 'max:255'], 'field_type' => ['required', 'in:text,dropdown,radio,checkbox,country,state,city'], 'placeholder' => ['nullable', 'string', 'max:255'], 'options' => ['nullable', 'string'], 'condition_field_id' => ['nullable', 'integer', 'exists:registration_fields,id'], 'condition_operator' => ['nullable', 'in:equals,not_equals'], 'condition_value' => ['nullable', 'string', 'max:255']]);
+        return $request->validate(['label' => ['required', 'string', 'max:255'], 'field_type' => ['required', 'in:text,password,dropdown,radio,checkbox,country,state,city'], 'placeholder' => ['nullable', 'string', 'max:255'], 'options' => ['nullable', 'string'], 'condition_field_id' => ['nullable', 'integer', 'exists:registration_fields,id'], 'condition_operator' => ['nullable', 'in:equals,not_equals'], 'condition_value' => ['nullable', 'string', 'max:255']]);
     }
 }

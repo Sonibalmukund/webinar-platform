@@ -36,12 +36,19 @@ class WebinarAttendanceController extends Controller
         );
         $live = DB::table('webinar_attendees')->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', now()->subSeconds(75))->count();
         try {
-            broadcast(new WebinarAttendanceUpdated($webinar->id, $request->user()->id, $live, 0, ! $current ? 'hand-raised' : 'hand-lowered'));
+            broadcast(new WebinarAttendanceUpdated($webinar->id, $request->user()->id, $live, 0, ! $current ? 'hand-raised' : 'hand-lowered', $request->user()->name));
         } catch (\Throwable $e) {
             report($e);
         }
 
-        return response()->json(['raised_hand' => ! $current, 'live_viewers' => $live, 'message' => ! $current ? 'Your hand is raised.' : 'Your hand is lowered.']);
+        return response()->json(['raised_hand' => ! $current, 'live_viewers' => $live, 'participants' => $this->participants($webinar), 'message' => ! $current ? 'Your hand is raised.' : 'Your hand is lowered.']);
+    }
+
+    private function participants(Webinar $webinar): array
+    {
+        return DB::table('webinar_attendees')->join('users', 'users.id', '=', 'webinar_attendees.user_id')
+            ->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', now()->subSeconds(75))
+            ->select('users.id', 'users.name', 'raised_hand')->orderByDesc('raised_hand')->orderBy('users.name')->get()->all();
     }
 
     private function touch(Request $request, Webinar $webinar, string $state): JsonResponse
@@ -53,6 +60,9 @@ class WebinarAttendanceController extends Controller
             $current = DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->lockForUpdate()->first();
             $increment = $current?->last_seen_at && ! $current?->left_at ? min(60, max(0, $now->diffInSeconds(Carbon::parse($current->last_seen_at), true))) : 0;
             $values = ['last_seen_at' => $now, 'left_at' => $state === 'leave' ? $now : null, 'updated_at' => $now];
+            if ($state === 'join') {
+                $values['raised_hand'] = false;
+            }
             if (! $current) {
                 $values += ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id, 'joined_at' => $now, 'watch_seconds' => 0, 'raised_hand' => false, 'created_at' => $now];
                 DB::table('webinar_attendees')->insert($values);
@@ -66,11 +76,11 @@ class WebinarAttendanceController extends Controller
         });
         $live = DB::table('webinar_attendees')->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', $now->copy()->subSeconds(75))->count();
         try {
-            broadcast(new WebinarAttendanceUpdated($webinar->id, $request->user()->id, $live, (int) $row->watch_seconds, $state));
+            broadcast(new WebinarAttendanceUpdated($webinar->id, $request->user()->id, $live, (int) $row->watch_seconds, $state, $request->user()->name));
         } catch (\Throwable $e) {
             report($e);
         }
 
-        return response()->json(['live_viewers' => $live, 'watch_seconds' => (int) $row->watch_seconds, 'state' => $state]);
+        return response()->json(['live_viewers' => $live, 'watch_seconds' => (int) $row->watch_seconds, 'state' => $state, 'participants' => $this->participants($webinar)]);
     }
 }

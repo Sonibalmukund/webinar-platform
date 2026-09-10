@@ -53,7 +53,7 @@ class DatabaseSeeder extends Seeder
         ] as $data) Brand::create($data+['webinar_id'=>$webinar->id,'website_url'=>'https://example.com','is_active'=>true]);
 
         Banner::create(['webinar_id'=>$webinar->id,'title'=>'Digital Healthcare Summit Cover','media_type'=>'image','media_url'=>'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1600&q=85','is_active'=>true,'display_order'=>1]);
-        Banner::create(['webinar_id'=>$webinar->id,'title'=>'Healthcare Innovation Preview','media_type'=>'video','media_url'=>'https://storage.googleapis.com/coverr-main/mp4/Mt_Baker.mp4','is_active'=>true,'display_order'=>2]);
+        Banner::create(['webinar_id'=>$webinar->id,'title'=>'Healthcare Innovation Preview','media_type'=>'video','media_url'=>'https://vjs.zencdn.net/v/oceans.mp4','is_active'=>true,'display_order'=>2]);
 
         $form=$webinar->registrationForm()->create(['title'=>'Reserve your seat','description'=>'Complete the fields below to join this webinar.','is_active'=>true,'require_login'=>true,'success_message'=>'Your seat has been reserved successfully.']);
         foreach([

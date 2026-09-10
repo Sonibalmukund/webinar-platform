@@ -17,15 +17,18 @@ class PollController extends Controller
     public function index(Request $request): View
     {
         $webinarId = $request->integer('webinar_id');
+        $search = trim((string) $request->input('search'));
         $polls = Poll::with(['webinar', 'options'])->withCount(['options', 'options as votes_count' => fn ($query) => $query->join('poll_responses', 'poll_responses.poll_option_id', '=', 'poll_options.id')])
             ->when($request->user()->hasRole('sub-admin'), fn ($query) => $query->whereIn('webinar_id', $request->user()->assignedWebinars()->pluck('webinars.id')))
             ->when($webinarId, fn ($query) => $query->where('webinar_id', $webinarId))
+            ->when($search !== '', fn ($query) => $query->where('question', 'like', "%{$search}%"))
             ->latest()->paginate(15)->withQueryString();
 
         return view('pages.admin.polls.index', [
             'polls' => $polls,
             'webinars' => $this->webinars($request),
             'selectedWebinarId' => $webinarId,
+            'search' => $search,
         ]);
     }
 
@@ -84,7 +87,7 @@ class PollController extends Controller
         $poll->update($values);
         $this->broadcastPoll($poll);
 
-        return back()->with('status', 'Poll status updated.');
+        return back()->with('status', $poll->type.($poll->status === 'active' ? ' started.' : ($poll->status === 'ended' ? ' stopped.' : ' status updated.')));
     }
 
     public function destroy(Poll $poll): RedirectResponse
@@ -111,7 +114,7 @@ class PollController extends Controller
             $copy->options()->create($option->only(['label', 'is_correct', 'display_order']));
         }
 
-        return redirect()->route('admin.polls.edit', $copy)->with('status', 'Poll duplicated as a draft.');
+        return redirect()->route('admin.polls.index', ['webinar_id' => $copy->webinar_id])->with('status', 'Poll duplicated as a draft.');
     }
 
     private function save(Request $request, Poll $poll): Poll
@@ -172,7 +175,7 @@ class PollController extends Controller
     private function broadcastPoll(Poll $poll): void
     {
         try {
-            broadcast(new WebinarRoomUpdated($poll->webinar_id, 'poll', ['poll_id' => $poll->id, 'status' => $poll->status]));
+            broadcast(new WebinarRoomUpdated($poll->webinar_id, 'poll', ['poll_id' => $poll->id, 'status' => $poll->status, 'type' => $poll->type]));
         } catch (\Throwable $e) {
             report($e);
         }

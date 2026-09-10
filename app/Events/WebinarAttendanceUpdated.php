@@ -11,7 +11,7 @@ class WebinarAttendanceUpdated implements ShouldBroadcastNow
 {
     use Dispatchable, SerializesModels;
 
-    public function __construct(public int $webinarId, public int $userId, public int $liveViewers, public int $watchSeconds, public string $state) {}
+    public function __construct(public int $webinarId, public int $userId, public int $liveViewers, public int $watchSeconds, public string $state, public ?string $userName = null) {}
 
     public function broadcastOn(): array
     {
@@ -25,6 +25,6 @@ class WebinarAttendanceUpdated implements ShouldBroadcastNow
 
     public function broadcastWith(): array
     {
-        return ['webinar_id' => $this->webinarId, 'user_id' => $this->userId, 'live_viewers' => $this->liveViewers, 'watch_seconds' => $this->watchSeconds, 'state' => $this->state];
+        return ['webinar_id' => $this->webinarId, 'user_id' => $this->userId, 'live_viewers' => $this->liveViewers, 'watch_seconds' => $this->watchSeconds, 'state' => $this->state, 'user_name' => $this->userName];
     }
 }

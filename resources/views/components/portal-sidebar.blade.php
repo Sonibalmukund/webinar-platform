@@ -14,13 +14,13 @@
                 @php($currentGroup = $item['section'] ?? null)
                 @if($currentGroup)<div class="sidebar-section-title">{{ $currentGroup }}</div>@endif
             @endif
-            @php($label = $item['label'] ?? $item['title'])
-            @php($url = $item['url'] ?? $item['route'])
-            @if($item['type']==='group')
-                <button class="sidebar-group-toggle {{ $item['active']?'open':'' }}" type="button" data-sidebar-group-toggle="{{ $item['id'] }}"><span><i class="bi bi-{{ $item['icon'] }}"></i> {{ $item['label'] }}</span><i class="bi bi-chevron-down"></i></button>
-                <div class="sidebar-submenu {{ $item['active']?'open':'' }}" id="{{ $item['id'] }}">@foreach($item['children'] as $child)<a class="{{ $child['active']?'active':'' }}" href="{{ $child['url'] }}">{{ $child['label'] }}</a>@endforeach</div>
+            @if(($item['type'] ?? '') === 'group')
+                <button class="sidebar-group-toggle {{ ($item['active'] ?? false) ? 'open' : '' }}" type="button" data-sidebar-group-toggle="{{ $item['id'] }}"><span><i class="bi bi-{{ $item['icon'] }}"></i> {{ $item['label'] ?? $item['title'] }}</span><i class="bi bi-chevron-down"></i></button>
+                <div class="sidebar-submenu {{ ($item['active'] ?? false) ? 'open' : '' }}" id="{{ $item['id'] }}">@foreach($item['children'] as $child)<a class="{{ ($child['active'] ?? false) ? 'active' : '' }}" href="{{ $child['url'] ?? ($child['route'] ?? '#') }}">{{ $child['label'] ?? $child['title'] }}</a>@endforeach</div>
             @else
-                <a class="{{ $item['active']?'active':'' }}" href="{{ $url }}">@if($item['icon'])<i class="bi bi-{{ $item['icon'] }}"></i>@endif {{ $label }}</a>
+                @php($label = $item['label'] ?? ($item['title'] ?? ''))
+                @php($url = $item['url'] ?? ($item['route'] ?? '#'))
+                <a class="{{ ($item['active'] ?? false) ? 'active' : '' }}" href="{{ $url }}">@if(!empty($item['icon']))<i class="bi bi-{{ $item['icon'] }}"></i>@endif {{ $label }}</a>
             @endif
         @endforeach
     </nav>

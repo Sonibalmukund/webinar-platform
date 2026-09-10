@@ -78,20 +78,22 @@ class AuthController extends Controller
             $request->merge(['_auth_modal' => 'login']);
         }
         $loginSettings = DB::table('settings')->where('group', 'registration')->pluck('value', 'key');
-        $passwordEnabled = $portal !== 'user' || ($loginSettings['registration_password_enabled'] ?? '1') === '1';
-        $rules = ['login' => ['required', 'email']];
+        $dashboardWebinar = $portal === 'user' ? FrontendAuth::webinar($request) : null;
+        $webinarHasPassword = $dashboardWebinar && $dashboardWebinar->registrationForm && $dashboardWebinar->registrationForm->fields()->where('is_enabled', true)->where('field_type', 'password')->exists();
+        $passwordEnabled = $portal === 'admin' ? true : ($dashboardWebinar ? $webinarHasPassword : (($loginSettings['registration_password_enabled'] ?? '1') === '1'));
+
+        $rules = ['login' => ['required', 'string']];
         if ($passwordEnabled) {
             $rules['password'] = ['required', 'string'];
         }
         $credentials = $portal === 'user' ? $this->validateFrontend($request, $rules, 'login') : $request->validate($rules);
         $login = $credentials['login'];
-        $user = null;
-        $user = User::where('email', $login)->first();
+        $user = User::where('email', $login)->orWhere('mobile', $login)->first();
         if (! $user) {
-            return ($portal === 'user' ? redirect(FrontendAuth::landing($request, 'login')) : back())->withErrors(['login' => 'No account was found for this email address.'])->onlyInput('login', '_auth_modal', 'return_to', 'webinar_id');
+            return ($portal === 'user' ? redirect(FrontendAuth::landing($request, 'login')) : back())->withErrors(['login' => 'No account was found for this '.($dashboardWebinar ? 'webinar' : 'email address').'.'])->onlyInput('login', '_auth_modal', 'return_to', 'webinar_id');
         }
         if ($passwordEnabled && ! Hash::check($credentials['password'], $user->password)) {
-            return ($portal === 'user' ? redirect(FrontendAuth::landing($request, 'login')) : back())->withErrors(['password' => 'The password entered for this email address is incorrect.'])->onlyInput('login', '_auth_modal', 'return_to', 'webinar_id');
+            return ($portal === 'user' ? redirect(FrontendAuth::landing($request, 'login')) : back())->withErrors(['password' => 'The password entered is incorrect.'])->onlyInput('login', '_auth_modal', 'return_to', 'webinar_id');
         }
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
@@ -102,7 +104,6 @@ class AuthController extends Controller
 
             return ($portal === 'user' ? redirect(FrontendAuth::landing($request, 'login')) : back())->withErrors(['login' => 'This account does not have access to this portal.'])->onlyInput('login', '_auth_modal', 'return_to');
         }
-        $dashboardWebinar = $portal === 'user' ? FrontendAuth::webinar($request) : null;
         $destination = null;
         if ($dashboardWebinar) {
             $request->session()->put('frontend_event_slug', $dashboardWebinar->slug);
@@ -118,16 +119,16 @@ class AuthController extends Controller
         }
         if ($destination) {
             return redirect(FrontendAuth::landing($request))
-                ->with('auth_status', 'Login successful. Welcome, '.$user->name.'.')
+                ->with('auth_status', 'Login successfully.')
                 ->with('auth_redirect', $destination);
         }
 
         if ($portal === 'admin') {
-            return redirect()->intended('/admin/dashboard')->with('auth_status', 'Welcome back, '.$user->name.'. You are signed in.');
+            return redirect()->intended('/admin/dashboard')->with('auth_status', 'Login successfully.');
         }
 
         return redirect()->route('webinars.index')
-            ->with('auth_status', 'Welcome back, '.$user->name.'. You are signed in.')
+            ->with('auth_status', 'Login successfully.')
             ->with('auth_redirect', route('dashboard'));
     }
 
@@ -135,15 +136,187 @@ class AuthController extends Controller
     {
         $request->merge(['_auth_modal' => 'register']);
         $settings = DB::table('settings')->where('group', 'registration')->pluck('value', 'key');
-        $fields = SignupField::with('options')->where('is_enabled', true)->get();
-        $emailEnabled = ($settings['registration_email_enabled'] ?? '1') === '1';
-        $mobileEnabled = ($settings['registration_mobile_enabled'] ?? '1') === '1';
-        $passwordEnabled = ($settings['registration_password_enabled'] ?? '1') === '1';
         $returnSlug = trim($request->string('return_to')->toString(), '/');
         $webinar = $request->filled('webinar_id')
             ? Webinar::with('registrationForm.fields.options')->find($request->integer('webinar_id'))
             : (preg_match('/^[A-Za-z0-9-]+$/', $returnSlug) ? Webinar::with('registrationForm.fields.options')->where('slug', $returnSlug)->first() : null);
         $registrationFields = $webinar?->registrationForm?->fields?->where('is_enabled', true) ?? collect();
+
+        // 1. Webinar-specific registration with dynamic fields
+        if ($webinar && $registrationFields->isNotEmpty()) {
+            $submittedFields = $request->input('fields', []);
+            foreach ($registrationFields as $field) {
+                if (!isset($submittedFields[$field->id]) || $submittedFields[$field->id] === '' || $submittedFields[$field->id] === null) {
+                    $lowerLabel = strtolower(trim($field->label));
+                    if ($request->filled('name') && (in_array($lowerLabel, ['name', 'full name', 'your name'], true) || str_starts_with($field->field_key, 'name') || str_starts_with($field->field_key, 'full_name'))) {
+                        $submittedFields[$field->id] = $request->input('name');
+                    } elseif ($request->filled('email') && (in_array($lowerLabel, ['email', 'email address'], true) || str_starts_with($field->field_key, 'email'))) {
+                        $submittedFields[$field->id] = $request->input('email');
+                    } elseif ($request->filled('mobile') && (in_array($lowerLabel, ['mobile', 'mobile number', 'phone', 'phone number'], true) || str_starts_with($field->field_key, 'mobile') || str_starts_with($field->field_key, 'phone'))) {
+                        $submittedFields[$field->id] = $request->input('mobile');
+                    } elseif ($request->filled('city_id') && ($lowerLabel === 'city' || str_starts_with($field->field_key, 'city') || $field->field_type === 'city')) {
+                        $submittedFields[$field->id] = $request->input('city_id');
+                    } elseif ($request->filled('country_id') && ($lowerLabel === 'country' || str_starts_with($field->field_key, 'country') || $field->field_type === 'country')) {
+                        $submittedFields[$field->id] = $request->input('country_id');
+                    } elseif ($request->filled('state_id') && ($lowerLabel === 'state' || str_starts_with($field->field_key, 'state') || $field->field_type === 'state')) {
+                        $submittedFields[$field->id] = $request->input('state_id');
+                    } elseif ($request->filled('password') && ($field->field_type === 'password' || in_array($lowerLabel, ['password'], true))) {
+                        $submittedFields[$field->id] = $request->input('password');
+                    }
+                }
+            }
+            $request->merge(['fields' => $submittedFields]);
+
+            $rules = [];
+            $attributes = [];
+            foreach ($registrationFields as $field) {
+                $rule = [];
+                $lowerLabel = strtolower(trim($field->label));
+                $isMobile = in_array($lowerLabel, ['mobile', 'mobile number', 'phone', 'phone number'], true) || str_starts_with($field->field_key, 'mobile');
+                if ($isMobile && !isset($submittedFields[$field->id]) && !$request->has('mobile') && ($settings['registration_mobile_required'] ?? '0') !== '1') {
+                    $rule[] = 'nullable';
+                } else {
+                    $rule[] = $field->is_required ? 'required' : 'nullable';
+                }
+                $isEmail = in_array($lowerLabel, ['email', 'email address'], true) || str_starts_with($field->field_key, 'email');
+                if ($field->field_type === 'password' || in_array($lowerLabel, ['password'], true)) {
+                    $rule[] = 'string';
+                    $rule[] = 'min:6';
+                } elseif ($field->field_type === 'checkbox') {
+                    $rule[] = 'array';
+                } elseif ($field->field_type === 'country') {
+                    $rule[] = 'exists:countries,id';
+                } elseif ($field->field_type === 'state') {
+                    $rule[] = 'exists:states,id';
+                } elseif ($field->field_type === 'city') {
+                    $rule[] = 'exists:cities,id';
+                } elseif ($isEmail) {
+                    $rule[] = 'email';
+                } else {
+                    $rule[] = 'string';
+                    $rule[] = 'max:255';
+                }
+                $rules['fields.'.$field->id] = $rule;
+                $attributes['fields.'.$field->id] = $field->label;
+            }
+
+            $this->validateFrontend($request, $rules, 'register', $attributes);
+
+            $extractedName = null;
+            $extractedEmail = null;
+            $extractedMobile = null;
+            $extractedPassword = null;
+            $countryId = $request->integer('country_id') ?: null;
+            $stateId = $request->integer('state_id') ?: null;
+            $cityId = $request->integer('city_id') ?: null;
+
+            foreach ($registrationFields as $field) {
+                $val = $submittedFields[$field->id] ?? null;
+                $lowerLabel = strtolower(trim($field->label));
+                if ($extractedName === null && (in_array($lowerLabel, ['name', 'full name', 'your name'], true) || str_starts_with($field->field_key, 'name') || str_starts_with($field->field_key, 'full_name'))) {
+                    $extractedName = is_string($val) ? trim($val) : null;
+                }
+                if ($extractedEmail === null && (in_array($lowerLabel, ['email', 'email address'], true) || str_starts_with($field->field_key, 'email'))) {
+                    $extractedEmail = is_string($val) ? trim($val) : null;
+                }
+                if ($extractedMobile === null && (in_array($lowerLabel, ['mobile', 'mobile number', 'phone', 'phone number'], true) || str_starts_with($field->field_key, 'mobile') || str_starts_with($field->field_key, 'phone'))) {
+                    $extractedMobile = is_string($val) ? trim($val) : null;
+                }
+                if ($extractedPassword === null && ($field->field_type === 'password' || in_array($lowerLabel, ['password'], true))) {
+                    $extractedPassword = is_string($val) ? trim($val) : null;
+                }
+                if ($field->field_type === 'country' && !empty($val)) {
+                    $countryId = (int)$val;
+                }
+                if ($field->field_type === 'state' && !empty($val)) {
+                    $stateId = (int)$val;
+                }
+                if ($field->field_type === 'city' && !empty($val)) {
+                    $cityId = (int)$val;
+                }
+            }
+
+            $name = $request->filled('name') ? $request->string('name')->trim()->toString() : ($extractedName ?: 'Attendee');
+            $email = $request->filled('email') ? $request->string('email')->trim()->toString() : $extractedEmail;
+            $mobile = $request->filled('mobile') ? $request->string('mobile')->trim()->toString() : $extractedMobile;
+            $password = $request->filled('password') ? $request->input('password') : ($extractedPassword ?: Str::random(40));
+
+            if (!$email && $mobile) {
+                $email = 'mobile-'.preg_replace('/\D/', '', $mobile).'-'.Str::lower(Str::random(6)).'@internal.local';
+            } elseif (!$email) {
+                $email = 'attendee-'.Str::lower(Str::random(8)).'@internal.local';
+            }
+
+            $user = null;
+            if ($email) {
+                $user = User::where('email', $email)->first();
+            }
+            if (!$user && $mobile) {
+                $user = User::where('mobile', $mobile)->first();
+            }
+
+            if (!$user) {
+                $user = User::create([
+                    'name' => $name,
+                    'email' => $email,
+                    'mobile' => $mobile,
+                    'password' => $password,
+                    'country_id' => $countryId,
+                    'state_id' => $stateId,
+                    'city_id' => $cityId,
+                ]);
+                $role = Role::firstOrCreate(['slug' => 'learner'], ['name' => 'Learner', 'description' => 'Webinar learner']);
+                $user->roles()->sync([$role->id]);
+            } else {
+                $updateData = [];
+                if ($name && $name !== 'Attendee' && (empty($user->name) || $user->name === 'Attendee')) {
+                    $updateData['name'] = $name;
+                }
+                if ($extractedPassword) {
+                    $updateData['password'] = $extractedPassword;
+                }
+                if (!empty($updateData)) {
+                    $user->update($updateData);
+                }
+            }
+
+            $status = $webinar->auto_approve ? 'approved' : 'pending';
+            $registration = Registration::firstOrCreate(
+                ['webinar_id' => $webinar->id, 'user_id' => $user->id],
+                [
+                    'email' => $user->email,
+                    'status' => $status,
+                    'source' => 'public-microsite',
+                    'registered_at' => now(),
+                    'approved_at' => $status === 'approved' ? now() : null,
+                ]
+            );
+
+            foreach ($registrationFields as $field) {
+                $val = $submittedFields[$field->id] ?? null;
+                if ($val !== null && $val !== '') {
+                    RegistrationAnswer::updateOrCreate(
+                        ['registration_id' => $registration->id, 'registration_field_id' => $field->id],
+                        ['value' => is_array($val) ? json_encode($val) : $val]
+                    );
+                }
+            }
+
+            Auth::login($user);
+            $request->session()->regenerate();
+            $request->session()->put('frontend_event_slug', $webinar->slug);
+            $request->session()->forget('url.intended');
+
+            return redirect()->route('webinars.show', $webinar)
+                ->with('registration_status', 'Registration successfully.')
+                ->with('auth_redirect', route('webinars.dashboard', $webinar));
+        }
+
+        // 2. Global fallback
+        $fields = SignupField::with('options')->where('is_enabled', true)->get();
+        $emailEnabled = ($settings['registration_email_enabled'] ?? '1') === '1';
+        $mobileEnabled = ($settings['registration_mobile_enabled'] ?? '1') === '1';
+        $passwordEnabled = ($settings['registration_password_enabled'] ?? '1') === '1';
         $rules = ['name' => ['required', 'string', 'max:255']];
         if ($emailEnabled) {
             $rules['email'] = [($settings['registration_email_required'] ?? '1') === '1' ? 'required' : 'nullable', 'email', 'unique:users'];
@@ -166,15 +339,6 @@ class AuthController extends Controller
         foreach ($fields as $field) {
             $rules['custom.'.$field->id] = [$field->is_required ? 'required' : 'nullable', $field->field_type === 'checkbox' ? 'array' : 'string'];
         }
-        foreach ($registrationFields as $field) {
-            if (in_array($field->field_key, ['full_name', 'email', 'mobile', 'city'], true)) {
-                continue;
-            }
-            $typeRule = match ($field->field_type) {
-                'checkbox' => 'array','country' => 'exists:countries,id','state' => 'exists:states,id','city' => 'exists:cities,id',default => 'string'
-            };
-            $rules['fields.'.$field->id] = [$field->is_required ? 'required' : 'nullable', $typeRule];
-        }
         $data = $this->validateFrontend($request, $rules, 'register');
         $countryId = ($settings['registration_country_enabled'] ?? '1') === '1' ? $request->integer('country_id') : (int) $settings['registration_default_country_id'];
         $stateId = ($settings['registration_state_enabled'] ?? '1') === '1' ? $request->integer('state_id') : (int) $settings['registration_default_state_id'];
@@ -194,33 +358,22 @@ class AuthController extends Controller
                 SignupFieldAnswer::create(['user_id' => $user->id, 'signup_field_id' => $field->id, 'value' => is_array($value) ? json_encode($value) : $value]);
             }
         }
-        if ($webinar && $webinar->registrationForm?->is_active) {
-            $status = $webinar->auto_approve ? 'approved' : 'pending';
-            $registration = Registration::create(['webinar_id' => $webinar->id, 'user_id' => $user->id, 'email' => $user->email, 'status' => $status, 'source' => 'public-microsite', 'registered_at' => now(), 'approved_at' => $status === 'approved' ? now() : null]);
-            foreach ($registrationFields as $field) {
-                $value = match ($field->field_key) {
-                    'full_name' => $user->name,'email' => $user->email,'mobile' => $user->mobile,'city' => $user->city_id,default => data_get($request->input('fields', []), (string) $field->id)
-                };
-                if ($value !== null && $value !== '') {
-                    RegistrationAnswer::create(['registration_id' => $registration->id, 'registration_field_id' => $field->id, 'value' => is_array($value) ? json_encode($value) : $value]);
-                }
-            }
-        }
         Auth::login($user);
         $request->session()->regenerate();
-        if ($webinar) {
-            $request->session()->put('frontend_event_slug', $webinar->slug);
-            $request->session()->forget('url.intended');
-        }
-        if ($webinar) {
-            return redirect()->route('webinars.show', $webinar)
-                ->with('registration_status', 'Registration successful. Your webinar dashboard is ready.')
-                ->with('auth_redirect', route('webinars.dashboard', $webinar));
-        }
 
         return redirect()->route('webinars.index')
-            ->with('registration_status', 'Account created successfully. Taking you to your dashboard…')
+            ->with('registration_status', 'Registration successfully.')
             ->with('auth_redirect', route('dashboard'));
+    }
+
+    private function validateFrontend(Request $request, array $rules, string $modal, array $customAttributes = []): array
+    {
+        $validator = Validator::make($request->all(), $rules, [], $customAttributes);
+        if ($validator->fails()) {
+            throw (new ValidationException($validator))->redirectTo(FrontendAuth::landing($request, $modal));
+        }
+
+        return $validator->validated();
     }
 
     private function micrositeReturnPath(Request $request): ?string
@@ -236,16 +389,6 @@ class AuthController extends Controller
         $this->validateFrontend($request, ['email' => ['required', 'email']], 'forgot');
 
         return redirect(FrontendAuth::landing($request, 'forgot'))->with('status', 'If that account exists, password reset instructions have been prepared.');
-    }
-
-    private function validateFrontend(Request $request, array $rules, string $modal): array
-    {
-        $validator = Validator::make($request->all(), $rules);
-        if ($validator->fails()) {
-            throw (new ValidationException($validator))->redirectTo(FrontendAuth::landing($request, $modal));
-        }
-
-        return $validator->validated();
     }
 
     public function logout(Request $request): RedirectResponse

@@ -4,21 +4,39 @@
 @php($routeBase=$type==='speaker'?'admin.speakers':'admin.general.'.$type.'s')
 @php($bulkRoute=$type==='speaker'?route('admin.speakers.bulk-destroy'):route('admin.general.'.$type.'s.bulk-destroy'))
 <style>.listing-preview{width:62px;height:48px;border-radius:10px;border:1px solid #e5e7eb;object-fit:cover;background:#f8fafc}.listing-preview.video{background:#0f172a}.media-placeholder{width:62px;height:48px;display:grid;place-items:center;border-radius:10px;background:#f1f5f9;color:#7c3aed}.bulk-toolbar{display:none;align-items:center;gap:12px;padding:11px 14px;margin-bottom:14px;border:1px solid #ddd6fe;border-radius:13px;background:#f5f3ff}.bulk-toolbar.visible{display:flex}.sweet-confirm-backdrop{position:fixed;inset:0;z-index:2000;display:grid;place-items:center;padding:20px;background:#0f172a80;backdrop-filter:blur(5px)}.sweet-confirm-card{width:min(430px,100%);padding:30px;text-align:center;border-radius:24px;background:#fff;box-shadow:0 30px 90px #0f172a45}.sweet-confirm-icon{width:72px;height:72px;margin:0 auto 18px;display:grid;place-items:center;border:3px solid #fecaca;border-radius:50%;color:#ef4444;font-size:2rem}.sweet-confirm-card p{color:#64748b}.cursor-pointer{cursor:pointer}</style>
-<div class="page-heading"><div><span class="eyebrow">GENERAL SETTINGS</span><h1>{{ ucfirst($type) }}s</h1><p>Manage webinar {{ $type }}s, previews and visibility.</p></div><a class="btn btn-gradient" href="{{ route($routeBase.'.create') }}"><i class="bi bi-plus"></i> Add {{ $type }}</a></div>
+<div class="page-heading"><div><span class="eyebrow">{{ $type === 'speaker' ? 'WEBINAR MANAGEMENT' : 'GENERAL SETTINGS' }}</span><h1>{{ ucfirst($type) }}s</h1><p>Manage webinar {{ $type }}s, previews and visibility.</p></div><a class="btn btn-gradient" href="{{ route($routeBase.'.create') }}"><i class="bi bi-plus"></i> Add {{ $type }}</a></div>
 @if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
 <form id="bulkDeleteForm" method="POST" action="{{ $bulkRoute }}" data-confirm-delete data-confirm-title="Delete selected {{ $type }}s?" data-confirm-text="This will permanently delete every selected item.">@csrf @method('DELETE')</form>
-<div class="panel-card"><div class="d-flex align-items-center justify-content-between gap-3 mb-3"><div class="filter-search mb-0"><i class="bi bi-search"></i><input data-listing-search placeholder="Search {{ $type }}s"></div></div>
+<form class="filter-bar module-filter-bar mb-4" method="GET">
+    <div class="filter-search">
+        <i class="bi bi-search"></i>
+        <input name="search" value="{{ request('search') }}" placeholder="Search {{ $type }}s..." aria-label="Search {{ $type }}s">
+    </div>
+    @if(isset($webinars) && $webinars->isNotEmpty())
+        <select class="form-select" name="webinar_id" onchange="this.form.submit()" aria-label="Filter by webinar">
+            <option value="">All webinars</option>
+            @foreach($webinars as $w)
+                <option value="{{ $w->id }}" @selected((int)request('webinar_id') === $w->id)>{{ $w->title }}</option>
+            @endforeach
+        </select>
+    @endif
+    <button class="btn btn-light" type="submit"><i class="bi bi-funnel"></i> Filter</button>
+    @if(request('search') || request('webinar_id'))
+        <a class="btn btn-outline-secondary" href="{{ url()->current() }}">Reset</a>
+    @endif
+</form>
+<div class="panel-card">
 <div class="bulk-toolbar" data-bulk-toolbar><strong><span data-selected-count>0</span> selected</strong><span class="text-muted">Choose the items you want to remove.</span><button type="submit" form="bulkDeleteForm" class="btn btn-sm btn-danger ms-auto"><i class="bi bi-trash"></i> Delete selected</button></div>
 <div class="table-responsive"><table class="premium-table" data-jquery-listing><thead><tr><th><input class="form-check-input" type="checkbox" data-select-all aria-label="Select all"></th><th>Index</th><th>Preview</th><th>Name / title</th><th>Webinar</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>
 @forelse($rows as $row)
 @php($media=$type==='banner'?($row->media_path?:$row->media_url):($type==='brand'?$row->logo_path:$row->photo_path))
 <tr><td><input class="form-check-input" form="bulkDeleteForm" type="checkbox" name="ids[]" value="{{ $row->id }}" data-row-select aria-label="Select {{ $row->title??$row->name }}"></td>
 <td data-list-index>{{ $rows->firstItem()+$loop->index }}</td>
-<td>@if($media)@if($type==='banner'&&$row->media_type==='video')<video class="listing-preview video" src="{{ $media }}" muted preload="metadata" controls></video>@else<a href="{{ $media }}" target="_blank" title="Open preview"><img class="listing-preview" src="{{ $media }}" alt="{{ $row->title??$row->name }} preview"></a>@endif @else<span class="media-placeholder"><i class="bi bi-{{ $type==='speaker'?'person':'image' }}"></i></span>@endif</td>
+<td>@if($media)@php(preg_match('/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/i',(string)$media,$ytListMatch))@if($type==='banner'&&$row->media_type==='video'&&!empty($ytListMatch[1]))<a href="{{ $media }}" target="_blank" title="Open YouTube video"><img class="listing-preview" src="https://img.youtube.com/vi/{{ $ytListMatch[1] }}/mqdefault.jpg" alt="{{ $row->title }} preview"></a>@elseif($type==='banner'&&$row->media_type==='video')<video class="listing-preview video" src="{{ $media }}" muted preload="metadata" controls></video>@else<a href="{{ $media }}" target="_blank" title="Open preview"><img class="listing-preview" src="{{ $media }}" alt="{{ $row->title??$row->name }} preview"></a>@endif @else<span class="media-placeholder"><i class="bi bi-{{ $type==='speaker'?'person':'image' }}"></i></span>@endif</td>
 <td><strong>{{ $row->title??$row->name }}</strong>@if($type==='banner'&&($row->starts_at||$row->ends_at))<br><small>{{ $row->starts_at?->format('d M Y H:i')??'Now' }} – {{ $row->ends_at?->format('d M Y H:i')??'No end' }}</small>@endif</td>
 <td>{{ $type==='speaker'?($row->webinars->first()?->title??'—'):($row->webinar?->title??'—') }}</td><td>{{ ucfirst($row->media_type??$type) }}</td>
 <td><form method="POST" action="{{ route($routeBase.'.toggle',$row) }}">@csrf @method('PATCH')<label class="d-inline-flex align-items-center gap-2 m-0 cursor-pointer"><span class="form-switch m-0"><input class="form-check-input" type="checkbox" @checked($row->is_active) onchange="this.form.submit()" aria-label="Toggle status"></span><strong class="{{ $row->is_active?'text-success':'text-muted' }}">{{ $row->is_active?'Active':'Inactive' }}</strong></label></form></td>
 <td><div class="d-flex gap-2"><a class="btn btn-sm btn-light" href="{{ route($routeBase.'.edit',$row) }}">Edit</a><form method="POST" action="{{ route($routeBase.'.destroy',$row) }}" data-confirm-delete data-confirm-title="Delete this {{ $type }}?" data-confirm-text="{{ $row->title??$row->name }} will be permanently deleted.">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Delete</button></form></div></td></tr>
 @empty<tr><td colspan="8" class="text-center text-muted py-5">No {{ $type }}s added yet.</td></tr>@endforelse
-</tbody></table></div></div><div class="mt-3">{{ $rows->links() }}</div>
+</tbody></table></div></div><x-admin-pagination :paginator="$rows" />
 @endsection

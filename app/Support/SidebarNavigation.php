@@ -33,6 +33,7 @@ final class SidebarNavigation
             self::item('Polls', 'bar-chart', '/admin/polls'),
             self::item('Certificates', 'award', '/admin/certificates'),
             self::item('Certificate Queue', 'patch-check', '/admin/certificate-queue'),
+            self::item('Certificate Logs', 'journal-text', '/admin/certificates/logs'),
             self::item('Users', 'people', '/admin/users'),
             self::item('User Attendance', 'person-video3', '/admin/attendance'),
             self::item('Registrations', 'person-check', '/admin/registrations'),
@@ -45,7 +46,6 @@ final class SidebarNavigation
             self::group('General Settings', 'gear', 'generalSettingsMenu', [
                 self::item('Site Settings', null, '/admin/general-settings/site'),
                 self::item('Banners', null, '/admin/general-settings/banners'),
-                self::item('Speakers', null, '/admin/speakers'),
                 self::item('Brands', null, '/admin/general-settings/brands'),
                 self::item('Content', null, '/admin/cms'),
             ]),

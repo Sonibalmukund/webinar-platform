@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Events\WebinarQuestionUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Webinar;
 use Illuminate\Http\RedirectResponse;
@@ -25,8 +26,19 @@ class QuestionController extends Controller
         $query = DB::table('questions')->where('id', $question);
         if ($request->user()->hasRole('sub-admin')) {
             $query->whereIn('webinar_id', $request->user()->assignedWebinars()->pluck('webinars.id'));
-        }abort_unless($query->exists(), 404);
+        }
+        $row = $query->first();
+        abort_unless($row, 404);
         $query->update(['status' => $data['status'], 'answered_at' => $data['status'] === 'answered' ? now() : null, 'updated_at' => now()]);
+
+        try {
+            broadcast(new WebinarQuestionUpdated($row->webinar_id, 'status_updated', [
+                'id' => $question,
+                'status' => $data['status'],
+            ]));
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return back()->with('success', 'Question status updated.');
     }
@@ -37,7 +49,8 @@ class QuestionController extends Controller
         $query = DB::table('questions')->where('id', $question);
         if ($request->user()->hasRole('sub-admin')) {
             $query->whereIn('webinar_id', $request->user()->assignedWebinars()->pluck('webinars.id'));
-        }$row = $query->first();
+        }
+        $row = $query->first();
         abort_unless($row, 404);
         DB::transaction(function () use ($request, $question, $data) {
             DB::table('question_answers')->where('question_id', $question)->where('is_official', true)->delete();
@@ -45,6 +58,17 @@ class QuestionController extends Controller
             DB::table('questions')->where('id', $question)->update(['status' => 'answered', 'answered_at' => now(), 'updated_at' => now()]);
         });
 
+        try {
+            broadcast(new WebinarQuestionUpdated($row->webinar_id, 'answered', [
+                'id' => $question,
+                'status' => 'answered',
+                'official_answer' => $data['answer'],
+            ]));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
         return back()->with('success', 'Official answer saved successfully.');
     }
 }
+

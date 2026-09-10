@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Events\WebinarRoomUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\CertificateTemplate;
 use App\Models\Webinar;
@@ -16,12 +17,26 @@ use Illuminate\View\View;
 
 class CertificateController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $user = request()->user();
+        $user = $request->user();
+        $selectedWebinarId = $request->filled('webinar_id') ? $request->integer('webinar_id') : null;
+        $search = trim($request->input('search', ''));
+
+        $allWebinars = Webinar::when($user->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $user->assignedWebinars()->pluck('webinars.id')))->orderBy('title')->get();
+
+        $webinars = Webinar::when($user->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $user->assignedWebinars()->pluck('webinars.id')))
+            ->when($selectedWebinarId, fn ($query) => $query->where('id', $selectedWebinarId))
+            ->when($search !== '', fn ($query) => $query->where('title', 'like', "%{$search}%"))
+            ->latest()
+            ->paginate(15)
+            ->withQueryString();
 
         return view('pages.admin.certificates.index', [
-            'webinars' => Webinar::when($user->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $user->assignedWebinars()->pluck('webinars.id')))->latest()->paginate(15),
+            'webinars' => $webinars,
+            'allWebinars' => $allWebinars,
+            'selectedWebinarId' => $selectedWebinarId,
+            'search' => $search,
             'templates' => CertificateTemplate::orderBy('name')->get(),
         ]);
     }
@@ -110,6 +125,25 @@ class CertificateController extends Controller
     {
         $data = $request->validate(['enabled' => ['required', 'boolean']]);
         $webinar->update(['certificate_enabled' => $data['enabled'] ? 'yes' : 'no']);
+        try {
+            broadcast(new WebinarRoomUpdated($webinar->id, 'controls', [
+                'status' => $webinar->status,
+                'chat_enabled' => (bool) $webinar->chat_enabled,
+                'polls_enabled' => (bool) $webinar->polls_enabled,
+                'comments_enabled' => (bool) $webinar->comments_enabled,
+                'certificate_enabled' => $webinar->certificate_enabled === 'yes',
+            ]));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'enabled' => (bool) $data['enabled'],
+                'status_text' => $data['enabled'] ? 'VISIBLE' : 'HIDDEN',
+                'message' => $data['enabled'] ? 'Certificate enabled.' : 'Certificate hidden.',
+            ]);
+        }
 
         return back()->with('status', $data['enabled'] ? 'Certificate enabled.' : 'Certificate hidden.');
     }
@@ -140,5 +174,47 @@ class CertificateController extends Controller
         AuditTrail::record('certificate.'.$data['status'], null, 'Certificate eligibility reviewed.', ['certificate_id' => $certificate]);
 
         return back()->with('status', 'Certificate '.$data['status'].'.');
+    }
+
+    public function logs(Request $request): View
+    {
+        $user = $request->user();
+        $search = trim($request->input('search', ''));
+        $webinarId = $request->input('webinar_id');
+
+        $query = DB::table('certificate_downloads')
+            ->join('users', 'users.id', '=', 'certificate_downloads.user_id')
+            ->join('webinars', 'webinars.id', '=', 'certificate_downloads.webinar_id')
+            ->select(
+                'certificate_downloads.*',
+                'users.name as user_name',
+                'users.email as user_email',
+                'webinars.title as webinar_title',
+                'webinars.slug as webinar_slug'
+            );
+
+        if ($user->hasRole('sub-admin')) {
+            $assignedIds = $user->assignedWebinars()->pluck('webinars.id')->all();
+            $query->whereIn('certificate_downloads.webinar_id', $assignedIds);
+        }
+
+        if ($webinarId) {
+            $query->where('certificate_downloads.webinar_id', $webinarId);
+        }
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('users.name', 'like', "%{$search}%")
+                    ->orWhere('users.email', 'like', "%{$search}%")
+                    ->orWhere('webinars.title', 'like', "%{$search}%")
+                    ->orWhere('certificate_downloads.credential_id', 'like', "%{$search}%")
+                    ->orWhere('certificate_downloads.ip_address', 'like', "%{$search}%");
+            });
+        }
+
+        $logs = $query->latest('certificate_downloads.downloaded_at')->paginate(20)->withQueryString();
+        $webinars = Webinar::when($user->hasRole('sub-admin'), fn ($q) => $q->whereIn('id', $user->assignedWebinars()->pluck('webinars.id')))->orderBy('title')->get();
+
+        return view('pages.admin.certificates.logs', compact('logs', 'webinars', 'search', 'webinarId'));
     }
 }

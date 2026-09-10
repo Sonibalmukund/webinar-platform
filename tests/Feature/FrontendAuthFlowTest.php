@@ -57,6 +57,7 @@ class FrontendAuthFlowTest extends TestCase
 
     public function test_event_without_custom_login_field_still_has_both_popups(): void
     {
+        \Illuminate\Support\Facades\DB::table('settings')->where('key', 'registration_password_enabled')->update(['value' => '0']);
         $webinar = $this->webinar();
         $this->get('/'.$webinar->slug)->assertOk()
             ->assertSee('id="micrositeLoginModal"', false)

@@ -32,17 +32,174 @@
 </div>
 
 <div class="report-main-grid">
-    <section class="panel-card report-chart-card">
-        <div class="panel-title"><div><h3>Audience momentum</h3><p>Last 14 days registration vs attendance trend</p></div><div class="chart-key"><span class="blue">Registrations</span><span class="green">Attendees</span></div></div>
-        <div class="report-chart-scale">@foreach([100,75,50,25,0] as $scale)<span>{{ round($maxTrend*$scale/100) }}</span>@endforeach</div>
-        <div class="report-line-chart"><svg viewBox="0 0 800 235" preserveAspectRatio="none"><defs><linearGradient id="reportArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7c3aed" stop-opacity=".24"/><stop offset="1" stop-color="#7c3aed" stop-opacity="0"/></linearGradient></defs>@foreach([34,76,119,161,204] as $y)<line x1="24" y1="{{ $y }}" x2="776" y2="{{ $y }}" class="chart-grid-line"/>@endforeach<polygon points="24,204 {{ $registrationPoints }} 776,204" fill="url(#reportArea)"/><polyline points="{{ $registrationPoints }}" class="report-chart-line report-registration-line"/><polyline points="{{ $attendancePoints }}" class="report-chart-line report-attendance-line"/>@foreach($trend as $row)<circle cx="{{ 24+$loop->index*(752/13) }}" cy="{{ 204-($row['registrations']/$maxTrend)*170 }}" r="4.5" class="report-dot registration-dot"><title>{{ $row['label'] }}: {{ $row['registrations'] }} registrations</title></circle><circle cx="{{ 24+$loop->index*(752/13) }}" cy="{{ 204-($row['attendees']/$maxTrend)*170 }}" r="4.5" class="report-dot attendance-dot"><title>{{ $row['label'] }}: {{ $row['attendees'] }} attendees</title></circle>@endforeach</svg><div class="report-chart-labels">@foreach($trend as $row)<span>{{ $loop->index%2===0?$row['label']:'' }}</span>@endforeach</div></div>
+    <section class="panel-card report-chart-card" style="padding: 24px;">
+        <div class="panel-title d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h3 style="font-size:1.15rem; font-weight:800; margin:0; color:#1e293b;">Audience momentum</h3>
+                <p style="font-size:0.75rem; color:#64748b; margin:4px 0 0;">Last 14 days registration vs attendance trend</p>
+            </div>
+            <div class="d-flex align-items-center gap-3" style="font-size:0.75rem; font-weight:700;">
+                <span class="d-inline-flex align-items-center gap-1"><span style="width:10px; height:10px; border-radius:50%; background:#7c3aed; display:inline-block;"></span> <span style="color:#6d28d9;">Registrations</span></span>
+                <span class="d-inline-flex align-items-center gap-1"><span style="width:10px; height:10px; border-radius:50%; background:#10b981; display:inline-block;"></span> <span style="color:#059669;">Attendees</span></span>
+            </div>
+        </div>
+        <div style="position:relative; height:265px; width:100%;">
+            <canvas id="reportAudienceChart"></canvas>
+        </div>
     </section>
-    <aside class="panel-card report-conversion-card">
-        <div class="panel-title"><div><h3>Conversion pulse</h3><p>Audience journey</p></div><span class="status-badge active">LIVE DATA</span></div>
-        <div class="report-ring" style="--report-progress:{{ min(100,$attendanceRate) }}"><div><strong>{{ $attendanceRate }}%</strong><small>attendance</small></div></div>
-        <div class="report-funnel"><div><span>Registered</span><strong>{{ $registrationCount }}</strong></div><i></i><div><span>Attended</span><strong>{{ $attendeeCount }}</strong></div><i></i><div><span>Unique voters</span><strong>{{ $uniqueVoters }}</strong></div></div>
+    <aside class="panel-card report-conversion-card" style="padding: 24px;">
+        <div class="panel-title d-flex justify-content-between align-items-center mb-2">
+            <div>
+                <h3 style="font-size:1.05rem; font-weight:800; margin:0; color:#1e293b;">Conversion pulse</h3>
+                <p style="font-size:0.72rem; color:#64748b; margin:3px 0 0;">Audience journey</p>
+            </div>
+            <span class="status-badge active" style="font-size:0.65rem; font-weight:800; padding:4px 10px; border-radius:999px; background:#dcfce7; color:#15803d;"><i class="bi bi-broadcast me-1"></i>LIVE DATA</span>
+        </div>
+        <div style="position:relative; height:160px; width:100%; margin: 8px auto;">
+            <canvas id="reportConversionDonut"></canvas>
+            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none;">
+                <strong style="font-size:1.6rem; font-weight:800; color:#1e293b; line-height:1;">{{ $attendanceRate }}%</strong>
+                <small style="font-size:0.68rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-top:3px;">Attendance</small>
+            </div>
+        </div>
+        <div class="report-funnel mt-2">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 13px; background:#f8fafc; border-radius:10px; font-size:0.75rem; border:1px solid #f1f5f9;">
+                <span style="color:#475569; font-weight:600;"><i class="bi bi-person-plus text-primary me-1"></i> Registered</span>
+                <strong style="font-weight:800; color:#1e293b;">{{ number_format($registrationCount) }}</strong>
+            </div>
+            <div style="text-align:center; color:#cbd5e1; font-size:0.75rem; margin:-3px 0;"><i class="bi bi-chevron-down"></i></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 13px; background:#ecfdf5; border-radius:10px; font-size:0.75rem; border:1px solid #d1fae5;">
+                <span style="color:#065f46; font-weight:600;"><i class="bi bi-person-check-fill text-success me-1"></i> Attended</span>
+                <strong style="font-weight:800; color:#065f46;">{{ number_format($attendeeCount) }}</strong>
+            </div>
+            <div style="text-align:center; color:#cbd5e1; font-size:0.75rem; margin:-3px 0;"><i class="bi bi-chevron-down"></i></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 13px; background:#faf5ff; border-radius:10px; font-size:0.75rem; border:1px solid #f3e8ff;">
+                <span style="color:#6b21a8; font-weight:600;"><i class="bi bi-ui-checks-grid text-purple me-1"></i> Unique voters</span>
+                <strong style="font-weight:800; color:#6b21a8;">{{ number_format($uniqueVoters) }}</strong>
+            </div>
+        </div>
     </aside>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    if (!window.Chart) return;
+
+    const reportAudienceCtx = document.getElementById('reportAudienceChart')?.getContext('2d');
+    if (reportAudienceCtx) {
+        const gradPurple = reportAudienceCtx.createLinearGradient(0, 0, 0, 240);
+        gradPurple.addColorStop(0, 'rgba(124, 58, 237, 0.28)');
+        gradPurple.addColorStop(1, 'rgba(124, 58, 237, 0.00)');
+
+        const gradTeal = reportAudienceCtx.createLinearGradient(0, 0, 0, 240);
+        gradTeal.addColorStop(0, 'rgba(16, 185, 129, 0.24)');
+        gradTeal.addColorStop(1, 'rgba(16, 185, 129, 0.00)');
+
+        new window.Chart(reportAudienceCtx, {
+            type: 'line',
+            data: {
+                labels: @json($trend->pluck('label')),
+                datasets: [
+                    {
+                        label: 'Registrations',
+                        data: @json($trend->pluck('registrations')),
+                        borderColor: '#7c3aed',
+                        backgroundColor: gradPurple,
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#7c3aed',
+                        pointBorderWidth: 2.5,
+                        pointRadius: 4,
+                        pointHoverRadius: 7,
+                        pointHoverBackgroundColor: '#7c3aed',
+                        pointHoverBorderColor: '#ffffff'
+                    },
+                    {
+                        label: 'Attendees',
+                        data: @json($trend->pluck('attendees')),
+                        borderColor: '#10b981',
+                        backgroundColor: gradTeal,
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#10b981',
+                        pointBorderWidth: 2.5,
+                        pointRadius: 4,
+                        pointHoverRadius: 7,
+                        pointHoverBackgroundColor: '#10b981',
+                        pointHoverBorderColor: '#ffffff'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#0f172a',
+                        titleColor: '#ffffff',
+                        bodyColor: '#cbd5e1',
+                        padding: 12,
+                        cornerRadius: 10,
+                        usePointStyle: true
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#64748b', font: { size: 11, weight: '600' } }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: '#f1f5f9', borderDash: [4, 4] },
+                        ticks: { precision: 0, color: '#94a3b8', font: { size: 11 } }
+                    }
+                }
+            }
+        });
+    }
+
+    const reportDonutCtx = document.getElementById('reportConversionDonut')?.getContext('2d');
+    if (reportDonutCtx) {
+        const total = {{ $registrationCount }};
+        const attended = {{ $attendeeCount }};
+        const voters = {{ $uniqueVoters }};
+        const notAttended = Math.max(0, total - attended);
+
+        new window.Chart(reportDonutCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Attended', 'Not Attended', 'Unique Voters'],
+                datasets: [{
+                    data: total > 0 ? [attended, notAttended, voters] : [1, 0, 0],
+                    backgroundColor: total > 0 ? ['#10b981', '#e2e8f0', '#7c3aed'] : ['#e2e8f0', '#f8fafc', '#f1f5f9'],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '74%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        enabled: total > 0,
+                        backgroundColor: '#0f172a',
+                        padding: 10,
+                        cornerRadius: 8
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
 
 <div class="report-insights">
     <article><i class="bi bi-bar-chart-fill"></i><span><small>Total polls</small><strong>{{ $polls->count() }}</strong></span></article>

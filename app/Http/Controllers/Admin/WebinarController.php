@@ -11,6 +11,7 @@ use App\Models\Webinar;
 use App\Support\AuditTrail;
 use App\Support\VideoEmbed;
 use App\Support\WebinarHealth;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -23,10 +24,29 @@ use Illuminate\View\View;
 
 class WebinarController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $user = request()->user();
-        $webinars = Webinar::with('registrationForm')->withCount('registrations')->when($user->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $user->assignedWebinars()->pluck('webinars.id')))->latest()->paginate(15);
+        $user = $request->user();
+        $search = trim((string) $request->input('search'));
+        $status = $request->input('status');
+
+        $query = Webinar::with('registrationForm')
+            ->withCount('registrations')
+            ->when($user->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $user->assignedWebinars()->pluck('webinars.id')));
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('short_description', 'like', "%{$search}%")
+                    ->orWhere('slug', 'like', "%{$search}%");
+            });
+        }
+
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $webinars = $query->latest()->paginate(15)->withQueryString();
         $webinars->getCollection()->each(fn ($webinar) => $webinar->health = WebinarHealth::score($webinar));
 
         return view('pages.admin.webinars.index', compact('webinars'));
@@ -52,7 +72,7 @@ class WebinarController extends Controller
         });
         AuditTrail::record('webinar.created', $webinar, 'Webinar created.');
 
-        return redirect()->route('admin.webinars.edit', $webinar)->with('status', 'Webinar created successfully.');
+        return redirect()->route('admin.webinars.index')->with('status', 'Webinar created successfully.');
     }
 
     public function edit(Webinar $webinar): View
@@ -79,25 +99,78 @@ class WebinarController extends Controller
         return view('pages.admin.webinars.live', ['webinar' => $webinar->loadCount('registrations'), 'liveViewers' => $liveViewers]);
     }
 
-    public function controls(Request $request, Webinar $webinar): RedirectResponse
+    public function controls(Request $request, Webinar $webinar): RedirectResponse|JsonResponse
     {
-        $webinar->update(['status' => $request->input('status', $webinar->status), 'chat_enabled' => $request->boolean('chat_enabled'), 'qa_enabled' => false, 'comments_enabled' => $request->boolean('comments_enabled'), 'polls_enabled' => $request->boolean('polls_enabled')]);
+        $webinar->update([
+            'status' => $request->input('status', $webinar->status),
+            'chat_enabled' => $request->boolean('chat_enabled'),
+            'qa_enabled' => $request->boolean('qa_enabled'),
+            'comments_enabled' => $request->boolean('comments_enabled'),
+            'polls_enabled' => $request->boolean('polls_enabled'),
+            'feedback_enabled' => $request->boolean('feedback_enabled'),
+        ]);
         $this->broadcastRoom($webinar, 'controls');
         AuditTrail::record('webinar.controls', $webinar, 'Live controls updated.', ['status' => $webinar->status]);
 
-        return back()->with('status', 'Live controls updated.');
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'message' => 'Live controls updated.',
+                'status' => $webinar->status,
+                'chat_enabled' => $webinar->chat_enabled,
+                'qa_enabled' => $webinar->qa_enabled,
+                'polls_enabled' => $webinar->polls_enabled,
+                'comments_enabled' => $webinar->comments_enabled,
+                'feedback_enabled' => $webinar->feedback_enabled,
+                'certificate_enabled' => $webinar->certificate_enabled === 'yes',
+            ]);
+        }
+
+        return redirect()->route('admin.webinars.index')->with('status', 'Live controls updated successfully.');
+    }
+
+    public function announcement(Request $request, Webinar $webinar): RedirectResponse|JsonResponse
+    {
+        $data = $request->validate([
+            'message' => ['nullable', 'string', 'max:500'],
+            'button_text' => ['nullable', 'string', 'max:50'],
+            'button_url' => ['nullable', 'url', 'max:500'],
+            'enabled' => ['nullable'],
+        ]);
+
+        $settings = $webinar->settings ?? [];
+        $settings['pinned_announcement'] = [
+            'enabled' => $request->boolean('enabled'),
+            'message' => trim((string) ($data['message'] ?? '')),
+            'button_text' => trim((string) ($data['button_text'] ?? '')),
+            'button_url' => trim((string) ($data['button_url'] ?? '')),
+            'updated_at' => now()->toIso8601String(),
+        ];
+
+        $webinar->update(['settings' => $settings]);
+        $this->broadcastRoom($webinar, 'announcement');
+        AuditTrail::record('webinar.announcement', $webinar, 'Pinned announcement updated.');
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'message' => 'Pinned announcement updated.',
+                'pinned_announcement' => $settings['pinned_announcement'],
+            ]);
+        }
+
+        return back()->with('status', 'Pinned announcement updated.');
     }
 
     public function status(Request $request, Webinar $webinar): RedirectResponse
     {
         $data = $request->validate(['status' => ['required', 'in:draft,scheduled,live,completed,cancelled']]);
         if (in_array($data['status'], ['scheduled', 'live']) && (! $webinar->starts_at || ! $webinar->ends_at)) {
-            return back()->withErrors(['status' => 'Set the start and end time before publishing this webinar.']);
-        }$webinar->update(['status' => $data['status'], 'published_at' => $data['status'] === 'draft' ? null : ($webinar->published_at ?? now())]);
+            return redirect()->route('admin.webinars.index')->withErrors(['status' => 'Set the start and end time before publishing this webinar.']);
+        }
+        $webinar->update(['status' => $data['status'], 'published_at' => $data['status'] === 'draft' ? null : ($webinar->published_at ?? now())]);
         $this->broadcastRoom($webinar, 'status');
         AuditTrail::record('webinar.status', $webinar, 'Webinar status changed to '.$data['status'].'.');
 
-        return back()->with('status', 'Webinar status updated.');
+        return redirect()->route('admin.webinars.index')->with('status', 'Webinar status updated successfully.');
     }
 
     public function update(Request $request, Webinar $webinar): RedirectResponse
@@ -114,7 +187,7 @@ class WebinarController extends Controller
         AuditTrail::record('webinar.updated', $webinar, 'Webinar settings updated.', ['changes' => $webinar->getChanges()]);
         $this->broadcastRoom($webinar, 'controls');
 
-        return back()->with('status', 'Webinar updated successfully.');
+        return redirect()->route('admin.webinars.index')->with('status', 'Webinar updated successfully.');
     }
 
     public function destroy(Webinar $webinar): RedirectResponse
@@ -183,13 +256,34 @@ class WebinarController extends Controller
         });
         AuditTrail::record('webinar.cloned', $copy, 'Webinar cloned from '.$webinar->title, ['source_id' => $webinar->id]);
 
-        return redirect()->route('admin.webinars.edit', $copy)->with('status', 'Webinar cloned as a draft. Set its schedule before publishing.');
+        return redirect()->route('admin.webinars.index')->with('status', 'Webinar cloned as a draft. Set its schedule before publishing.');
     }
 
     private function webinarData(Request $request, ?Webinar $webinar = null): array
     {
-        $request->merge(['early_entry_minutes' => $request->input('early_entry_minutes', 30)]);
-        $data = $request->validate(['title' => ['required', 'string', 'max:255'], 'slug' => ['nullable', 'string', 'max:180', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('webinars', 'slug')->ignore($webinar?->id)], 'icon' => ['nullable', 'string', 'max:60'], 'short_description' => ['nullable', 'string', 'max:500'], 'description' => ['nullable', 'string'], 'status' => ['required', 'in:draft,scheduled,live,completed,cancelled'], 'language' => ['required', 'string', 'max:10'], 'timezone' => ['required', 'timezone'], 'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'], 'early_entry_minutes' => ['required', 'integer', 'min:0', 'max:240'], 'max_attendees' => ['nullable', 'integer', 'min:1'], 'registration_type' => ['required', 'in:free,paid'], 'price' => ['nullable', 'numeric', 'min:0']]);
+        $request->merge([
+            'early_entry_minutes' => $request->input('early_entry_minutes', 30),
+            'registration_type' => $request->input('registration_type', 'free'),
+            'price' => $request->input('price', 0),
+        ]);
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'slug' => ['nullable', 'string', 'max:180', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('webinars', 'slug')->ignore($webinar?->id)],
+            'icon' => ['nullable', 'string', 'max:60'],
+            'short_description' => ['nullable', 'string', 'max:500'],
+            'description' => ['nullable', 'string'],
+            'status' => ['required', 'in:draft,scheduled,live,completed,cancelled'],
+            'language' => ['required', 'string', 'max:10'],
+            'timezone' => ['required', 'timezone'],
+            'starts_at' => ['nullable', 'date'],
+            'ends_at' => ['nullable', 'date', 'after:starts_at'],
+            'early_entry_minutes' => ['required', 'integer', 'min:0', 'max:240'],
+            'max_attendees' => ['nullable', 'integer', 'min:1'],
+            'registration_type' => ['required', 'in:free,paid'],
+            'price' => ['nullable', 'numeric', 'min:0'],
+        ], [
+            'ends_at.after' => 'The end date and time must be after the start date and time.',
+        ]);
         $player = $request->validate(['live_provider' => ['nullable', 'in:youtube,vimeo,custom'], 'live_source' => ['nullable', 'string', 'max:5000']]);
         $provider = $player['live_provider'] ?? null;
         $data['live_provider'] = $provider;
@@ -204,7 +298,7 @@ class WebinarController extends Controller
         }
         $data['certificate_enabled'] = $request->has('certificate_enabled') ? ($request->boolean('certificate_enabled') ? 'yes' : 'no') : ($webinar?->certificate_enabled ?? 'no');
         $data['chat_enabled'] = $request->boolean('chat_enabled');
-        $data['qa_enabled'] = false;
+        $data['qa_enabled'] = $request->has('qa_enabled') ? $request->boolean('qa_enabled') : ($webinar?->qa_enabled ?? true);
         $data['comments_enabled'] = $request->boolean('comments_enabled');
         $data['feedback_enabled'] = $request->boolean('feedback_enabled');
         $data['polls_enabled'] = $request->has('polls_enabled') ? $request->boolean('polls_enabled') : ($webinar?->polls_enabled ?? false);
@@ -216,13 +310,28 @@ class WebinarController extends Controller
         $experience = $request->validate([
             'room_layout' => ['nullable', 'in:theater,presentation,interview,panel'],
             'brand_primary' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'], 'brand_secondary' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'], 'brand_logo_url' => ['nullable', 'url'],
+            'brand_logo_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:5120'],
             'waiting_message' => ['nullable', 'string', 'max:500'], 'waiting_media_url' => ['nullable', 'url'], 'post_message' => ['nullable', 'string', 'max:500'], 'registration_success_title' => ['nullable', 'string', 'max:120'], 'registration_success_message' => ['nullable', 'string', 'max:500'],
             'video_chapters' => ['nullable', 'string', 'max:5000'], 'certificate_min_attendance' => ['nullable', 'integer', 'min:0', 'max:100'], 'certificate_require_poll' => ['nullable', 'boolean'],
             'registration_preset' => ['nullable', 'in:custom,business,education,healthcare,marketing'],
         ]);
+        $contact = $request->validate(['contact_mobile' => ['nullable', 'string', 'max:25', 'regex:/^[+0-9() .-]+$/']]);
         $settings = $webinar?->settings ?? [];
+        if ($request->has('contact_mobile')) {
+            $settings['contact_mobile'] = $contact['contact_mobile'] ?? null;
+        }
+        $existingLogo = data_get($webinar?->settings, 'experience.logo_url');
+        $logoUrl = $request->filled('brand_logo_url') ? $request->input('brand_logo_url') : $existingLogo;
+        if ($request->hasFile('brand_logo_file')) {
+            $logoFile = $request->file('brand_logo_file');
+            $directory = public_path('uploads/webinars');
+            \Illuminate\Support\Facades\File::ensureDirectoryExists($directory);
+            $logoName = \Illuminate\Support\Str::uuid().'.'.$logoFile->getClientOriginalExtension();
+            $logoFile->move($directory, $logoName);
+            $logoUrl = '/uploads/webinars/'.$logoName;
+        }
         $settings['experience'] = [
-            'layout' => $experience['room_layout'] ?? 'theater', 'primary' => $experience['brand_primary'] ?? '#6d28d9', 'secondary' => $experience['brand_secondary'] ?? '#2563eb', 'logo_url' => $experience['brand_logo_url'] ?? null,
+            'layout' => $experience['room_layout'] ?? 'theater', 'primary' => $experience['brand_primary'] ?? '#6d28d9', 'secondary' => $experience['brand_secondary'] ?? '#2563eb', 'logo_url' => $logoUrl,
             'waiting_message' => $experience['waiting_message'] ?? 'The webinar will begin shortly.', 'waiting_media_url' => $experience['waiting_media_url'] ?? null, 'post_message' => $experience['post_message'] ?? 'Thank you for attending.',
             'registration_success_title' => $experience['registration_success_title'] ?? 'You are registered!', 'registration_success_message' => $experience['registration_success_message'] ?? 'Your seat is confirmed. Add the webinar to your calendar and return when the room opens.',
             'chapters' => collect(preg_split('/\r\n|\r|\n/', $experience['video_chapters'] ?? ''))->filter()->map(function ($line) {
@@ -312,7 +421,16 @@ class WebinarController extends Controller
     private function broadcastRoom(Webinar $webinar, string $change): void
     {
         try {
-            broadcast(new WebinarRoomUpdated($webinar->id, $change, ['status' => $webinar->status, 'chat_enabled' => $webinar->chat_enabled, 'polls_enabled' => $webinar->polls_enabled]));
+            broadcast(new WebinarRoomUpdated($webinar->id, $change, [
+                'status' => $webinar->status,
+                'chat_enabled' => (bool) $webinar->chat_enabled,
+                'qa_enabled' => (bool) $webinar->qa_enabled,
+                'polls_enabled' => (bool) $webinar->polls_enabled,
+                'comments_enabled' => (bool) $webinar->comments_enabled,
+                'feedback_enabled' => (bool) $webinar->feedback_enabled,
+                'certificate_enabled' => $webinar->certificate_enabled === 'yes',
+                'pinned_announcement' => data_get($webinar->settings, 'pinned_announcement'),
+            ]));
         } catch (\Throwable $e) {
             report($e);
         }

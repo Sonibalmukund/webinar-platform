@@ -15,6 +15,25 @@ class WebinarRegistrationController extends Controller
     {
         abort_unless($webinar->registrationForm?->is_active, 403, 'Registration is disabled.');
         $fields = $webinar->registrationForm->fields()->with('options')->where('is_enabled', true)->get();
+        $input = $request->all();
+        foreach ($fields as $field) {
+            $lowerLabel = strtolower(trim($field->label));
+            $isName = in_array($lowerLabel, ['name', 'full name', 'your name']) || str_starts_with($field->field_key, 'name') || str_starts_with($field->field_key, 'full_name');
+            $isEmail = in_array($lowerLabel, ['email', 'email address']) || str_starts_with($field->field_key, 'email');
+            $isMobile = in_array($lowerLabel, ['mobile', 'mobile number', 'phone', 'phone number']) || str_starts_with($field->field_key, 'mobile');
+
+            if ($request->user()) {
+                if ($isName && empty(data_get($input, 'fields.'.$field->id))) {
+                    data_set($input, 'fields.'.$field->id, $request->user()->name);
+                } elseif ($isEmail && empty(data_get($input, 'fields.'.$field->id))) {
+                    data_set($input, 'fields.'.$field->id, $request->user()->email);
+                } elseif ($isMobile && empty(data_get($input, 'fields.'.$field->id)) && $request->user()->mobile) {
+                    data_set($input, 'fields.'.$field->id, $request->user()->mobile);
+                }
+            }
+        }
+        $request->merge($input);
+
         $rules = [];
         foreach ($fields as $field) {
             $conditionMet = true;
@@ -35,7 +54,21 @@ class WebinarRegistrationController extends Controller
             ['user_id' => $request->user()->id, 'status' => $status, 'source' => 'web', 'registered_at' => now(), 'approved_at' => $status === 'approved' ? now() : null]
         );
         foreach ($fields as $field) {
+            $lowerLabel = strtolower(trim($field->label));
+            $isName = in_array($lowerLabel, ['name', 'full name', 'your name']) || str_starts_with($field->field_key, 'name') || str_starts_with($field->field_key, 'full_name');
+            $isEmail = in_array($lowerLabel, ['email', 'email address']) || str_starts_with($field->field_key, 'email');
+            $isMobile = in_array($lowerLabel, ['mobile', 'mobile number', 'phone', 'phone number']) || str_starts_with($field->field_key, 'mobile');
+
             $value = data_get($request->input('fields', []), (string) $field->id);
+            if (($value === null || $value === '') && $request->user()) {
+                if ($isName) {
+                    $value = $request->user()->name;
+                } elseif ($isEmail) {
+                    $value = $request->user()->email;
+                } elseif ($isMobile) {
+                    $value = $request->user()->mobile;
+                }
+            }
             if ($value !== null) {
                 RegistrationAnswer::updateOrCreate(['registration_id' => $registration->id, 'registration_field_id' => $field->id], ['value' => is_array($value) ? json_encode($value) : $value]);
             }

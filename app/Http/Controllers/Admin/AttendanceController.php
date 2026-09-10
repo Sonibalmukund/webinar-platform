@@ -11,9 +11,19 @@ use Illuminate\View\View;
 
 class AttendanceController extends Controller
 {
-    private function query(int $webinarId = 0)
+    private function query(int $webinarId = 0, string $search = '')
     {
-        return DB::table('webinar_attendees')->join('users', 'users.id', '=', 'webinar_attendees.user_id')->join('webinars', 'webinars.id', '=', 'webinar_attendees.webinar_id')->when($webinarId, fn ($query) => $query->where('webinar_attendees.webinar_id', $webinarId))->select('webinar_attendees.*', 'users.name as user_name', 'users.email', 'users.mobile', 'webinars.title as webinar_title')->orderByDesc('joined_at');
+        return DB::table('webinar_attendees')
+            ->join('users', 'users.id', '=', 'webinar_attendees.user_id')
+            ->join('webinars', 'webinars.id', '=', 'webinar_attendees.webinar_id')
+            ->when($webinarId, fn ($query) => $query->where('webinar_attendees.webinar_id', $webinarId))
+            ->when($search !== '', fn ($query) => $query->where(function ($q) use ($search) {
+                $q->where('users.name', 'like', "%{$search}%")
+                    ->orWhere('users.email', 'like', "%{$search}%")
+                    ->orWhere('users.mobile', 'like', "%{$search}%");
+            }))
+            ->select('webinar_attendees.*', 'users.name as user_name', 'users.email', 'users.mobile', 'webinars.title as webinar_title')
+            ->orderByDesc('joined_at');
     }
 
     private function assignedIds(Request $request)
@@ -25,7 +35,8 @@ class AttendanceController extends Controller
     {
         $assignedIds = $this->assignedIds($request);
         $webinarId = $request->integer('webinar_id');
-        $rows = $this->query($webinarId)->when($assignedIds, fn ($query) => $query->whereIn('webinar_attendees.webinar_id', $assignedIds))->paginate(20)->withQueryString();
+        $search = trim((string) $request->input('search'));
+        $rows = $this->query($webinarId, $search)->when($assignedIds, fn ($query) => $query->whereIn('webinar_attendees.webinar_id', $assignedIds))->paginate(20)->withQueryString();
         $webinarMap = Webinar::whereIn('id', $rows->pluck('webinar_id'))->get()->keyBy('id');
         $rows->getCollection()->transform(function ($row) use ($webinarMap) {
             $row->metrics = WebinarExperience::metrics($webinarMap[$row->webinar_id], $row->user_id);
@@ -34,13 +45,14 @@ class AttendanceController extends Controller
         });
         $webinars = Webinar::when($assignedIds, fn ($query) => $query->whereIn('id', $assignedIds))->orderBy('title')->get();
 
-        return view('pages.admin.attendance', compact('rows', 'webinars', 'webinarId'));
+        return view('pages.admin.attendance', compact('rows', 'webinars', 'webinarId', 'search'));
     }
 
     public function export(Request $request)
     {
         $assignedIds = $this->assignedIds($request);
-        $rows = $this->query($request->integer('webinar_id'))->when($assignedIds, fn ($query) => $query->whereIn('webinar_attendees.webinar_id', $assignedIds))->get();
+        $search = trim((string) $request->input('search'));
+        $rows = $this->query($request->integer('webinar_id'), $search)->when($assignedIds, fn ($query) => $query->whereIn('webinar_attendees.webinar_id', $assignedIds))->get();
 
         return response()->streamDownload(function () use ($rows) {
             $out = fopen('php://output', 'w');

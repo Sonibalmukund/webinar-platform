@@ -13,9 +13,25 @@ use Illuminate\View\View;
 
 class SpeakerController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        return view('pages.admin.general.index', ['type' => 'speaker', 'rows' => Speaker::with('webinars')->latest()->paginate(15)]);
+        $webinars = Webinar::orderBy('title')->get();
+        $webinarId = $request->integer('webinar_id');
+        $search = $request->input('search');
+
+        $query = Speaker::with('webinars');
+        if ($webinarId) {
+            $query->whereHas('webinars', fn ($q) => $q->where('webinars.id', $webinarId));
+        }
+        if ($search) {
+            $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('headline', 'like', "%{$search}%")->orWhere('company', 'like', "%{$search}%"));
+        }
+
+        return view('pages.admin.general.index', [
+            'type' => 'speaker',
+            'rows' => $query->latest()->paginate(15)->withQueryString(),
+            'webinars' => $webinars,
+        ]);
     }
 
     public function create(): View

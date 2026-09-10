@@ -12,15 +12,27 @@ class EngagementController extends Controller
 {
     public function comments(): View
     {
-        return $this->indexView('comments', 'comments_enabled');
+        return $this->listing('comments');
     }
 
     public function feedback(): View
     {
-        $ids = $this->webinars('feedback_enabled')->pluck('id');
-        $items = DB::table('feedback')->join('webinars', 'webinars.id', '=', 'feedback.webinar_id')->leftJoin('users', 'users.id', '=', 'feedback.user_id')->whereIn('feedback.webinar_id', $ids)->select('feedback.*', 'webinars.title as webinar_title', 'users.name as user_name', 'users.email as user_email')->latest('feedback.created_at')->paginate(20);
+        return $this->listing('feedback');
+    }
 
-        return view('pages.admin.engagement.feedback-list', compact('items'));
+    private function listing(string $type): View
+    {
+        $webinars = $this->webinars($type.'_enabled')->get();
+        $webinarId = request()->integer('webinar_id');
+        $search = trim((string) request('search', ''));
+        $column = $type === 'comments' ? 'comment' : 'message';
+        $items = DB::table($type)->join('webinars', 'webinars.id', '=', $type.'.webinar_id')->leftJoin('users', 'users.id', '=', $type.'.user_id')
+            ->whereIn($type.'.webinar_id', $webinars->pluck('id'))
+            ->when($webinarId, fn ($query) => $query->where($type.'.webinar_id', $webinarId))
+            ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query->where($type.'.'.$column, 'like', '%'.$search.'%')->orWhere('users.name', 'like', '%'.$search.'%')->orWhere('users.email', 'like', '%'.$search.'%')))
+            ->select($type.'.*', 'webinars.title as webinar_title', 'users.name as user_name', 'users.email as user_email')->latest($type.'.created_at')->paginate(20)->withQueryString();
+
+        return view('pages.admin.engagement.'.$type.'-list', compact('items', 'webinars', 'webinarId', 'search'));
     }
 
     private function webinars(string $flag)

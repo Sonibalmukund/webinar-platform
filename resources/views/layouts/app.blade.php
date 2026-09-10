@@ -15,6 +15,27 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 @vite(['resources/css/app.css', 'resources/js/app.js'])
+<style>
+/* Hide scrollbar track/column across all browsers while allowing natural scrolling */
+html, body {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  scrollbar-gutter: auto !important;
+  overflow-x: hidden !important;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+</style>
 </head>
 <body class="@yield('body-class')" @auth data-auth-user-id="{{ auth()->id() }}" @endauth>
 @yield('shell')

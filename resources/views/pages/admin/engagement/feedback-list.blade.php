@@ -7,6 +7,7 @@
 @if(session('success'))
     <div class="alert alert-success">{{ session('success') }}</div>
 @endif
+<x-admin-webinar-filter :webinars="$webinars" :selected="$webinarId" :search="$search" />
 <section class="panel-card table-responsive">
     <table class="premium-table">
         <thead><tr><th>User</th><th>Webinar</th><th>Rating</th><th>Feedback</th><th>Received</th><th>Status</th></tr></thead>
@@ -35,5 +36,5 @@
         </tbody>
     </table>
 </section>
-<div class="mt-3">{{ $items->links() }}</div>
+<x-admin-pagination :paginator="$items" />
 @endsection

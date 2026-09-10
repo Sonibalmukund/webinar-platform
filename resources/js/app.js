@@ -4,8 +4,50 @@ import './realtime-experience';
 import '../css/event-experience.css';
 import $ from 'jquery';
 import 'jquery-validation';
+import Chart from 'chart.js/auto';
 
 window.$ = window.jQuery = $;
+window.Chart = Chart;
+
+window.showToast = function(message, tone = 'success') {
+    if (!message) return;
+    let toastContainer = document.getElementById('simpleToastContainer');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'simpleToastContainer';
+        toastContainer.className = 'simple-toast-container';
+        document.body.appendChild(toastContainer);
+    }
+
+    const toastEl = document.createElement('div');
+    toastEl.className = `simple-toast simple-toast-${tone}`;
+
+    let iconClass = 'bi-check-circle-fill';
+    if (tone === 'warning') iconClass = 'bi-exclamation-circle-fill';
+    else if (tone === 'danger' || tone === 'error') iconClass = 'bi-x-circle-fill';
+    else if (tone === 'info') iconClass = 'bi-info-circle-fill';
+
+    toastEl.innerHTML = `
+        <i class="bi ${iconClass}"></i>
+        <span class="simple-toast-msg">${message}</span>
+        <button type="button" class="simple-toast-close" aria-label="Close">&times;</button>
+    `;
+
+    toastContainer.appendChild(toastEl);
+
+    const dismiss = () => {
+        toastEl.classList.add('simple-toast-leaving');
+        setTimeout(() => toastEl.remove(), 250);
+    };
+    toastEl.querySelector('.simple-toast-close')?.addEventListener('click', dismiss);
+    setTimeout(dismiss, 3200);
+
+    const fallbackToast = document.querySelector('#appToast');
+    if (fallbackToast) {
+        const textSpan = fallbackToast.querySelector('.toast-body span') || fallbackToast.querySelector('span');
+        if (textSpan) textSpan.textContent = message;
+    }
+};
 
 document.addEventListener('click', event => {
     const sidebarGroupToggle = event.target.closest('[data-sidebar-group-toggle]');
@@ -222,12 +264,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if(document.body.classList.contains('sub-admin-portal'))table.find('thead th').each(function(index){const label=$(this).text().trim().toLowerCase();if(['webinar','event','event / webinar','webinar / client'].includes(label)){table.find('tr').each(function(){$(this).children().eq(index).hide()})}});
         const rows=table.find('tbody > tr').filter(function(){return !$(this).find('[colspan]').length;});
         if(!rows.length)return;
+        const hasServerFilter = $('.filter-bar, .module-filter-bar').length > 0 || table.closest('.portal-content, .panel-card, .table-responsive').find('.filter-bar, .module-filter-bar, .pagination, .pagination-bar').length > 0 || table.closest('.panel-card').parent().find('.pagination, .pagination-bar').length > 0;
         let page=1, size=10, query='';
-        const shell=$('<div class="jquery-listing-tools"><label><i class="bi bi-search"></i><input type="search" placeholder="Search this listing…"></label><select aria-label="Rows per page"><option>10</option><option>25</option><option>50</option><option value="9999">All</option></select><span></span><div></div></div>');
-        table.closest('.table-responsive').before(shell);
-        const render=()=>{const matches=rows.filter(function(){return $(this).text().toLowerCase().includes(query)});const pages=Math.max(1,Math.ceil(matches.length/size));page=Math.min(page,pages);rows.hide();matches.slice((page-1)*size,page*size).show();shell.find('>span').text(`${matches.length} result${matches.length===1?'':'s'}`);const nav=shell.find('>div').empty();$('<button type="button" aria-label="Previous"><i class="bi bi-chevron-left"></i></button>').prop('disabled',page===1).on('click',()=>{page--;render()}).appendTo(nav);$('<b></b>').text(`${page} / ${pages}`).appendTo(nav);$('<button type="button" aria-label="Next"><i class="bi bi-chevron-right"></i></button>').prop('disabled',page===pages).on('click',()=>{page++;render()}).appendTo(nav);};
-        shell.find('input').on('input',function(){query=this.value.toLowerCase().trim();page=1;render()});shell.find('select').on('change',function(){size=Number(this.value);page=1;render()});
-        table.find('thead th').each(function(index){const th=$(this);if(!th.text().trim())return;th.addClass('is-sortable').attr('tabindex','0').on('click keydown',function(event){if(event.type==='keydown'&&event.key!=='Enter')return;const ascending=th.attr('data-sort')!=='asc';table.find('th').removeAttr('data-sort');th.attr('data-sort',ascending?'asc':'desc');rows.sort((a,b)=>$(a).children().eq(index).text().trim().localeCompare($(b).children().eq(index).text().trim(),undefined,{numeric:true})*(ascending?1:-1)).appendTo(table.find('tbody'));page=1;render()})});render();
+        let render = () => {};
+        if (!hasServerFilter) {
+            const shell=$('<div class="jquery-listing-tools"><label><i class="bi bi-search"></i><input type="search" placeholder="Search this listing…"></label><select aria-label="Rows per page"><option>10</option><option>25</option><option>50</option><option value="9999">All</option></select></div>');
+            const bottomBar=$('<div class="jquery-listing-bottom mt-3 pt-3 border-top d-flex justify-content-between align-items-center flex-wrap gap-2 w-100"><span class="jquery-listing-info text-muted" style="font-size: 0.84rem; font-weight: 600;"></span><div class="jquery-listing-nav ms-auto d-flex align-items-center gap-2"></div></div>');
+            table.closest('.table-responsive').before(shell);
+            table.closest('.table-responsive').after(bottomBar);
+            render=()=>{
+                const matches=rows.filter(function(){return $(this).text().toLowerCase().includes(query)});
+                const pages=Math.max(1,Math.ceil(matches.length/size));
+                page=Math.min(page,pages);
+                rows.hide();
+                matches.slice((page-1)*size,page*size).show();
+                bottomBar.find('.jquery-listing-info').text(`Showing ${matches.length ? (page-1)*size + 1 : 0} to ${Math.min(page*size, matches.length)} of ${matches.length} result${matches.length===1?'':'s'}`);
+                const nav=bottomBar.find('.jquery-listing-nav').empty();
+                if(pages > 1) {
+                    $('<button type="button" class="btn btn-sm btn-light border" aria-label="Previous"><i class="bi bi-chevron-left"></i></button>').prop('disabled',page===1).on('click',()=>{page--;render()}).appendTo(nav);
+                    $('<span class="badge bg-light text-dark border px-2 py-1"></span>').text(`${page} / ${pages}`).appendTo(nav);
+                    $('<button type="button" class="btn btn-sm btn-light border" aria-label="Next"><i class="bi bi-chevron-right"></i></button>').prop('disabled',page===pages).on('click',()=>{page++;render()}).appendTo(nav);
+                }
+            };
+            shell.find('input').on('input',function(){query=this.value.toLowerCase().trim();page=1;render()});
+            shell.find('select').on('change',function(){size=Number(this.value);page=1;render()});
+            render();
+        }
+        table.find('thead th').each(function(index){const th=$(this);if(!th.text().trim())return;th.addClass('is-sortable').attr('tabindex','0').on('click keydown',function(event){if(event.type==='keydown'&&event.key!=='Enter')return;const ascending=th.attr('data-sort')!=='asc';table.find('th').removeAttr('data-sort');th.attr('data-sort',ascending?'asc':'desc');rows.sort((a,b)=>$(a).children().eq(index).text().trim().localeCompare($(b).children().eq(index).text().trim(),undefined,{numeric:true})*(ascending?1:-1)).appendTo(table.find('tbody'));if(!hasServerFilter){page=1;render()}})});
     });
 
     const registrationType = document.querySelector('#registrationType');
@@ -416,9 +479,16 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('[data-stat]').forEach((stat, index) => { if (option.textContent !== 'All Events') stat.textContent = ['1','2.8K','1.2K','86%','4.9','984'][index % 6]; });
     }));
 
+    const flashEl = document.querySelector('[data-app-flash]');
+    if (flashEl && (flashEl.dataset.appFlash || flashEl.textContent.trim())) {
+        const msg = flashEl.dataset.appFlash || flashEl.textContent.trim();
+        const tone = flashEl.dataset.appFlashTone || 'success';
+        window.showToast(msg, tone);
+    }
+
     document.querySelectorAll('[data-demo-toast]').forEach(button => button.addEventListener('click', event => {
         if (button.tagName === 'BUTTON' && button.closest('form')) event.preventDefault();
-        window.bootstrap && bootstrap.Toast.getOrCreateInstance(document.querySelector('#appToast')).show();
+        window.showToast('Action completed successfully!', 'success');
     }));
 
     const search = document.querySelector('#webinarSearch');
@@ -444,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let wizardStep = 0; const pages = [...document.querySelectorAll('.wizard-page')]; const steps = [...document.querySelectorAll('.wizard-step')];
     const showStep = step => { wizardStep = Math.max(0, Math.min(step, pages.length - 1)); pages.forEach((p,i)=>p.classList.toggle('active',i===wizardStep)); steps.forEach((s,i)=>s.classList.toggle('active',i===wizardStep)); const next=document.querySelector('#wizardNext'); if(next) next.innerHTML=wizardStep===pages.length-1?'Publish webinar <i class="bi bi-send"></i>':'Continue <i class="bi bi-arrow-right"></i>'; };
     steps.forEach(step => step.addEventListener('click', () => showStep(Number(step.dataset.step))));
-    document.querySelector('#wizardNext')?.addEventListener('click', () => wizardStep === pages.length - 1 ? (window.bootstrap && bootstrap.Toast.getOrCreateInstance(document.querySelector('#appToast')).show()) : showStep(wizardStep + 1));
+    document.querySelector('#wizardNext')?.addEventListener('click', () => wizardStep === pages.length - 1 ? window.showToast('Webinar ready for publish!', 'success') : showStep(wizardStep + 1));
     document.querySelector('#wizardBack')?.addEventListener('click', () => showStep(wizardStep - 1));
 
     const fillSelect = (select, items, placeholder) => {
@@ -486,11 +556,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const bannerVideoFields = document.querySelector('#bannerVideoFields');
     const bannerVideoUpload = document.querySelector('#bannerVideoUpload');
     const bannerVideoUrl = document.querySelector('#bannerVideoUrl');
+    const bannerImageUpload = document.querySelector('#bannerImageUpload');
+    const bannerImageUrl = document.querySelector('#bannerImageUrl');
+    const bannerImageUrlInput = document.querySelector('#bannerImageUrlInput');
+    const bannerVideoUrlInput = document.querySelector('#bannerVideoUrlInput');
     const bannerPreview = document.querySelector('#bannerLivePreview');
     const syncBannerType = () => {
         const isVideo = bannerType?.value === 'video';
         if (bannerImageFields) bannerImageFields.hidden = isVideo;
         if (bannerVideoFields) bannerVideoFields.hidden = !isVideo;
+        if (bannerImageUrlInput) bannerImageUrlInput.disabled = isVideo;
+        if (bannerVideoUrlInput) bannerVideoUrlInput.disabled = !isVideo;
+    };
+    const syncBannerImageSource = () => {
+        const useUrl = document.querySelector('input[name="image_source"]:checked')?.value === 'url';
+        if (bannerImageUpload) bannerImageUpload.hidden = useUrl;
+        if (bannerImageUrl) bannerImageUrl.hidden = !useUrl;
     };
     const syncBannerVideoSource = () => {
         const useUrl = document.querySelector('input[name="video_source"]:checked')?.value === 'url';
@@ -502,14 +583,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const url = URL.createObjectURL(file);
         bannerPreview.innerHTML = kind === 'video' ? `<video src="${url}" controls autoplay muted></video>` : `<img src="${url}" alt="Banner preview">`;
     };
+    const renderBannerVideoUrlPreview = (val) => {
+        if (!bannerPreview || !val) return;
+        const url = String(val).trim();
+        const ytMatch = url.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/i) || url.match(/^([A-Za-z0-9_-]{11})$/);
+        if (ytMatch) {
+            bannerPreview.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${ytMatch[1]}?autoplay=1&mute=1&loop=1&playlist=${ytMatch[1]}&controls=0" allow="autoplay; encrypted-media" allowfullscreen style="width:100%;min-height:300px;border:0;"></iframe>`;
+            return;
+        }
+        const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d{6,12})/i);
+        if (vimeoMatch) {
+            bannerPreview.innerHTML = `<iframe src="https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=1&loop=1&autopause=0&background=1" allow="autoplay; fullscreen" allowfullscreen style="width:100%;min-height:300px;border:0;"></iframe>`;
+            return;
+        }
+        bannerPreview.innerHTML = `<video src="${url.replace(/["<>]/g, '')}" controls autoplay muted style="width:100%;max-height:430px;"></video>`;
+    };
     bannerType?.addEventListener('change', syncBannerType);
+    document.querySelectorAll('input[name="image_source"]').forEach(radio => radio.addEventListener('change', syncBannerImageSource));
     document.querySelectorAll('input[name="video_source"]').forEach(radio => radio.addEventListener('change', syncBannerVideoSource));
     document.querySelector('#bannerImageInput')?.addEventListener('change', event => renderBannerPreview(event.target.files?.[0], 'image'));
     document.querySelector('#bannerVideoInput')?.addEventListener('change', event => renderBannerPreview(event.target.files?.[0], 'video'));
-    document.querySelector('#bannerVideoUrlInput')?.addEventListener('change', event => {
-        if (bannerPreview && event.target.value) bannerPreview.innerHTML = `<video src="${event.target.value.replace(/["<>]/g, '')}" controls></video>`;
+    bannerImageUrlInput?.addEventListener('input', event => {
+        if (bannerPreview && event.target.value) bannerPreview.innerHTML = `<img src="${event.target.value.replace(/["<>]/g, '')}" alt="Banner preview">`;
     });
+    bannerVideoUrlInput?.addEventListener('input', event => renderBannerVideoUrlPreview(event.target.value));
+    bannerVideoUrlInput?.addEventListener('change', event => renderBannerVideoUrlPreview(event.target.value));
     syncBannerType();
+    syncBannerImageSource();
     syncBannerVideoSource();
 
     const liveProvider=document.querySelector('#liveProvider'),liveSource=document.querySelector('#liveSource'),livePreview=document.querySelector('#liveEmbedPreview');

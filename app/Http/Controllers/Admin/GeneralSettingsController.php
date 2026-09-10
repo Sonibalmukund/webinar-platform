@@ -35,9 +35,25 @@ class GeneralSettingsController extends Controller
         return back()->with('status', 'Site settings saved.');
     }
 
-    public function banners(): View
+    public function banners(Request $request): View
     {
-        return view('pages.admin.general.index', ['type' => 'banner', 'rows' => Banner::with('webinar')->latest()->paginate(15)]);
+        $webinars = Webinar::orderBy('title')->get();
+        $webinarId = $request->integer('webinar_id');
+        $search = $request->input('search');
+
+        $query = Banner::with('webinar');
+        if ($webinarId) {
+            $query->where('webinar_id', $webinarId);
+        }
+        if ($search) {
+            $query->where('title', 'like', "%{$search}%");
+        }
+
+        return view('pages.admin.general.index', [
+            'type' => 'banner',
+            'rows' => $query->latest()->paginate(15)->withQueryString(),
+            'webinars' => $webinars,
+        ]);
     }
 
     public function bannerForm(?Banner $banner = null): View
@@ -48,23 +64,58 @@ class GeneralSettingsController extends Controller
     public function saveBanner(Request $request, ?Banner $banner = null): RedirectResponse
     {
         $banner = $banner ?? new Banner;
-        $type = (string) $request->input('media_type');
+        $type = (string) $request->input('media_type', 'image');
+        if (! $request->filled('media_url') && $request->filled('media_url_video')) {
+            $request->merge(['media_url' => trim((string) $request->input('media_url_video'))]);
+        }
         $data = $request->validate([
-            'webinar_id' => ['required', 'exists:webinars,id'], 'title' => ['required', 'string', 'max:255'], 'media_type' => ['required', 'in:image,video'],
-            'image_media' => [Rule::requiredIf($type === 'image' && (! $banner->exists || $banner->media_type !== 'image')), 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
-            'video_media' => [Rule::requiredIf($type === 'video' && ! $request->filled('media_url') && (! $banner->exists || $banner->media_type !== 'video')), 'nullable', 'file', 'mimes:mp4,webm,mov', 'max:20480'],
+            'webinar_id' => ['required', 'exists:webinars,id'],
+            'title' => ['required', 'string', 'max:255'],
+            'media_type' => ['required', 'in:image,video'],
+            'image_media' => [Rule::requiredIf($type === 'image' && ! $request->filled('media_url') && (! $banner->exists || ($banner->media_type !== 'image' && ! $banner->media_path))), 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'video_media' => [Rule::requiredIf($type === 'video' && ! $request->filled('media_url') && (! $banner->exists || ($banner->media_type !== 'video' && ! $banner->media_path))), 'nullable', 'file', 'mimes:mp4,webm,mov', 'max:20480'],
             'media_url' => ['nullable', 'url'],
-            'starts_at' => ['nullable', 'date'], 'ends_at' => ['nullable', 'date', 'after:starts_at'],
+            'starts_at' => ['nullable'],
+            'ends_at' => ['nullable'],
         ]);
+
         $file = $type === 'image' ? $request->file('image_media') : $request->file('video_media');
         if ($file) {
             $data['media_path'] = $this->upload($file, 'banners');
+            if (! $request->filled('media_url')) {
+                $data['media_url'] = null;
+            }
+        } elseif ($request->filled('media_url')) {
+            $data['media_url'] = trim((string) $request->input('media_url'));
+            if (! $banner->exists || ! $banner->media_path) {
+                $data['media_path'] = null;
+            }
         }
-        if ($type === 'image') {
-            $data['media_url'] = null;
+
+        $webinar = Webinar::find($request->input('webinar_id'));
+        $tz = $webinar?->timezone ?: 'UTC';
+        if ($request->filled('starts_at')) {
+            try {
+                $data['starts_at'] = \Illuminate\Support\Carbon::parse($request->input('starts_at'), $tz)->utc();
+            } catch (\Exception $e) {
+                $data['starts_at'] = null;
+            }
+        } else {
+            $data['starts_at'] = null;
         }
-        unset($data['image_media'],$data['video_media']);
-        $data['is_active'] = $banner->exists ? $banner->is_active : true;
+
+        if ($request->filled('ends_at')) {
+            try {
+                $data['ends_at'] = \Illuminate\Support\Carbon::parse($request->input('ends_at'), $tz)->utc();
+            } catch (\Exception $e) {
+                $data['ends_at'] = null;
+            }
+        } else {
+            $data['ends_at'] = null;
+        }
+
+        unset($data['image_media'], $data['video_media']);
+        $data['is_active'] = $request->has('is_active') ? $request->boolean('is_active') : ($banner->exists ? $banner->is_active : true);
         $banner->fill($data)->save();
 
         return redirect()->route('admin.general.banners')->with('status', 'Banner saved.');
@@ -102,9 +153,25 @@ class GeneralSettingsController extends Controller
         return back()->with('status', 'Banner order saved.');
     }
 
-    public function brands(): View
+    public function brands(Request $request): View
     {
-        return view('pages.admin.general.index', ['type' => 'brand', 'rows' => Brand::with('webinar')->latest()->paginate(15)]);
+        $webinars = Webinar::orderBy('title')->get();
+        $webinarId = $request->integer('webinar_id');
+        $search = $request->input('search');
+
+        $query = Brand::with('webinar');
+        if ($webinarId) {
+            $query->where('webinar_id', $webinarId);
+        }
+        if ($search) {
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        return view('pages.admin.general.index', [
+            'type' => 'brand',
+            'rows' => $query->latest()->paginate(15)->withQueryString(),
+            'webinars' => $webinars,
+        ]);
     }
 
     public function brandForm(?Brand $brand = null): View
@@ -115,11 +182,22 @@ class GeneralSettingsController extends Controller
     public function saveBrand(Request $request, ?Brand $brand = null): RedirectResponse
     {
         $brand = $brand ?? new Brand;
-        $data = $request->validate(['webinar_id' => ['required', 'exists:webinars,id'], 'name' => ['required', 'string', 'max:255'], 'website_url' => ['nullable', 'url'], 'logo' => [$brand->exists ? 'nullable' : 'required', 'image', 'max:5120']]);
+        $data = $request->validate([
+            'webinar_id' => ['required', 'exists:webinars,id'],
+            'name' => ['required', 'string', 'max:255'],
+            'website_url' => ['nullable', 'url'],
+            'logo_url' => ['nullable', 'url'],
+            'logo' => [Rule::requiredIf(! $brand->exists && ! $request->filled('logo_url') && ! $brand->logo_path), 'nullable', 'image', 'max:5120'],
+        ]);
+
         if ($request->hasFile('logo')) {
             $data['logo_path'] = $this->upload($request->file('logo'), 'brands');
-        }unset($data['logo']);
-        $data['is_active'] = $brand->exists ? $brand->is_active : true;
+        } elseif ($request->filled('logo_url')) {
+            $data['logo_path'] = $request->input('logo_url');
+        }
+
+        unset($data['logo'], $data['logo_url']);
+        $data['is_active'] = $request->has('is_active') ? $request->boolean('is_active') : ($brand->exists ? $brand->is_active : true);
         $brand->fill($data)->save();
 
         return redirect()->route('admin.general.brands')->with('status', 'Brand saved.');

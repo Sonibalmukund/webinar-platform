@@ -8,7 +8,13 @@
     @if($type==='recordings')
     <article class="learner-library-card"><div class="library-art"><i class="bi bi-play-circle-fill"></i><span>RECORDING</span></div><div><small>{{ $item->published_at?Carbon\Carbon::parse($item->published_at)->format('M d, Y'):'' }}</small><h3>{{ $item->title ?: $item->webinar_title }}</h3><p>{{ $item->webinar_title }}</p><a class="btn btn-gradient w-100" href="{{ $item->recording_url }}" target="_blank" rel="noopener">Watch recording <i class="bi bi-box-arrow-up-right"></i></a></div></article>
     @elseif($type==='certificates')
-    <article class="learner-certificate"><i class="bi bi-award"></i><div><small>CERTIFICATE OF COMPLETION</small><h3>{{ $item->webinar_title }}</h3><p>Issued {{ $item->issued_at?Carbon\Carbon::parse($item->issued_at)->format('M d, Y'):'Pending' }} · {{ Str::limit($item->credential_id,18) }}</p></div><a class="icon-btn" href="{{ route('webinars.certificate.download',$item->webinar_slug) }}" title="Download certificate"><i class="bi bi-download"></i></a></article>
+    <?php
+        $certShareUrl = url('/'.$item->webinar_slug);
+        $certShareText = rawurlencode("I'm excited to share that I've completed the webinar: ".$item->webinar_title."! Check it out here: ".$certShareUrl);
+        $linkedInShareUrl = 'https://www.linkedin.com/sharing/share-offsite/?url='.rawurlencode($certShareUrl);
+        $whatsAppShareUrl = 'https://wa.me/?text='.$certShareText;
+    ?>
+    <article class="learner-certificate"><i class="bi bi-award"></i><div><small>CERTIFICATE OF COMPLETION</small><h3>{{ $item->webinar_title }}</h3><p>Issued {{ $item->issued_at?Carbon\Carbon::parse($item->issued_at)->format('M d, Y'):'Pending' }} · {{ Str::limit($item->credential_id,18) }}</p></div><div class="d-flex align-items-center gap-1"><a class="icon-btn text-success" href="{{ $whatsAppShareUrl }}" target="_blank" rel="noopener" title="Share on WhatsApp"><i class="bi bi-whatsapp"></i></a><a class="icon-btn text-primary" href="{{ $linkedInShareUrl }}" target="_blank" rel="noopener" title="Share on LinkedIn"><i class="bi bi-linkedin"></i></a><a class="icon-btn" href="{{ route('webinars.certificate.download',$item->webinar_slug) }}" title="Download certificate"><i class="bi bi-download"></i></a></div></article>
     @else
     <article class="learner-library-card"><div class="library-art bookmark"><i class="bi bi-bookmark-fill"></i><span>BOOKMARKED</span></div><div><small>{{ Carbon\Carbon::parse($item->bookmarked_at)->format('M d, Y') }}</small><h3>{{ $item->title }}</h3><p>{{ Str::limit($item->short_description,100) }}</p><a class="btn btn-gradient w-100" href="{{ route('webinars.show',$item->slug) }}">View webinar <i class="bi bi-arrow-right"></i></a></div></article>
     @endif
