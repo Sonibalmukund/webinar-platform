@@ -34,7 +34,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Paginator::useBootstrapFive();
-        $siteSettings = Schema::hasTable('settings') ? DB::table('settings')->where('group', 'site')->pluck('value', 'key') : collect();
+        try {
+            $siteSettings = Schema::hasTable('settings') ? DB::table('settings')->where('group', 'site')->pluck('value', 'key') : collect();
+        } catch (\Throwable $e) {
+            $siteSettings = collect();
+        }
         View::share('siteSettings', $siteSettings);
         View::composer('components.frontend-auth', function ($view) {
             $webinar = $view->getData()['authWebinar'] ?? null;
