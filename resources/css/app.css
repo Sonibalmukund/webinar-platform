@@ -473,11 +473,12 @@ html,body{max-width:100%;overflow-x:hidden}
     --blue:#b91d29;
     --navy:#101827;
     --muted:#647087;
-    --bg:#f1f4f8;
+    --bg:#f5f7fb;
     --line:#e2e7ef;
     --shadow:0 18px 50px rgba(9,18,34,.09);
     background-color:var(--bg);
-    background-image:none !important;
+    background-image:linear-gradient(rgba(16,24,39,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(16,24,39,.025) 1px,transparent 1px);
+    background-size:38px 38px;
     font-family:"Space Grotesk","DM Sans",sans-serif;
 }
 .portal-body h1,.portal-body h2,.portal-body h3,.portal-body h4,.portal-body h5,.portal-body h6,.portal-body .brand,.portal-body .btn { font-family:"Exo 2","Manrope",sans-serif; }
@@ -518,7 +519,4 @@ html,body{max-width:100%;overflow-x:hidden}
 .portal-body .site-setting-preview { width:min(320px,100%); height:110px; padding:10px; border-color:#dfe5ee; border-radius:5px 16px 5px 16px; background:#fff; }
 @media(max-width:767px) { .portal-body .portal-content { padding-top:100px; }.portal-body .sidebar .site-brand-logo { width:170px; } }
 
-/* Show the exact Site Settings logo on a readable surface in the dark sidebar. */
-.portal-body .sidebar .sidebar-uploaded-brand{width:100%;min-height:64px;padding:9px 12px!important;border:1px solid rgba(255,255,255,.16);border-radius:5px 15px 5px 15px;background:#fff}
-.portal-body .sidebar .sidebar-uploaded-brand .site-brand-logo{width:100%;max-width:190px;max-height:48px;object-position:left center}
 .audience-voice-list article:target{outline:2px solid rgba(239,35,60,.42);box-shadow:0 12px 34px rgba(239,35,60,.12)}
