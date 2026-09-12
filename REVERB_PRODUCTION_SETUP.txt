@@ -1,0 +1,173 @@
+====================================================================
+     LARAVEL REVERB PRODUCTION SETUP (AWS EC2 - VIRTUALPORTAL.IN)
+====================================================================
+Server IP   : 13.127.166.34 (AWS EC2 Mumbai)
+Server User : ubuntu
+Project Path: /var/www/html/webinar-platform
+Domain      : virtualportal.in
+====================================================================
+
+--------------------------------------------------------------------
+CHECK 1: SERVER PAR REVERB INSTALLED HAI YA NAHI KAISE CHECK KAREIN?
+--------------------------------------------------------------------
+Terminal (SSH) me ye command chalayein:
+
+    cd /var/www/html/webinar-platform
+    php artisan list reverb
+
+Agar output me ye commands dikh rahe hain:
+    reverb:install  Install the Reverb dependencies
+    reverb:restart  Restart the Reverb server
+    reverb:start    Start the Reverb server
+
+==> Iska matlab Reverb ALREADY INSTALLED HAI!
+
+
+====================================================================
+STEP 1: AWS SECURITY GROUP & FIREWALL ME PORT 8080 ALLOW KAREIN
+====================================================================
+1. AWS EC2 Dashboard -> Security Groups me jayein
+   Inbound Rules me add karein:
+   Type: Custom TCP | Port: 8080 | Source: 0.0.0.0/0 (Anywhere)
+
+2. Server Terminal me UFW allow karein:
+   sudo ufw allow 8080/tcp
+   sudo ufw reload
+
+
+====================================================================
+STEP 2: .ENV FILE ME CONFIGURATION (/var/www/html/webinar-platform/.env)
+====================================================================
+FileZilla ya nano se .env file me Reverb ke ye values check/set karein:
+
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://virtualportal.in
+
+BROADCAST_CONNECTION=reverb
+
+# Reverb Credentials
+REVERB_APP_ID=504333
+REVERB_APP_KEY=xdp8ocwlczmqoe4bgark
+REVERB_APP_SECRET=qbizsvjg0xy5ewzchcbt
+
+# Internal Reverb Server
+REVERB_SERVER_HOST=0.0.0.0
+REVERB_SERVER_PORT=8080
+REVERB_HOST="127.0.0.1"
+REVERB_PORT=8080
+REVERB_SCHEME=http
+
+# Security: Allowed Origins
+REVERB_ALLOWED_ORIGINS="virtualportal.in,https://virtualportal.in,www.virtualportal.in,https://www.virtualportal.in"
+
+# Frontend WebSockets (User browser connects via Port 443 SSL)
+VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"
+VITE_REVERB_HOST="virtualportal.in"
+VITE_REVERB_PORT=443
+VITE_REVERB_SCHEME=https
+
+
+====================================================================
+STEP 3: ASSETS BUILD & CACHE COMMANDS
+====================================================================
+Terminal me run karein:
+
+    cd /var/www/html/webinar-platform
+
+    # File permissions theek karein
+    sudo chown -R ubuntu:www-data /var/www/html/webinar-platform
+    sudo chmod -R 775 storage bootstrap/cache
+
+    # Config & route cache
+    php artisan config:clear
+    php artisan config:cache
+    php artisan route:cache
+    php artisan view:cache
+
+
+====================================================================
+STEP 4: NGINX REVERSE PROXY SETUP (SSL / WSS)
+====================================================================
+Nginx site file edit karein:
+
+    sudo nano /etc/nginx/sites-available/virtualportal.in
+    # (ya /etc/nginx/sites-available/default)
+
+server { ... } block ke andar paste karein:
+
+    # WebSocket Proxy for Reverb
+    location /app {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+    }
+
+    # Internal Pusher API routes
+    location /apps {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+Save karein aur Nginx reload karein:
+
+    sudo nginx -t
+    sudo systemctl reload nginx
+
+
+====================================================================
+STEP 5: SUPERVISOR SETUP (EXACT PATH & USER FOR YOUR SERVER)
+====================================================================
+1. Supervisor config file banayein:
+    sudo nano /etc/supervisor/conf.d/reverb.conf
+
+2. Yeh exact code paste karein:
+
+[program:reverb]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/html/webinar-platform/artisan reverb:start --host=0.0.0.0 --port=8080
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=ubuntu
+numprocs=1
+redirect_stderr=true
+stdout_logfile=/var/log/reverb.log
+
+3. Supervisor ko start karein:
+
+    sudo supervisorctl reread
+    sudo supervisorctl update
+    sudo supervisorctl start reverb:*
+
+
+====================================================================
+STEP 6: STATUS TEST COMMANDS
+====================================================================
+
+1. Check Supervisor Status:
+    sudo supervisorctl status
+
+    Output:
+    reverb:reverb_00    RUNNING    pid 12345, uptime 0:01:20
+
+2. Browser me Test:
+    - https://virtualportal.in open karein
+    - F12 -> Network -> WS filter
+    - Status "101 Switching Protocols" (Green) dikhayega!
+
+====================================================================
+                      END OF GUIDE
+====================================================================

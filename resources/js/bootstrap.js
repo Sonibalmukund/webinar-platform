@@ -5,15 +5,19 @@ window.axios = axios;
 
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 window.Pusher = Pusher;
-const isHttps = (import.meta.env.VITE_REVERB_SCHEME ?? 'http') === 'https' || window.location.protocol === 'https:';
+const isHttps = window.location.protocol === 'https:' || (import.meta.env.VITE_REVERB_SCHEME ?? 'http') === 'https';
 const defaultPort = isHttps ? 443 : 8080;
 const port = Number(import.meta.env.VITE_REVERB_PORT) || defaultPort;
+
+const envHost = import.meta.env.VITE_REVERB_HOST;
+const host = (envHost && envHost !== '127.0.0.1' && envHost !== 'localhost') ? envHost : window.location.hostname;
+const key = document.querySelector('meta[name="reverb-key"]')?.content || import.meta.env.VITE_REVERB_APP_KEY || 'xdp8ocwlczmqoe4bgark';
 
 window.Echo = new Echo({
     broadcaster: 'reverb',
     authEndpoint: document.querySelector('meta[name="broadcast-auth-url"]')?.content || '/broadcasting/auth',
-    key: import.meta.env.VITE_REVERB_APP_KEY || 'webinar-local-key',
-    wsHost: import.meta.env.VITE_REVERB_HOST || window.location.hostname,
+    key: key,
+    wsHost: host,
     wsPort: port,
     wssPort: port,
     forceTLS: isHttps,

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <meta name="broadcast-auth-url" content="{{ url('/broadcasting/auth') }}">
+<meta name="reverb-key" content="{{ config('broadcasting.connections.reverb.key') }}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#6d28d9">
 <title>@yield('title', $siteSettings['site_name']??'Webinarly') - {{ $siteSettings['site_name']??'Webinarly' }}</title>
