@@ -28,7 +28,7 @@ class WebinarAttendanceController extends Controller
 
     public function hand(Request $request, Webinar $webinar): JsonResponse
     {
-        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->exists(), 403);
+        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->admitted()->exists(), 403);
         $current = (bool) DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->value('raised_hand');
         DB::table('webinar_attendees')->updateOrInsert(
             ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id],
@@ -53,7 +53,7 @@ class WebinarAttendanceController extends Controller
 
     private function touch(Request $request, Webinar $webinar, string $state): JsonResponse
     {
-        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->exists(), 403);
+        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->admitted()->exists(), 403);
         $now = now();
         $row = DB::transaction(function () use ($request, $webinar, $state, $now) {
             $current = DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->lockForUpdate()->first();

@@ -49,10 +49,77 @@ class FrontendAuthFlowTest extends TestCase
 
     public function test_admin_and_sub_admin_share_one_login_page(): void
     {
+        $this->get('/admin')->assertRedirect('/admin/login');
         $this->get('/admin/dashboard')->assertRedirect(route('admin.login'));
         $this->get('/sub-admin/dashboard')->assertRedirect('/admin/dashboard');
         $this->get('/admin/login')->assertOk()->assertSee('Sign in securely');
         $this->get('/sub-admin/login')->assertRedirect('/admin/login');
+
+        $this->actingAs($this->learner());
+        $this->get('/admin')->assertRedirect('/admin/login');
+        $this->get('/admin/login')->assertOk()->assertSee('Sign in securely');
+
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::firstOrCreate(['slug' => 'super-admin'], ['name' => 'Super Admin']));
+        $this->actingAs($admin)->withSession(['auth_status' => 'Login successfully.'])->get(route('admin.dashboard'))
+            ->assertOk()->assertSee('data-app-flash="Login successfully."', false);
+    }
+
+    public function test_same_browser_session_can_access_multiple_registered_webinars(): void
+    {
+        \Illuminate\Support\Facades\DB::table('settings')
+            ->where('group', 'registration')
+            ->where('key', 'registration_password_enabled')
+            ->update(['value' => '1']);
+
+        $first = $this->webinar();
+        $second = Webinar::create([
+            'created_by' => $first->created_by,
+            'slug' => 'second-popup-flow-event',
+            'title' => 'Second Popup Flow Event',
+            'status' => 'scheduled',
+        ]);
+        $user = $this->learner();
+        foreach ([$first, $second] as $webinar) {
+            Registration::create(['webinar_id' => $webinar->id, 'user_id' => $user->id, 'email' => $user->email, 'status' => 'approved']);
+        }
+
+        foreach ([$first, $second] as $webinar) {
+            $this->post('/login', [
+                'return_to' => '/'.$webinar->slug,
+                'webinar_id' => $webinar->id,
+                'login' => $user->email,
+                'password' => 'PopupPass123',
+            ])->assertRedirect(route('webinars.show', $webinar))
+                ->assertSessionHas('auth_redirect', route('webinars.dashboard', $webinar));
+
+            $this->assertAuthenticatedAs($user);
+            $this->assertDatabaseHas('registrations', [
+                'webinar_id' => $webinar->id,
+                'user_id' => $user->id,
+            ]);
+        }
+
+        $this->get(route('webinars.dashboard', $first))->assertOk();
+        $this->get(route('webinars.dashboard', $second))->assertOk();
+    }
+
+    public function test_event_login_does_not_register_or_open_an_unregistered_webinar(): void
+    {
+        $webinar = $this->webinar();
+        $user = $this->learner();
+
+        $this->post('/login', [
+            'return_to' => '/'.$webinar->slug,
+            'webinar_id' => $webinar->id,
+            'login' => $user->email,
+            'password' => 'PopupPass123',
+        ])->assertRedirect('/'.$webinar->slug.'?auth=login')
+            ->assertSessionHasErrors('login')
+            ->assertSessionMissing('auth_redirect');
+
+        $this->assertDatabaseMissing('registrations', ['webinar_id' => $webinar->id, 'user_id' => $user->id]);
+        $this->actingAs($user)->get(route('webinars.dashboard', $webinar))->assertForbidden();
     }
 
     public function test_event_without_custom_login_field_still_has_both_popups(): void
@@ -91,16 +158,6 @@ class FrontendAuthFlowTest extends TestCase
         $this->actingAs($user)->get(route('webinars.dashboard', $webinar))->assertOk()->assertDontSee('id="appToast"', false);
     }
 
-    public function test_event_login_registers_learner_and_opens_dashboard(): void
-    {
-        $webinar = $this->webinar();
-        $user = $this->learner();
-        $this->post('/login', ['return_to' => '/'.$webinar->slug, 'webinar_id' => $webinar->id, 'login' => $user->email, 'password' => 'PopupPass123'])
-            ->assertRedirect(route('webinars.show', $webinar))
-            ->assertSessionHas('auth_redirect', route('webinars.dashboard', $webinar));
-        $this->assertDatabaseHas('registrations', ['webinar_id' => $webinar->id, 'user_id' => $user->id]);
-    }
-
     public function test_logout_uses_explicit_event_without_a_referer(): void
     {
         $webinar = $this->webinar();
@@ -125,6 +182,7 @@ class FrontendAuthFlowTest extends TestCase
     public function test_registration_from_popup_creates_event_seat_and_opens_dashboard(): void
     {
         $webinar = Webinar::where('slug', 'future-of-digital-healthcare-2026')->firstOrFail();
+        $webinar->update(['auto_approve' => false]);
         $country = Country::where('iso2', 'IN')->firstOrFail();
         $state = State::where('country_id', $country->id)->where('name', 'Gujarat')->firstOrFail();
         $city = City::where('state_id', $state->id)->firstOrFail();
@@ -137,7 +195,7 @@ class FrontendAuthFlowTest extends TestCase
             ->assertSessionHas('registration_status')
             ->assertSessionHas('auth_redirect', route('webinars.dashboard', $webinar));
         $this->assertAuthenticated();
-        $this->assertDatabaseHas('registrations', ['webinar_id' => $webinar->id, 'email' => 'popup-registration@example.test']);
+        $this->assertDatabaseHas('registrations', ['webinar_id' => $webinar->id, 'email' => 'popup-registration@example.test', 'status' => 'approved']);
         $this->post('/logout', ['return_to' => '/'.$webinar->slug])->assertRedirect('/'.$webinar->slug);
     }
 }

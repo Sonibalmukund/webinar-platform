@@ -60,6 +60,16 @@ class CertificateController extends Controller
         ]);
     }
 
+    public function preview(Webinar $webinar): View
+    {
+        $templateId = data_get($webinar->settings, 'certificate_template_id');
+
+        return view('pages.admin.certificates.preview', [
+            'webinar' => $webinar,
+            'template' => $templateId ? CertificateTemplate::find($templateId) : null,
+        ]);
+    }
+
     public function update(Request $request, Webinar $webinar): RedirectResponse
     {
         $data = $request->validate([
@@ -155,7 +165,7 @@ class CertificateController extends Controller
             $templateId = data_get($webinar->settings, 'certificate_template_id');
             if (! $templateId) {
                 continue;
-            }foreach ($webinar->registrations()->where('status', 'approved')->whereNotNull('user_id')->get() as $registration) {
+            }foreach ($webinar->registrations()->admitted()->whereNotNull('user_id')->get() as $registration) {
                 $metrics = WebinarExperience::metrics($webinar, $registration->user_id);
                 if ($metrics['eligible']) {
                     DB::table('certificates')->insertOrIgnore(['webinar_id' => $webinar->id, 'user_id' => $registration->user_id, 'template_id' => $templateId, 'credential_id' => (string) Str::uuid(), 'status' => 'pending', 'created_at' => now(), 'updated_at' => now()]);

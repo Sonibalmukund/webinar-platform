@@ -57,11 +57,5 @@ class AppServiceProvider extends ServiceProvider
                 'signupFields' => SignupField::with(['options' => fn ($q) => $q->where('is_enabled', true)])->where('is_enabled', true)->orderBy('display_order')->get(),
             ]);
         });
-        foreach ([Banner::class, Brand::class, Speaker::class, Poll::class, RegistrationField::class] as $modelClass) {
-            $label = class_basename($modelClass);
-            $modelClass::created(fn ($model) => AuditTrail::record(strtolower($label).'.created', $model, $label.' created.'));
-            $modelClass::updated(fn ($model) => AuditTrail::record(strtolower($label).'.updated', $model, $label.' updated.', ['changes' => $model->getChanges()]));
-            $modelClass::deleted(fn ($model) => AuditTrail::record(strtolower($label).'.deleted', $model, $label.' deleted.'));
-        }
     }
 }

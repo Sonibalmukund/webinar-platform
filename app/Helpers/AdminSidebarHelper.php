@@ -23,6 +23,7 @@ final class AdminSidebarHelper
             ...($chatVisible ? [self::item('Live Chat', 'chat-dots', '/admin/chats', 'chat.view', false, 'Engagement')] : []),
             ...($commentsVisible ? [self::item('Comments', 'chat-square-text', '/admin/comments', 'q-and-a.view', false, 'Engagement')] : []),
             self::item('Polls', 'bar-chart', '/admin/polls', 'polls.view', false, 'Engagement'),
+            self::item('Poll Logs', 'clipboard-data', '/admin/poll-logs', 'polls.view', false, 'Engagement'),
             self::item('Feedback', 'star', '/admin/feedback', 'feedback.view', false, 'Engagement'),
             self::item('Certificates', 'award', '/admin/certificates', 'certificates.view', false, 'Operations'),
             self::item('Certificate Logs', 'journal-text', '/admin/certificates/logs', 'certificates.view', false, 'Operations'),

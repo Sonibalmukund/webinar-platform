@@ -66,7 +66,7 @@ class AuthenticationTest extends TestCase
         $admin->roles()->sync([$adminRole->id]);
         $user = User::updateOrCreate(['email' => 'seat@example.com'], ['name' => 'Seat Learner', 'password' => 'Webinar@123']);
         $user->roles()->sync([$learnerRole->id]);
-        $webinar = Webinar::updateOrCreate(['slug' => 'test-webinar'], ['created_by' => $admin->id, 'title' => 'Test Webinar']);
+        $webinar = Webinar::updateOrCreate(['slug' => 'test-webinar'], ['created_by' => $admin->id, 'title' => 'Test Webinar', 'auto_approve' => false]);
         $webinar->registrationForm()->updateOrCreate([], ['title' => 'Registration Form', 'is_active' => true, 'require_login' => true]);
 
         $this->actingAs($user)->post("/webinars/{$webinar->slug}/register")->assertRedirect();

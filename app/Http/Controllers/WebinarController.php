@@ -33,6 +33,7 @@ class WebinarController extends Controller
 
     public function show(Webinar $webinar): View
     {
+        $webinar->syncLifecycleStatus();
         $canPreview = auth()->check() && (auth()->user()->hasRole('super-admin') || auth()->user()->hasRole('sub-admin'));
         abort_if($webinar->status === 'draft' && ! $canPreview, 404);
         if ($webinar->status !== 'draft') {
@@ -69,6 +70,7 @@ class WebinarController extends Controller
 
     public function dashboard(Request $request, Webinar $webinar): View
     {
+        $webinar->syncLifecycleStatus();
         abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->exists(), 403, 'Register for this webinar before opening its dashboard.');
         $request->session()->put('frontend_event_slug', $webinar->slug);
         $webinar->load(['speakers'])->loadCount('registrations');
@@ -538,9 +540,13 @@ class WebinarController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        AuditTrail::record('certificate.downloaded', $webinar, 'Certificate downloaded by '.$request->user()->name.'.', [
+        AuditTrail::record('certificate.downloaded', $webinar, 'Certificate downloaded by '.$request->user()->name.' ('.$request->user()->email.') for "'.$webinar->title.'".', [
             'credential_id' => $certificate->credential_id,
             'user_id' => $request->user()->id,
+            'user_name' => $request->user()->name,
+            'user_email' => $request->user()->email,
+            'webinar_id' => $webinar->id,
+            'webinar_title' => $webinar->title,
         ]);
         $pdf = $this->certificatePdf($request->user()->name, $webinar->title, $certificate->credential_id, $certificate->issued_at ?: now());
 

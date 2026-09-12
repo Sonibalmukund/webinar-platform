@@ -47,8 +47,11 @@ class WebinarRegistrationController extends Controller
             $rules['fields.'.$field->id] = [$field->is_required && $conditionMet ? 'required' : 'nullable', $typeRule];
         }
         $request->validate($rules);
-        $approvedCount = $webinar->registrations()->where('status', 'approved')->count();
-        $status = $webinar->max_attendees && $approvedCount >= $webinar->max_attendees ? 'waitlisted' : ($webinar->auto_approve ? 'approved' : 'pending');
+        $existingRegistration = Registration::where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->first();
+        $admittedCount = $webinar->registrations()->admitted()->count();
+        $status = $existingRegistration && ! in_array($existingRegistration->status, ['waitlisted', 'cancelled', 'rejected'], true)
+            ? 'approved'
+            : ($webinar->max_attendees && $admittedCount >= $webinar->max_attendees ? 'waitlisted' : 'approved');
         $registration = Registration::updateOrCreate(
             ['webinar_id' => $webinar->id, 'email' => $request->user()->email],
             ['user_id' => $request->user()->id, 'status' => $status, 'source' => 'web', 'registered_at' => now(), 'approved_at' => $status === 'approved' ? now() : null]
@@ -75,6 +78,6 @@ class WebinarRegistrationController extends Controller
         }
         AuditTrail::record('registration.created', $registration, 'Webinar registration submitted.', ['status' => $status, 'webinar_id' => $webinar->id]);
 
-        return redirect()->route('webinars.dashboard', $webinar)->with('registration_status', $status === 'waitlisted' ? 'The webinar is full. You have been added to the waitlist.' : ($status === 'pending' ? 'Your registration is awaiting approval.' : 'Your seat has been reserved successfully.'));
+        return redirect()->route($status === 'waitlisted' ? 'webinars.show' : 'webinars.dashboard', $webinar)->with('registration_status', $status === 'waitlisted' ? 'The webinar is full. You have been added to the waitlist.' : 'Your registration is confirmed. You can enter the webinar now.');
     }
 }

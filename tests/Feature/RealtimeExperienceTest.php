@@ -7,6 +7,7 @@ use App\Events\WebinarAttendanceUpdated;
 use App\Events\WebinarQuestionUpdated;
 use App\Events\WebinarRoomUpdated;
 use App\Models\Permission;
+use App\Models\CertificateTemplate;
 use App\Models\Poll;
 use App\Models\Registration;
 use App\Models\Role;
@@ -57,8 +58,11 @@ class RealtimeExperienceTest extends TestCase
     public function test_unregistered_learner_cannot_write_attendance(): void
     {
         $admin = $this->user('super-admin');
+        $learner = $this->user('learner');
         $webinar = $this->webinar($admin);
-        $this->actingAs($this->user('learner'))->postJson(route('webinars.attendance.join', $webinar))->assertForbidden();
+        $this->actingAs($learner)->postJson(route('webinars.attendance.join', $webinar))->assertForbidden();
+        Registration::create(['webinar_id' => $webinar->id, 'user_id' => $learner->id, 'email' => $learner->email, 'status' => 'pending']);
+        $this->postJson(route('webinars.attendance.join', $webinar))->assertOk()->assertJsonPath('state', 'join');
     }
 
     public function test_registered_learner_can_raise_and_lower_hand(): void
@@ -167,7 +171,14 @@ class RealtimeExperienceTest extends TestCase
         }
         $this->actingAs($admin)->get(route('admin.comments.index', ['webinar_id' => $one->id, 'search' => 'Unique']))->assertOk()->assertSee('Unique note '.$one->id)->assertDontSee('Unique note '.$two->id);
         $this->get(route('admin.comments.index', ['webinar_id' => $one->id, 'search' => 'absent-text']))->assertOk()->assertSee('No comments found.');
-        $this->get(route('admin.feedback.index'))->assertOk()->assertSee('All webinars');
+        $one->update(['feedback_enabled' => true]);
+        $feedbackId = DB::table('feedback')->insertGetId(['webinar_id' => $one->id, 'user_id' => $admin->id, 'rating' => 5, 'message' => 'Actionable feedback', 'status' => 'new', 'created_at' => now(), 'updated_at' => now()]);
+        $this->get(route('admin.feedback.index'))->assertOk()
+            ->assertSee('All webinars')
+            ->assertSee('Actions')
+            ->assertSee('Actionable feedback')
+            ->assertSee(route('admin.feedback.show', $one).'#feedback-'.$feedbackId, false)
+            ->assertDontSee('<th>Status</th>', false);
     }
 
     public function test_admin_notification_is_saved_and_broadcast_to_each_learner(): void
@@ -351,5 +362,75 @@ class RealtimeExperienceTest extends TestCase
             ->assertSee('LinkedIn')
             ->assertSee('https://wa.me/?text=', false)
             ->assertSee('https://www.linkedin.com/sharing/share-offsite/', false);
+    }
+
+    public function test_poll_results_show_voter_log_to_authorized_admins(): void
+    {
+        $admin = $this->user('super-admin');
+        $sub = $this->user('sub-admin');
+        $learner = $this->user('learner');
+        $webinar = $this->webinar($admin);
+        $sub->assignedWebinars()->attach($webinar->id, ['assigned_by' => $admin->id]);
+        $permission = Permission::firstOrCreate(['slug' => 'polls.view'], ['name' => 'polls.view', 'module' => 'polls']);
+        $sub->webinarPermissions()->attach($permission->id, ['webinar_id' => $webinar->id, 'assigned_by' => $admin->id]);
+
+        $poll = Poll::create(['webinar_id' => $webinar->id, 'created_by' => $admin->id, 'question' => 'Which answer did you select?', 'status' => 'ended']);
+        $option = $poll->options()->create(['label' => 'VirtualPortal answer', 'is_correct' => true, 'display_order' => 0]);
+        DB::table('poll_responses')->insert(['poll_id' => $poll->id, 'poll_option_id' => $option->id, 'user_id' => $learner->id, 'is_correct' => true, 'voted_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+
+        foreach ([$admin, $sub] as $staff) {
+            $this->actingAs($staff)->get(route('admin.polls.show', $poll))->assertOk()
+                ->assertSee('Poll results')
+                ->assertSee('VirtualPortal answer')
+                ->assertDontSee('Who answered this poll');
+            $this->actingAs($staff)->get(route('admin.polls.logs'))->assertOk()
+                ->assertSee('Poll voter logs')
+                ->assertSee($learner->email)
+                ->assertSee('VirtualPortal answer')
+                ->assertSee('View results')
+                ->assertSee(route('admin.polls.show', $poll), false)
+                ->assertSee('sidebar-uploaded-brand', false)
+                ->assertSee('site-brand-logo', false)
+                ->assertSee('/uploads/site/', false);
+        }
+    }
+
+    public function test_poll_and_dashboard_access_never_cross_webinar_registration_scope(): void
+    {
+        $admin = $this->user('super-admin');
+        $learner = $this->user('learner');
+        $registeredWebinar = $this->webinar($admin);
+        $otherWebinar = $this->webinar($admin);
+        Registration::create(['webinar_id' => $registeredWebinar->id, 'user_id' => $learner->id, 'email' => $learner->email, 'status' => 'approved']);
+        $poll = Poll::create(['webinar_id' => $registeredWebinar->id, 'created_by' => $admin->id, 'question' => 'Only registered webinar poll', 'status' => 'active']);
+        $poll->options()->create(['label' => 'Scoped option A', 'display_order' => 0]);
+        $poll->options()->create(['label' => 'Scoped option B', 'display_order' => 1]);
+
+        $this->actingAs($learner)->get(route('webinars.dashboard', $registeredWebinar))->assertOk()->assertSee('Only registered webinar poll');
+        $this->get(route('webinars.dashboard', $otherWebinar))->assertForbidden();
+        $this->get(route('webinars.polls.active', $otherWebinar))->assertForbidden();
+
+        Registration::create(['webinar_id' => $otherWebinar->id, 'user_id' => $learner->id, 'email' => $learner->email, 'status' => 'pending']);
+        $this->get(route('webinars.dashboard', $otherWebinar))->assertOk();
+        $this->get(route('webinars.polls.active', $otherWebinar))->assertOk();
+    }
+
+    public function test_certificate_preview_is_available_to_super_admin_and_authorized_sub_admin(): void
+    {
+        $admin = $this->user('super-admin');
+        $sub = $this->user('sub-admin');
+        $webinar = $this->webinar($admin);
+        $sub->assignedWebinars()->attach($webinar->id, ['assigned_by' => $admin->id]);
+        $permission = Permission::firstOrCreate(['slug' => 'certificates.view'], ['name' => 'certificates.view', 'module' => 'certificates']);
+        $sub->webinarPermissions()->attach($permission->id, ['webinar_id' => $webinar->id, 'assigned_by' => $admin->id]);
+        $template = CertificateTemplate::create(['name' => 'VirtualPortal Certificate', 'orientation' => 'landscape', 'design' => ['headline' => 'Certificate of Completion', 'signatory' => 'VirtualPortal Team'], 'created_by' => $admin->id]);
+        $webinar->update(['settings' => ['certificate_template_id' => $template->id]]);
+
+        foreach ([$admin, $sub] as $staff) {
+            $this->actingAs($staff)->get(route('admin.certificates.preview', $webinar))->assertOk()
+                ->assertSee('Certificate Preview')
+                ->assertSee('Sample Attendee')
+                ->assertSee('VirtualPortal Team');
+        }
     }
 }

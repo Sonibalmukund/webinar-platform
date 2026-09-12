@@ -2,6 +2,7 @@
 @section('title', 'Audience Journey - ' . ($registration->user?->name ?? $registration->email))
 
 @section('content')
+@php($registrationLabel=in_array($registration->status,['approved','pending'],true)?'Registered':ucfirst($registration->status))
 <style>
 .journey-shell { display: grid; gap: 24px; }
 .attendee-hero-card {
@@ -203,7 +204,7 @@
                     <i class="bi bi-camera-video text-muted me-1"></i>
                     <strong>{{ $registration->webinar?->title ?? 'Webinar' }}</strong>
                     <span class="mx-2 text-muted">·</span>
-                    <span class="badge bg-light text-dark border">{{ ucfirst($registration->status) }}</span>
+                    <span class="badge bg-light text-dark border">{{ $registrationLabel }}</span>
                 </p>
             </div>
         </div>
@@ -247,7 +248,7 @@
             <i class="bi bi-shield-check"></i>
             <div>
                 <small>Registration Status</small>
-                <strong class="text-capitalize text-success">{{ $registration->status }}</strong>
+                <strong class="text-success">{{ $registrationLabel }}</strong>
             </div>
         </div>
     </div>
@@ -258,7 +259,7 @@
             <div class="journey-event">
                 <i class="bi bi-person-check"></i>
                 <span>
-                    <strong>Registered for Event ({{ ucfirst($registration->status) }})</strong>
+                    <strong>Registered for Event ({{ $registrationLabel }})</strong>
                     <small>{{ $registration->registered_at?->format('d M Y, h:i A') ?: ($registration->created_at?->format('d M Y, h:i A') ?: 'Timestamp recorded') }}</small>
                 </span>
             </div>

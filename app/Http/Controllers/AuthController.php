@@ -40,8 +40,12 @@ class AuthController extends Controller
         return redirect(FrontendAuth::landing($request, 'forgot'));
     }
 
-    public function showAdminLogin(): View
+    public function showAdminLogin(Request $request): View|RedirectResponse
     {
+        if ($request->user()?->isAdmin()) {
+            return redirect()->route('admin.dashboard');
+        }
+
         return $this->show('admin');
     }
 
@@ -106,8 +110,18 @@ class AuthController extends Controller
         }
         $destination = null;
         if ($dashboardWebinar) {
+            $isRegistered = $dashboardWebinar->registrations()
+                ->where('user_id', $user->id)
+                ->admitted()
+                ->exists();
+            if (! $isRegistered) {
+                $request->session()->forget('url.intended');
+
+                return redirect(FrontendAuth::landing($request, 'login'))
+                    ->withErrors(['login' => 'You are not registered for this webinar. Please register before signing in.'])
+                    ->onlyInput('login', '_auth_modal', 'return_to', 'webinar_id');
+            }
             $request->session()->put('frontend_event_slug', $dashboardWebinar->slug);
-            $dashboardWebinar->registrations()->firstOrCreate(['user_id' => $user->id], ['email' => $user->email, 'status' => $dashboardWebinar->auto_approve ? 'approved' : 'pending', 'source' => 'event-login', 'registered_at' => now(), 'approved_at' => $dashboardWebinar->auto_approve ? now() : null]);
             $destination = route('webinars.dashboard', $dashboardWebinar);
             $request->session()->forget('url.intended');
         }
@@ -280,8 +294,12 @@ class AuthController extends Controller
                 }
             }
 
-            $status = $webinar->auto_approve ? 'approved' : 'pending';
-            $registration = Registration::firstOrCreate(
+            $existingRegistration = Registration::where(['webinar_id' => $webinar->id, 'user_id' => $user->id])->first();
+            $admittedCount = $webinar->registrations()->admitted()->count();
+            $status = $existingRegistration && ! in_array($existingRegistration->status, ['waitlisted', 'cancelled', 'rejected'], true)
+                ? 'approved'
+                : ($webinar->max_attendees && $admittedCount >= $webinar->max_attendees ? 'waitlisted' : 'approved');
+            $registration = Registration::updateOrCreate(
                 ['webinar_id' => $webinar->id, 'user_id' => $user->id],
                 [
                     'email' => $user->email,
@@ -307,9 +325,14 @@ class AuthController extends Controller
             $request->session()->put('frontend_event_slug', $webinar->slug);
             $request->session()->forget('url.intended');
 
-            return redirect()->route('webinars.show', $webinar)
-                ->with('registration_status', 'Registration successfully.')
-                ->with('auth_redirect', route('webinars.dashboard', $webinar));
+            $response = redirect()->route('webinars.show', $webinar)
+                ->with('registration_status', $status === 'waitlisted'
+                    ? 'The webinar is full. You have been added to the waitlist.'
+                    : 'Registration successful. You can enter the webinar now.');
+
+            return $status === 'waitlisted'
+                ? $response
+                : $response->with('auth_redirect', route('webinars.dashboard', $webinar));
         }
 
         // 2. Global fallback

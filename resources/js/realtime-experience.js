@@ -83,15 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const onlineCount = Math.max(1, currentRows, data.participants.length);
         document.querySelectorAll('[data-room-online]').forEach(node => node.textContent = onlineCount);
     };
-    const flash = document.querySelector('[data-app-flash]');
-    if (flash) {
-        if (window.showToast) {
-            window.showToast(flash.dataset.appFlash || flash.textContent.trim(), flash.dataset.appFlashTone || 'success');
-        } else {
-            const toast = document.querySelector('#appToast');
-            if (toast && window.bootstrap) bootstrap.Toast.getOrCreateInstance(toast, {delay:4200}).show();
-        }
-    }
     const publicWebinar=document.querySelector('[data-public-webinar]');
     if(publicWebinar && window.Echo) window.Echo.channel(`webinar.public.${publicWebinar.dataset.publicWebinar}`).listen('.room.updated',event=>{if(event.change==='status')window.location.reload();});
     const attendee = document.querySelector('[data-attendance-tracker]');

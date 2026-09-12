@@ -550,7 +550,7 @@
                         <span>Early Room Access (minutes)</span>
                     </label>
                     <input class="form-control" type="number" min="0" max="240" id="earlyEntryMinutes" name="early_entry_minutes" value="{{ old('early_entry_minutes', $webinar->early_entry_minutes ?? 30) }}">
-                    <small class="text-muted">How early approved learners can enter the room before starts_at.</small>
+                    <small class="text-muted">How early registered attendees can enter the room before starts_at.</small>
                 </div>
                 <div></div>
 

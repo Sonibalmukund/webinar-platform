@@ -33,6 +33,7 @@ class AdminFiltersAndGeneralSettingsTest extends TestCase
         $this->actingAs($admin)
             ->get('/admin/general-settings/banners')
             ->assertOk()
+            ->assertSee('sidebar-uploaded-brand', false)
             ->assertSee('Banners')
             ->assertSee('Brands')
             ->assertSee('Site Settings')

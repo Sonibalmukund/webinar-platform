@@ -9,7 +9,7 @@ class WebinarHealth
 {
     public static function score(Webinar $webinar): array
     {
-        $registrations = $webinar->registrations()->whereIn('status', ['approved', 'attended', 'completed'])->count();
+        $registrations = $webinar->registrations()->admitted()->count();
         $attended = DB::table('webinar_attendees')->where('webinar_id', $webinar->id)->where('watch_seconds', '>', 0)->count();
         $pollAnswers = DB::table('poll_responses')->join('polls', 'polls.id', '=', 'poll_responses.poll_id')->where('polls.webinar_id', $webinar->id)->distinct('poll_responses.user_id')->count('poll_responses.user_id');
         $attendanceRate = $registrations ? round($attended / $registrations * 100) : 0;

@@ -264,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(document.body.classList.contains('sub-admin-portal'))table.find('thead th').each(function(index){const label=$(this).text().trim().toLowerCase();if(['webinar','event','event / webinar','webinar / client'].includes(label)){table.find('tr').each(function(){$(this).children().eq(index).hide()})}});
         const rows=table.find('tbody > tr').filter(function(){return !$(this).find('[colspan]').length;});
         if(!rows.length)return;
-        const hasServerFilter = $('.filter-bar, .module-filter-bar').length > 0 || table.closest('.portal-content, .panel-card, .table-responsive').find('.filter-bar, .module-filter-bar, .pagination, .pagination-bar').length > 0 || table.closest('.panel-card').parent().find('.pagination, .pagination-bar').length > 0;
+        const hasServerFilter = $('.filter-bar, .module-filter-bar').length > 0 || table.closest('.portal-content, .panel-card, .table-responsive').find('.filter-bar, .module-filter-bar, .pagination, .pagination-bar, .admin-pagination-bar').length > 0 || table.closest('.panel-card').parent().find('.pagination, .pagination-bar, .admin-pagination-bar').length > 0;
         let page=1, size=10, query='';
         let render = () => {};
         if (!hasServerFilter) {

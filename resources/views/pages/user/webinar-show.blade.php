@@ -186,8 +186,8 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
     .microsite-nav-inner{min-height:62px;padding:8px 14px}
     .microsite-logo img{max-height:38px;max-width:130px}
     .microsite-nav-actions{gap:8px}
-    .btn-login-unique{padding:6px 14px;font-size:.8rem}
-    .btn-register-nav{padding:6px 14px;font-size:.8rem}
+    .microsite-nav-actions>.btn-login-unique,.microsite-nav-actions>.btn-register-nav,.microsite-nav-actions>form{display:none!important}
+    .mobile-menu .btn-login-unique,.mobile-menu .btn-register-nav{display:inline-flex!important;padding:8px 14px;font-size:.8rem;flex:1}
     .speaker-grid{grid-template-columns:1fr}
     .content-section{padding:52px 0}
     .footer-grid{grid-template-columns:1fr}

@@ -39,7 +39,7 @@
                 <p style="font-size:0.75rem; color:#64748b; margin:4px 0 0;">Last 14 days registration vs attendance trend</p>
             </div>
             <div class="d-flex align-items-center gap-3" style="font-size:0.75rem; font-weight:700;">
-                <span class="d-inline-flex align-items-center gap-1"><span style="width:10px; height:10px; border-radius:50%; background:#7c3aed; display:inline-block;"></span> <span style="color:#6d28d9;">Registrations</span></span>
+                <span class="d-inline-flex align-items-center gap-1"><span style="width:10px; height:10px; border-radius:50%; background:#ee1f2d; display:inline-block;"></span> <span style="color:#b91522;">Registrations</span></span>
                 <span class="d-inline-flex align-items-center gap-1"><span style="width:10px; height:10px; border-radius:50%; background:#10b981; display:inline-block;"></span> <span style="color:#059669;">Attendees</span></span>
             </div>
         </div>
@@ -88,8 +88,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const reportAudienceCtx = document.getElementById('reportAudienceChart')?.getContext('2d');
     if (reportAudienceCtx) {
         const gradPurple = reportAudienceCtx.createLinearGradient(0, 0, 0, 240);
-        gradPurple.addColorStop(0, 'rgba(124, 58, 237, 0.28)');
-        gradPurple.addColorStop(1, 'rgba(124, 58, 237, 0.00)');
+        gradPurple.addColorStop(0, 'rgba(238, 31, 45, 0.28)');
+        gradPurple.addColorStop(1, 'rgba(238, 31, 45, 0.00)');
 
         const gradTeal = reportAudienceCtx.createLinearGradient(0, 0, 0, 240);
         gradTeal.addColorStop(0, 'rgba(16, 185, 129, 0.24)');
@@ -103,17 +103,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                         label: 'Registrations',
                         data: @json($trend->pluck('registrations')),
-                        borderColor: '#7c3aed',
+                        borderColor: '#ee1f2d',
                         backgroundColor: gradPurple,
                         borderWidth: 3,
                         fill: true,
                         tension: 0.4,
                         pointBackgroundColor: '#ffffff',
-                        pointBorderColor: '#7c3aed',
+                        pointBorderColor: '#ee1f2d',
                         pointBorderWidth: 2.5,
                         pointRadius: 4,
                         pointHoverRadius: 7,
-                        pointHoverBackgroundColor: '#7c3aed',
+                        pointHoverBackgroundColor: '#ee1f2d',
                         pointHoverBorderColor: '#ffffff'
                     },
                     {
@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 labels: ['Attended', 'Not Attended', 'Unique Voters'],
                 datasets: [{
                     data: total > 0 ? [attended, notAttended, voters] : [1, 0, 0],
-                    backgroundColor: total > 0 ? ['#10b981', '#e2e8f0', '#7c3aed'] : ['#e2e8f0', '#f8fafc', '#f1f5f9'],
+                    backgroundColor: total > 0 ? ['#10b981', '#e2e8f0', '#ee1f2d'] : ['#e2e8f0', '#f8fafc', '#f1f5f9'],
                     borderWidth: 0,
                     hoverOffset: 4
                 }]

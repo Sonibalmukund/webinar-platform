@@ -17,7 +17,7 @@ class DashboardController extends Controller
 {
     public function learner(Request $request): View|RedirectResponse
     {
-        $registrations = Registration::with('webinar')->where('user_id', $request->user()->id)->latest('registered_at')->get();
+        $registrations = Registration::with('webinar')->where('user_id', $request->user()->id)->admitted()->latest('registered_at')->get();
         if ($webinar = $registrations->first()?->webinar) {
             return redirect()->route('webinars.dashboard', $webinar);
         }
@@ -62,7 +62,7 @@ class DashboardController extends Controller
         $recordings = DB::table('webinar_recordings')
             ->join('webinars', 'webinars.id', '=', 'webinar_recordings.webinar_id')
             ->join('registrations', fn ($join) => $join->on('registrations.webinar_id', '=', 'webinars.id')->where('registrations.user_id', $request->user()->id))
-            ->where('webinars.status', 'completed')->where('webinar_recordings.status', 'published')->whereNotNull('webinar_recordings.published_at')
+            ->whereNotIn('registrations.status', ['waitlisted', 'cancelled', 'rejected'])->where('webinars.status', 'completed')->where('webinar_recordings.status', 'published')->whereNotNull('webinar_recordings.published_at')
             ->select('webinar_recordings.*', 'webinars.title as webinar_title', 'webinars.slug as webinar_slug')->latest('webinar_recordings.published_at')->get();
 
         return view('pages.user.library', ['type' => 'recordings', 'items' => $recordings]);

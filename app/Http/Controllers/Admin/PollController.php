@@ -40,6 +40,52 @@ class PollController extends Controller
         ]);
     }
 
+    public function logs(Request $request): View
+    {
+        $webinarId = $request->integer('webinar_id');
+        $search = trim((string) $request->input('search'));
+        $assignedWebinarIds = $request->user()->hasRole('sub-admin')
+            ? $request->user()->assignedWebinars()->pluck('webinars.id')
+            : null;
+
+        $logs = PollResponse::query()
+            ->join('polls', 'polls.id', '=', 'poll_responses.poll_id')
+            ->join('poll_options', 'poll_options.id', '=', 'poll_responses.poll_option_id')
+            ->join('webinars', 'webinars.id', '=', 'polls.webinar_id')
+            ->leftJoin('users', 'users.id', '=', 'poll_responses.user_id')
+            ->select([
+                'poll_responses.*',
+                'users.name as user_name',
+                'users.email as user_email',
+                'users.mobile as user_mobile',
+                'polls.question as poll_question',
+                'poll_options.label as option_label',
+                'webinars.id as webinar_id',
+                'webinars.title as webinar_title',
+            ])
+            ->when($assignedWebinarIds, fn ($query) => $query->whereIn('polls.webinar_id', $assignedWebinarIds))
+            ->when($webinarId, fn ($query) => $query->where('polls.webinar_id', $webinarId))
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($nested) use ($search) {
+                    $nested->where('users.name', 'like', "%{$search}%")
+                        ->orWhere('users.email', 'like', "%{$search}%")
+                        ->orWhere('polls.question', 'like', "%{$search}%")
+                        ->orWhere('poll_options.label', 'like', "%{$search}%")
+                        ->orWhere('webinars.title', 'like', "%{$search}%");
+                });
+            })
+            ->orderByRaw('COALESCE(poll_responses.voted_at, poll_responses.created_at) DESC')
+            ->paginate(25)
+            ->withQueryString();
+
+        return view('pages.admin.polls.logs', [
+            'logs' => $logs,
+            'webinars' => $this->webinars($request),
+            'selectedWebinarId' => $webinarId,
+            'search' => $search,
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $poll = $this->save($request, new Poll);
@@ -61,8 +107,14 @@ class PollController extends Controller
         $totalVotes = $poll->options->sum('responses_count');
         $totalUsers = PollResponse::where('poll_id', $poll->id)->distinct('user_id')->count('user_id');
         $correctVotes = $poll->options->where('is_correct', true)->sum('responses_count');
+        $voters = PollResponse::with(['user', 'option'])
+            ->where('poll_id', $poll->id)
+            ->orderByRaw('COALESCE(voted_at, created_at) DESC')
+            ->latest('id')
+            ->paginate(25, ['*'], 'voters')
+            ->withQueryString();
 
-        return view('pages.admin.polls.show', compact('poll', 'totalVotes', 'totalUsers', 'correctVotes'));
+        return view('pages.admin.polls.show', compact('poll', 'totalVotes', 'totalUsers', 'correctVotes', 'voters'));
     }
 
     public function update(Request $request, Poll $poll): RedirectResponse

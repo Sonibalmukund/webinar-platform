@@ -36,7 +36,8 @@ class RealtimeChatTest extends TestCase
         $admin = $this->user('super-admin');
         $webinar = $this->webinar($admin);
         $response = $this->actingAs($admin)->postJson(route('admin.chats.store', $webinar), ['message' => 'Hello participants']);
-        $response->assertCreated()->assertJsonPath('message.user_name', $admin->name)->assertJsonPath('message.message', 'Hello participants');
+        $response->assertCreated()->assertJsonPath('message.user_name', $admin->name)->assertJsonPath('message.message', 'Hello participants')->assertJsonPath('message.reply_to_id', null);
+        $this->actingAs($admin)->get(route('admin.chats.show', $webinar))->assertOk()->assertDontSee('admin-reply-preview mb-2 p-2 rounded border bg-light d-flex', false);
         Event::assertDispatched(WebinarChatMessageSent::class, fn ($event) => $event->webinarId === $webinar->id && ! array_key_exists('user_email', $event->broadcastWith()) && (string) $event->broadcastOn()[0] === 'private-webinar.chat.'.$webinar->id);
     }
 

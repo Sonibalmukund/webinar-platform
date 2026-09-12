@@ -103,6 +103,36 @@ html,body{max-width:100%;overflow-x:hidden}
 .qa-official-answer{margin:10px 0;padding:10px 12px;border-left:3px solid #8b5cf6;border-radius:8px;background:#7c3aed18}.qa-official-answer small{color:#c4b5fd;font-size:.58rem;font-weight:800}.qa-official-answer p{margin:4px 0 0!important;color:#e2e8f0!important}.qa-question-box{margin-top:12px}
 .table-responsive { overscroll-behavior-x:contain; }
 .table-responsive:focus-visible { outline:2px solid #7c3aed; outline-offset:3px; }
+
+/* VirtualPortal staff login and admin accent normalization */
+.staff-auth-body .auth-showcase{background-color:#081426;background-image:radial-gradient(circle at 82% 78%,rgba(238,31,45,.28),transparent 34%),linear-gradient(rgba(238,31,45,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(238,31,45,.035) 1px,transparent 1px);background-size:auto,34px 34px,34px 34px}
+.staff-auth-body .auth-showcase:after{background:linear-gradient(135deg,rgba(238,31,45,.18),transparent 60%)}
+.staff-auth-body .auth-showcase .site-brand-logo{width:min(230px,75%);height:76px;object-fit:contain;object-position:left center}
+.staff-auth-body .auth-glow{background:#ee1f2d;opacity:.18}
+.staff-auth-body .hero-kicker.dark{border-color:rgba(255,255,255,.13);background:rgba(238,31,45,.16);color:#ffd7da}
+.staff-auth-body .auth-message blockquote{border-left-color:#ee1f2d;background:rgba(238,31,45,.12)}
+.staff-auth-body .auth-icon{background:#fff0f1;color:#ee1f2d}
+.staff-auth-body .auth-card a{color:#d71927}
+.staff-auth-body .form-control:focus,.staff-auth-body .form-select:focus{border-color:#ee1f2d;box-shadow:0 0 0 4px rgba(238,31,45,.1)}
+.staff-auth-body .btn-gradient{border-color:#ee1f2d;background:linear-gradient(135deg,#ee1f2d,#b91522);box-shadow:0 12px 28px rgba(238,31,45,.25)}
+.staff-auth-body .btn-gradient:hover{background:linear-gradient(135deg,#ff3341,#d71927)}
+
+.portal-body .report-hero{background:radial-gradient(circle at 68% 0,rgba(238,31,45,.2),transparent 27%),linear-gradient(120deg,#081426,#14233c 62%,#b91522)}
+.portal-body .report-metric-icon.purple,.portal-body .chat-count-badge,.portal-body .chat-avatar{background:#fff0f1;color:#ee1f2d}
+.portal-body .report-thread-total,.portal-body .report-table-count,.portal-body .chat-thread-total{background:#fff0f1;color:#b91522}
+.portal-body .report-ring{background:conic-gradient(#ee1f2d calc(var(--report-progress)*1%),#e8eaf2 0)}
+.portal-body .report-insights article:nth-child(2){background:linear-gradient(135deg,#7f1019,#ee1f2d)}
+.portal-body .report-insights article:nth-child(3){background:linear-gradient(135deg,#081426,#263b5d)}
+.portal-body .report-event-name>span{background:linear-gradient(135deg,#ffe1e3,#f7c4c8);color:#b91522}
+.portal-body .report-progress span,.portal-body .poll-result-track span{background:linear-gradient(90deg,#ee1f2d,#b91522)}
+.portal-body .chat-thread-cover{background:radial-gradient(circle at 75% 20%,rgba(255,255,255,.18),transparent 30%),linear-gradient(135deg,#081426,#14233c 58%,#ee1f2d)}
+.portal-body .chat-thread-body>small,.portal-body .chat-thread-stats i,.portal-body .chat-thread-footer b{color:#d71927}
+.portal-body .chat-avatar.event,.portal-body .chat-bubble-row.mine .chat-bubble{background:linear-gradient(135deg,#ee1f2d,#b91522);color:#fff}
+.portal-body .chat-bubble{background:#fff0f1;color:#701019}
+.portal-body .premium-table a:not(.btn){color:#b91522}
+.portal-body .premium-table a:not(.btn):hover{color:#081426}
+.portal-body .admin-pagination-links .page-item.active .page-link{background:#ee1f2d;border-color:#ee1f2d;box-shadow:0 4px 12px rgba(238,31,45,.25)}
+.certificate-preview-shell{padding:18px}.certificate-readonly .certificate-drag-item{cursor:default;pointer-events:none}.certificate-preview-shell .cert-inner{border-color:#ee1f2d}.certificate-preview-shell .cert-inner>small,.certificate-preview-shell .cert-inner h1{color:#ee1f2d}
 .sidebar-backdrop { position:fixed; inset:0; z-index:190; border:0; background:#02061799; }
 .sidebar-backdrop[hidden] { display:none; }
 .sidebar-close { position:absolute; top:16px; right:12px; color:#e2e8f0; background:#ffffff14; }
@@ -435,3 +465,60 @@ html,body{max-width:100%;overflow-x:hidden}
         border-radius: 16px;
     }
 }
+
+/* VirtualPortal admin design system */
+.portal-body {
+    --purple:#ee1f2d;
+    --violet:#ff3341;
+    --blue:#b91d29;
+    --navy:#101827;
+    --muted:#647087;
+    --bg:#f1f4f8;
+    --line:#e2e7ef;
+    --shadow:0 18px 50px rgba(9,18,34,.09);
+    background-color:var(--bg);
+    background-image:none !important;
+    font-family:"Space Grotesk","DM Sans",sans-serif;
+}
+.portal-body h1,.portal-body h2,.portal-body h3,.portal-body h4,.portal-body h5,.portal-body h6,.portal-body .brand,.portal-body .btn { font-family:"Exo 2","Manrope",sans-serif; }
+.portal-body .sidebar { background-color:#091222; background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px); background-size:38px 38px; border-right:1px solid #202b3d; }
+.portal-body .sidebar .brand { width:100%; min-height:67px; padding:0 8px; margin-bottom:20px; }
+.site-brand-logo { display:block; width:auto; max-width:190px; max-height:58px; object-fit:contain; }
+.site-brand-logo-small { max-width:42px; max-height:42px; }
+.portal-body .sidebar .site-brand-logo { width:190px; max-width:100%; max-height:64px; }
+.portal-body .sidebar-nav a,.portal-body .sidebar-group-toggle { border-radius:4px 12px 4px 12px; }
+.portal-body .sidebar-nav a:hover,.portal-body .sidebar-nav a.active { color:#fff; background:linear-gradient(90deg,rgba(238,31,45,.24),rgba(238,31,45,.05)); box-shadow:inset 3px 0 #ee1f2d; }
+.portal-body .sidebar-group-toggle:hover,.portal-body .sidebar-group-toggle.open { color:#fff; background:#192438; }
+.portal-body .sidebar-section-title,.portal-body .sidebar-label { color:#77859a; }
+.portal-body .topbar { height:82px; border-bottom-color:#e7eaf0; background:rgba(255,255,255,.94); backdrop-filter:blur(16px); }
+.portal-body .portal-content { padding-top:110px; }
+.portal-body .eyebrow { color:#ee1f2d; letter-spacing:.16em; }
+.portal-body .eyebrow:before { content:"// "; opacity:.45; }
+.portal-body .page-heading h1 { color:#091222; letter-spacing:-.045em; }
+.portal-body .btn { border-radius:4px 11px 4px 11px; }
+.portal-body .btn-gradient,.portal-body .btn-danger { color:#fff; border-color:#ee1f2d; background:linear-gradient(135deg,#ff3341,#ee1f2d); box-shadow:0 10px 24px rgba(238,31,45,.2); }
+.portal-body .btn-gradient:hover,.portal-body .btn-danger:hover { color:#fff; border-color:#d71927; background:linear-gradient(135deg,#ee1f2d,#c91624); box-shadow:0 14px 30px rgba(238,31,45,.26); }
+.portal-body .panel-card,.portal-body .stat-card,.portal-body .filter-bar,.portal-body .registration-card,.portal-body .webinar-stepper-wrap,.portal-body .wizard-footer-bar { border-color:#dfe5ee; border-radius:6px 20px 6px 20px; box-shadow:0 10px 30px rgba(9,18,34,.05); }
+.portal-body .panel-card { position:relative; }
+.portal-body .panel-card:before { content:""; position:absolute; top:-1px; right:27px; width:34px; height:2px; background:#ee1f2d; }
+.portal-body .welcome-banner,.portal-body .event-banner { border:1px solid #26344a; border-radius:6px 22px 6px 22px; background-color:#091222; background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px),radial-gradient(circle at 85% 20%,rgba(238,31,45,.28),transparent 34%); background-size:38px 38px,38px 38px,auto; }
+.portal-body .welcome-banner span,.portal-body .welcome-banner p { color:#c2cad7; }
+.portal-body .stat-icon,.portal-body .activity-list>div>i,.portal-body .date-box,.portal-body .media-placeholder { color:#ee1f2d; background:#fff0f1; border-radius:4px 12px 4px 12px; }
+.portal-body .avatar,.portal-body .mini-avatar { color:#a91824; background:linear-gradient(135deg,#ffe3e5,#ffc8cc); }
+.portal-body .form-control:focus,.portal-body .form-select:focus { border-color:#ee1f2d; box-shadow:0 0 0 4px rgba(238,31,45,.09); }
+.portal-body .premium-table thead th { color:#687488; background:#f3f6fa; border-bottom-color:#dfe5ee; }
+.portal-body .premium-table tbody tr:hover { background:#fff9f9; }
+.portal-body .pagination-bar button.active,.portal-body .admin-pagination-links .page-item.active .page-link { color:#fff; border-color:#ee1f2d; background:#ee1f2d; box-shadow:0 5px 14px rgba(238,31,45,.24); }
+.portal-body .detail-tabs button.active { color:#ee1f2d; border-color:#ee1f2d; }
+.portal-body .step-item.active { border-color:transparent!important; background:linear-gradient(135deg,#ff3341,#ee1f2d)!important; box-shadow:0 8px 22px rgba(238,31,45,.24)!important; }
+.portal-body .step-item.active .step-badge { color:#ee1f2d!important; }
+.portal-body .choice-card input[type="radio"]:checked+.choice-card-box { border-color:#ee1f2d!important; background:#fff5f6!important; box-shadow:0 4px 14px rgba(238,31,45,.13)!important; }
+.portal-body .choice-card input[type="radio"]:checked+.choice-card-box i,.portal-body .form-subhead i,.portal-body .wizard-step-info-badge i { color:#fff!important; background:#ee1f2d!important; }
+.portal-body .form-field>.form-control:focus,.portal-body .form-field>.form-select:focus,.portal-body .form-field>.input-group:focus-within,.portal-body .form-field>textarea:focus { border-color:#ee1f2d!important; box-shadow:0 0 0 3px rgba(238,31,45,.11)!important; }
+.portal-body .site-setting-preview { width:min(320px,100%); height:110px; padding:10px; border-color:#dfe5ee; border-radius:5px 16px 5px 16px; background:#fff; }
+@media(max-width:767px) { .portal-body .portal-content { padding-top:100px; }.portal-body .sidebar .site-brand-logo { width:170px; } }
+
+/* Show the exact Site Settings logo on a readable surface in the dark sidebar. */
+.portal-body .sidebar .sidebar-uploaded-brand{width:100%;min-height:64px;padding:9px 12px!important;border:1px solid rgba(255,255,255,.16);border-radius:5px 15px 5px 15px;background:#fff}
+.portal-body .sidebar .sidebar-uploaded-brand .site-brand-logo{width:100%;max-width:190px;max-height:48px;object-position:left center}
+.audience-voice-list article:target{outline:2px solid rgba(239,35,60,.42);box-shadow:0 12px 34px rgba(239,35,60,.12)}
