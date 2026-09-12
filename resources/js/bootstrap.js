@@ -6,8 +6,7 @@ window.axios = axios;
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 window.Pusher = Pusher;
 const isHttps = window.location.protocol === 'https:' || (import.meta.env.VITE_REVERB_SCHEME ?? 'http') === 'https';
-const defaultPort = isHttps ? 443 : 8080;
-const port = Number(import.meta.env.VITE_REVERB_PORT) || defaultPort;
+const port = isHttps ? 443 : (Number(import.meta.env.VITE_REVERB_PORT) || 8080);
 
 const envHost = import.meta.env.VITE_REVERB_HOST;
 const host = (envHost && envHost !== '127.0.0.1' && envHost !== 'localhost') ? envHost : window.location.hostname;
