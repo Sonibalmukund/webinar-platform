@@ -54,7 +54,6 @@ class WebinarAttendanceController extends Controller
     private function touch(Request $request, Webinar $webinar, string $state): JsonResponse
     {
         abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->exists(), 403);
-        abort_unless($webinar->canEnter(), 409, 'The webinar room is not open.');
         $now = now();
         $row = DB::transaction(function () use ($request, $webinar, $state, $now) {
             $current = DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->lockForUpdate()->first();

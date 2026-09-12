@@ -97,21 +97,19 @@ class WebinarController extends Controller
             ->latest('chat_messages.sent_at')->limit(50)->get();
         $feedback = $webinar->feedback_enabled ? DB::table('feedback')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->latest()->first() : null;
         $now = now();
-        if ($webinar->canEnter()) {
-            $existingAttendee = DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->first();
-            $shouldResetHand = ! $existingAttendee || $existingAttendee->left_at !== null || ! $existingAttendee->last_seen_at || Carbon::parse($existingAttendee->last_seen_at)->lt($now->copy()->subMinutes(10));
+        $existingAttendee = DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->first();
+        $shouldResetHand = ! $existingAttendee || $existingAttendee->left_at !== null || ! $existingAttendee->last_seen_at || Carbon::parse($existingAttendee->last_seen_at)->lt($now->copy()->subMinutes(10));
 
-            DB::table('webinar_attendees')->updateOrInsert(
-                ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id],
-                [
-                    'last_seen_at' => $now,
-                    'left_at' => null,
-                    'raised_hand' => $shouldResetHand ? false : (bool) ($existingAttendee->raised_hand ?? false),
-                    'updated_at' => $now,
-                    'created_at' => $now,
-                ]
-            );
-        }
+        DB::table('webinar_attendees')->updateOrInsert(
+            ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id],
+            [
+                'last_seen_at' => $now,
+                'left_at' => null,
+                'raised_hand' => $shouldResetHand ? false : (bool) ($existingAttendee->raised_hand ?? false),
+                'updated_at' => $now,
+                'created_at' => $now,
+            ]
+        );
         $liveViewers = DB::table('webinar_attendees')->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', now()->subSeconds(75))->count();
         $participants = DB::table('webinar_attendees')->join('users', 'users.id', '=', 'webinar_attendees.user_id')->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', now()->subSeconds(75))->select('users.id', 'users.name', 'raised_hand')->orderByDesc('raised_hand')->get();
         $raisedHand = (bool) DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->value('raised_hand');
