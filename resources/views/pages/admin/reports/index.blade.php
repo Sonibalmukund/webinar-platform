@@ -14,13 +14,13 @@
 <section class="report-hero">
     <div class="report-hero-copy">
         <span class="report-kicker"><i class="bi bi-stars"></i> INTELLIGENCE CENTER</span>
-        <h1>{{ $selected?->title ?? 'All Events' }} report</h1>
-        <p>Registrations, attendance aur engagement ka complete real-time overview.</p>
+        <h1>{{ $selected?->title ?? (auth()->user()->hasRole('sub-admin') ? 'Assigned Events' : 'All Events') }} report</h1>
+        <p>{{ auth()->user()->hasRole('sub-admin') ? 'Your assigned events ke registrations, attendance aur engagement ka overview.' : 'Registrations, attendance aur engagement ka complete real-time overview.' }}</p>
     </div>
-    <form method="GET" action="{{ route('admin.reports.index') }}" class="report-filter">
+    @unless(auth()->user()->hasRole('sub-admin'))<form method="GET" action="{{ route('admin.reports.index') }}" class="report-filter">
         <label for="reportWebinar">View report for</label>
         <div><i class="bi bi-calendar3"></i><select id="reportWebinar" name="webinar_id" onchange="this.form.submit()"><option value="">All Events</option>@foreach($webinars as $webinar)<option value="{{ $webinar->id }}" @selected($selected?->id===$webinar->id)>{{ $webinar->title }}</option>@endforeach</select></div>
-    </form>
+    </form>@endunless
     <div class="report-orb report-orb-one"></div><div class="report-orb report-orb-two"></div>
 </section>
 

@@ -195,6 +195,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     document.querySelectorAll('.webinar-multi-select input').forEach(input => input.addEventListener('change', updateWebinarDropdown));
     updateWebinarDropdown();
+    document.querySelector('[data-permission-user-select]')?.addEventListener('change', event => {
+        const url = event.target.selectedOptions[0]?.dataset.permissionUrl;
+        if (url) window.location.href = url;
+    });
     document.querySelector('#registrationWebinarSelect')?.addEventListener('change', event => {
         const url = new URL(window.location.href);
         if (event.target.value) url.searchParams.set('webinar_id', event.target.value); else url.searchParams.delete('webinar_id');

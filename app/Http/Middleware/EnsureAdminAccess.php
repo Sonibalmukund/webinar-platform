@@ -20,7 +20,7 @@ class EnsureAdminAccess
         }
 
         $permission ??= $this->permissionFor($request);
-        $hasPermission = $user->hasPermission($permission) || ($permission === 'users.view' && $user->hasPermission('registrations.view'));
+        $hasPermission = $permission && ($user->hasPermission($permission) || ($permission === 'users.view' && $user->hasPermission('registrations.view')));
         abort_unless($permission && $hasPermission, 403, 'You do not have permission to access this module.');
 
         $webinar = $request->route('webinar');
@@ -48,7 +48,10 @@ class EnsureAdminAccess
         }
 
         $module = match (true) {
+            $name === 'admin.polls.logs' => 'poll-logs',
+            $name === 'admin.certificates.logs' => 'certificate-logs',
             str_contains($name, '.dynamic-fields.') || (str_contains($name, '.registration.') && $name !== 'admin.registration-settings') => 'dynamic-fields',
+            in_array($name, ['admin.webinars.live', 'admin.webinars.controls', 'admin.webinars.announcement'], true) => 'live-control',
             str_contains($name, '.webinars.') => 'webinars',
             str_contains($name, '.polls.') => 'polls',
             str_contains($name, '.users') => 'users',
@@ -60,6 +63,7 @@ class EnsureAdminAccess
             str_contains($name, '.chats.') => 'chat',
             str_contains($name, '.questions.') => 'q-and-a',
             str_contains($name, '.comments.') => 'q-and-a',
+            str_contains($name, '.feedback.') => 'feedback',
             str_contains($name, '.notifications.') => 'notifications',
             default => null,
         };
@@ -68,6 +72,13 @@ class EnsureAdminAccess
         }
 
         $action = match (true) {
+            $module === 'live-control' && $name !== 'admin.webinars.live' => 'manage',
+            $name === 'admin.certificates.visibility' => 'hide',
+            $name === 'admin.polls.status' => 'manage',
+            $name === 'admin.webinars.clone' || $name === 'admin.polls.duplicate' => 'create',
+            str_starts_with($name, 'admin.chats.') && str_ends_with($name, '.store') => 'manage',
+            str_starts_with($name, 'admin.chats.') && str_ends_with($name, '.destroy') => 'moderate',
+            $module === 'q-and-a' && ! str_ends_with($name, '.index') && ! str_ends_with($name, '.show') => 'edit',
             str_ends_with($name, '.create') || str_ends_with($name, '.store') => 'create',
             str_ends_with($name, '.edit') || str_ends_with($name, '.update') || str_ends_with($name, '.status') || str_ends_with($name, '.controls') => 'edit',
             str_ends_with($name, '.destroy') || str_contains($name, 'bulk-destroy') => 'delete',

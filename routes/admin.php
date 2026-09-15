@@ -91,9 +91,9 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::get('/admin/certificates/logs', [CertificateController::class, 'logs'])->name('admin.certificates.logs');
     Route::get('/admin/permissions', [PermissionController::class, 'index'])->name('admin.permissions.index');
     Route::get('/admin/permissions/create', [PermissionController::class, 'create'])->name('admin.permissions.create');
-    Route::get('/admin/permissions/{user}/{webinar}/edit', [PermissionController::class, 'edit'])->name('admin.permissions.edit');
+    Route::get('/admin/permissions/{user}/edit', [PermissionController::class, 'edit'])->name('admin.permissions.edit');
     Route::put('/admin/permissions', [PermissionController::class, 'update'])->name('admin.permissions.update');
-    Route::delete('/admin/permissions/{user}/{webinar}', [PermissionController::class, 'destroy'])->name('admin.permissions.destroy');
+    Route::delete('/admin/permissions/{user}', [PermissionController::class, 'destroy'])->name('admin.permissions.destroy');
     Route::get('/admin/speakers', [SpeakerController::class, 'index'])->name('admin.speakers.index');
     Route::get('/admin/speakers/create', [SpeakerController::class, 'create'])->name('admin.speakers.create');
     Route::post('/admin/speakers', [SpeakerController::class, 'store'])->name('admin.speakers.store');

@@ -9,10 +9,10 @@
 @endphp
 <div class="page-heading">
     <div><span class="eyebrow">CERTIFICATE PREVIEW</span><h1>{{ $webinar->title }}</h1><p>This is how the configured certificate will look with sample attendee data.</p></div>
-    <div class="d-flex gap-2"><a class="btn btn-light" href="{{ route('admin.certificates.index') }}"><i class="bi bi-arrow-left"></i> Back</a><a class="btn btn-gradient" href="{{ route('admin.certificates.edit',$webinar) }}"><i class="bi bi-pencil"></i> Edit design</a></div>
+    <div class="d-flex gap-2"><a class="btn btn-light" href="{{ route('admin.certificates.index') }}"><i class="bi bi-arrow-left"></i> Back</a>@if(auth()->user()->hasRole('super-admin') || auth()->user()->hasPermission('certificates.edit'))<a class="btn btn-gradient" href="{{ route('admin.certificates.edit',$webinar) }}"><i class="bi bi-pencil"></i> Edit design</a>@endif</div>
 </div>
 @if(!$template)
-    <div class="panel-card text-center py-5"><i class="bi bi-award display-5 text-muted"></i><h2 class="mt-3">No certificate template configured</h2><p class="text-muted">Add a template before opening its preview.</p><a class="btn btn-gradient" href="{{ route('admin.certificates.edit',$webinar) }}">Add template</a></div>
+    <div class="panel-card text-center py-5"><i class="bi bi-award display-5 text-muted"></i><h2 class="mt-3">No certificate template configured</h2><p class="text-muted">Add a template before opening its preview.</p>@if(auth()->user()->hasRole('super-admin') || auth()->user()->hasPermission('certificates.create'))<a class="btn btn-gradient" href="{{ route('admin.certificates.edit',$webinar) }}">Add template</a>@endif</div>
 @else
     @if(data_get($design,'font_file'))<style>@font-face{font-family:CustomCertificateFont;src:url('{{ data_get($design,'font_file') }}')}</style>@endif
     <section class="panel-card certificate-preview-shell"><div class="certificate-preview certificate-readonly">

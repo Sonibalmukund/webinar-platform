@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Webinar;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -57,10 +58,29 @@ class SubAdminController extends Controller
         unset($data['webinars']);
         if (blank($data['password'] ?? null)) {
             unset($data['password']);
-        } $user->fill($data)->save();
-        $role = Role::where('slug', 'sub-admin')->firstOrFail();
-        $user->roles()->sync([$role->id]);
-        $user->assignedWebinars()->syncWithPivotValues($webinars, ['assigned_by' => $request->user()->id]);
+        }
+
+        DB::transaction(function () use ($data, $user, $webinars, $request) {
+            $permissionIds = $user->exists
+                ? DB::table('user_webinar_permissions')->where('user_id', $user->id)->distinct()->pluck('permission_id')
+                : collect();
+            $user->fill($data)->save();
+            $role = Role::where('slug', 'sub-admin')->firstOrFail();
+            $user->roles()->sync([$role->id]);
+            $user->assignedWebinars()->syncWithPivotValues($webinars, ['assigned_by' => $request->user()->id]);
+            DB::table('user_webinar_permissions')->where('user_id', $user->id)->delete();
+
+            $now = now();
+            $rows = [];
+            foreach ($webinars as $webinarId) {
+                foreach ($permissionIds as $permissionId) {
+                    $rows[] = ['user_id' => $user->id, 'webinar_id' => $webinarId, 'permission_id' => $permissionId, 'assigned_by' => $request->user()->id, 'created_at' => $now, 'updated_at' => $now];
+                }
+            }
+            if ($rows !== []) {
+                DB::table('user_webinar_permissions')->insert($rows);
+            }
+        });
     }
 
     public function destroy(User $subAdmin): RedirectResponse

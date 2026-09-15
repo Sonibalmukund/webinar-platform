@@ -1,6 +1,7 @@
-@props(['webinars', 'selected' => null, 'search' => null, 'placeholder' => 'Search listing...', 'showSearch' => true])
+@props(['webinars', 'selected' => null, 'search' => null, 'placeholder' => 'Search listing...', 'showSearch' => true, 'showWebinar' => null])
 @php($currentSearch = $search ?? request('search', ''))
 @php($currentSelected = $selected ?? request('webinar_id'))
+@php($showWebinar = $showWebinar ?? !auth()->user()->hasRole('sub-admin'))
 <form class="filter-bar module-filter-bar mb-4" method="GET" action="{{ url()->current() }}">
     @if($showSearch)
         <div class="filter-search">
@@ -8,7 +9,7 @@
             <input name="search" value="{{ $currentSearch }}" placeholder="{{ $placeholder }}" aria-label="Search listing">
         </div>
     @endif
-    @if(isset($webinars))
+    @if(isset($webinars) && $showWebinar)
         <select class="form-select" name="webinar_id" onchange="this.form.submit()" aria-label="Filter by webinar">
             <option value="">All webinars</option>
             @foreach($webinars as $event)

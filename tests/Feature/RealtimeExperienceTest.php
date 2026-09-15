@@ -213,7 +213,10 @@ class RealtimeExperienceTest extends TestCase
             $permission = Permission::firstOrCreate(['slug' => $slug], ['name' => $slug, 'module' => strtok($slug, '.')]);
             $sub->webinarPermissions()->attach($permission->id, ['webinar_id' => $assigned->id, 'assigned_by' => $admin->id]);
         }
-        $this->actingAs($sub)->get(route('admin.dashboard'))->assertOk()->assertSee('ASSIGNED EVENTS');
+        $this->actingAs($sub)->get(route('admin.dashboard'))->assertOk()
+            ->assertSee('ASSIGNED EVENTS')
+            ->assertSee('Profile')
+            ->assertDontSee('<div class="sidebar-section-title">Administration</div>', false);
         $this->actingAs($sub)->get(route('admin.chats.show', $assigned))->assertOk()
             ->assertSee('data-chat-history="'.route('admin.chats.show', $assigned).'"', false);
         $this->get(route('admin.chats.show',$other))->assertForbidden();
@@ -447,16 +450,20 @@ class RealtimeExperienceTest extends TestCase
                 ->assertSee('Poll results')
                 ->assertSee('VirtualPortal answer')
                 ->assertDontSee('Who answered this poll');
-            $this->actingAs($staff)->get(route('admin.polls.logs'))->assertOk()
-                ->assertSee('Poll voter logs')
-                ->assertSee($learner->email)
-                ->assertSee('VirtualPortal answer')
-                ->assertSee('View results')
-                ->assertSee(route('admin.polls.show', $poll), false)
-                ->assertSee('sidebar-uploaded-brand', false)
-                ->assertSee('site-brand-logo', false)
-                ->assertSee('/storage/site/', false);
         }
+
+        $this->actingAs($admin)->get(route('admin.polls.logs'))->assertOk()
+            ->assertSee('Poll voter logs')
+            ->assertSee($learner->email)
+            ->assertSee('VirtualPortal answer')
+            ->assertSee('View results')
+            ->assertSee(route('admin.polls.show', $poll), false)
+            ->assertSee('sidebar-uploaded-brand', false)
+            ->assertSee('site-brand-logo', false)
+            ->assertSee('/storage/site/', false);
+
+        $this->actingAs($sub)->get(route('admin.polls.logs'))->assertForbidden();
+        $this->actingAs($sub)->get(route('admin.certificates.logs'))->assertForbidden();
     }
 
     public function test_poll_and_dashboard_access_never_cross_webinar_registration_scope(): void
@@ -496,5 +503,110 @@ class RealtimeExperienceTest extends TestCase
                 ->assertSee('Sample Attendee')
                 ->assertSee('VirtualPortal Team');
         }
+    }
+
+    public function test_role_permissions_are_module_based_and_apply_to_all_assigned_webinars(): void
+    {
+        $admin = $this->user('super-admin');
+        $sub = $this->user('sub-admin');
+        $firstWebinar = $this->webinar($admin);
+        $secondWebinar = $this->webinar($admin);
+        $sub->assignedWebinars()->attach([$firstWebinar->id, $secondWebinar->id], ['assigned_by' => $admin->id]);
+
+        $this->actingAs($admin)->get(route('admin.permissions.create', ['user_id' => $sub->id]))
+            ->assertOk()
+            ->assertSee('Dashboard')
+            ->assertSee('Dynamic Fields')
+            ->assertSee('Speakers')
+            ->assertSee('Users')
+            ->assertSee('Feedback')
+            ->assertSee('Q And A')
+            ->assertSee('Poll Logs')
+            ->assertSee('Certificate Logs')
+            ->assertDontSee('name="webinar_id"', false);
+
+        $permissionIds = Permission::whereIn('slug', ['dashboard.view', 'speakers.view', 'feedback.view', 'poll-logs.view', 'certificate-logs.view'])->pluck('id')->all();
+        $this->put(route('admin.permissions.update'), ['user_id' => $sub->id, 'permissions' => $permissionIds])
+            ->assertRedirect(route('admin.permissions.index'));
+
+        foreach ([$firstWebinar, $secondWebinar] as $webinar) {
+            foreach ($permissionIds as $permissionId) {
+                $this->assertDatabaseHas('user_webinar_permissions', [
+                    'user_id' => $sub->id,
+                    'webinar_id' => $webinar->id,
+                    'permission_id' => $permissionId,
+                ]);
+            }
+        }
+
+        $this->actingAs($sub)->get(route('admin.polls.logs'))
+            ->assertOk()
+            ->assertDontSee('name="webinar_id"', false);
+        $this->get(route('admin.certificates.logs'))
+            ->assertOk()
+            ->assertDontSee('name="webinar_id"', false);
+        $this->get(route('admin.feedback.index'))
+            ->assertOk()
+            ->assertSee('Feedback from your assigned webinars.')
+            ->assertSee('Sub Administrator')
+            ->assertDontSee('name="webinar_id"', false);
+
+        $thirdWebinar = $this->webinar($admin);
+        $this->actingAs($admin)->put(route('admin.subadmins.update', $sub), [
+            'name' => $sub->name,
+            'email' => $sub->email,
+            'mobile' => $sub->mobile,
+            'job_title' => $sub->job_title,
+            'status' => 'active',
+            'password' => '',
+            'webinars' => [$firstWebinar->id, $secondWebinar->id, $thirdWebinar->id],
+        ])->assertRedirect(route('admin.subadmins.index'));
+
+        foreach ($permissionIds as $permissionId) {
+            $this->assertDatabaseHas('user_webinar_permissions', [
+                'user_id' => $sub->id,
+                'webinar_id' => $thirdWebinar->id,
+                'permission_id' => $permissionId,
+            ]);
+        }
+    }
+
+    public function test_view_only_sub_admin_does_not_see_mutation_buttons_and_reports_stay_assigned(): void
+    {
+        $admin = $this->user('super-admin');
+        $sub = $this->user('sub-admin');
+        $assigned = $this->webinar($admin);
+        $assigned->update(['title' => 'Assigned report event']);
+        $other = $this->webinar($admin);
+        $other->update(['title' => 'Private platform event']);
+        $sub->assignedWebinars()->attach($assigned->id, ['assigned_by' => $admin->id]);
+
+        foreach (['webinars.view', 'polls.view', 'certificates.view', 'speakers.view', 'notifications.view', 'reports.view'] as $slug) {
+            $permission = Permission::where('slug', $slug)->firstOrFail();
+            $sub->webinarPermissions()->attach($permission->id, ['webinar_id' => $assigned->id, 'assigned_by' => $admin->id]);
+        }
+
+        Poll::create(['webinar_id' => $assigned->id, 'created_by' => $admin->id, 'question' => 'View-only poll', 'status' => 'draft']);
+        Registration::create(['webinar_id' => $assigned->id, 'email' => 'assigned-report@example.com', 'status' => 'approved']);
+        Registration::create(['webinar_id' => $other->id, 'email' => 'private-report@example.com', 'status' => 'approved']);
+
+        $this->actingAs($sub)->get(route('admin.webinars.index'))->assertOk()
+            ->assertDontSee('Create webinar')->assertDontSee('Edit webinar')->assertDontSee('Clone as draft')->assertDontSee('>Delete<', false);
+        $this->get(route('admin.webinars.create'))->assertForbidden();
+        $this->get(route('admin.webinars.edit', $assigned))->assertForbidden();
+        $this->get(route('admin.polls.index'))->assertOk()
+            ->assertDontSee('Add poll')->assertDontSee('>Edit<', false)->assertDontSee('Duplicate')->assertDontSee('>Delete<', false);
+        $this->get(route('admin.polls.edit', Poll::where('webinar_id', $assigned->id)->firstOrFail()))->assertForbidden();
+        $this->get(route('admin.certificates.index'))->assertOk()
+            ->assertDontSee('Add certificate')->assertDontSee('Add template')->assertDontSee('Edit template');
+        $this->get(route('admin.speakers.index'))->assertOk()->assertDontSee('Add speaker');
+        $this->get(route('admin.notifications.index'))->assertOk()->assertDontSee('Create notification');
+
+        $this->get(route('admin.reports.index'))->assertOk()
+            ->assertSee('Assigned Events report')
+            ->assertSee('Assigned report event')
+            ->assertDontSee('Private platform event')
+            ->assertDontSee('private-report@example.com');
+        $this->get(route('admin.reports.index', ['webinar_id' => $other->id]))->assertForbidden();
     }
 }

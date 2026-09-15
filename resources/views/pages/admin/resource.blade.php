@@ -10,7 +10,7 @@
             <i class="bi bi-search"></i>
             <input name="search" value="{{ request('search') }}" placeholder="Search users by name, email, mobile..." aria-label="Search users">
         </div>
-        @if(isset($webinars))
+        @if(isset($webinars) && !auth()->user()->hasRole('sub-admin'))
             <select class="form-select" name="webinar_id" onchange="this.form.submit()" aria-label="Filter by webinar">
                 <option value="">All webinars</option>
                 @foreach($webinars as $webinar)
@@ -36,7 +36,7 @@
             <i class="bi bi-search"></i>
             <input name="search" value="{{ request('search') }}" placeholder="Search attendees by name, email, phone..." aria-label="Search registrations">
         </div>
-        @if(isset($webinars))
+        @if(isset($webinars) && !auth()->user()->hasRole('sub-admin'))
             <select class="form-select" name="webinar_id" onchange="this.form.submit()" aria-label="Filter by webinar">
                 <option value="">All webinars</option>
                 @foreach($webinars as $webinar)

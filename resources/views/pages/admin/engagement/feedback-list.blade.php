@@ -2,7 +2,7 @@
 @section('title', 'Feedback')
 @section('content')
 <div class="page-heading">
-    <div><span class="eyebrow">AUDIENCE VOICE</span><h1>Feedback</h1><p>All feedback from enabled webinars in one listing.</p></div>
+    <div><span class="eyebrow">AUDIENCE VOICE</span><h1>Feedback</h1><p>{{ auth()->user()->hasRole('sub-admin') ? 'Feedback from your assigned webinars.' : 'All feedback from enabled webinars in one listing.' }}</p></div>
 </div>
 @if(session('success'))
     <div class="alert alert-success">{{ session('success') }}</div>
