@@ -86,11 +86,10 @@ class ChatController extends Controller
         $attachment = [];
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
-            $directory = public_path('uploads/chat');
-            File::ensureDirectoryExists($directory);
-            $name = Str::uuid().'.'.$file->getClientOriginalExtension();
-            $attachment = ['attachment_path' => '/uploads/chat/'.$name, 'attachment_name' => $file->getClientOriginalName(), 'attachment_mime' => $file->getMimeType()];
-            $file->move($directory, $name);
+            $extension = $file->getClientOriginalExtension();
+            $name = Str::uuid().($extension ? '.'.$extension : '');
+            $path = $file->storeAs('chat', $name, 'public');
+            $attachment = ['attachment_path' => '/storage/'.$path, 'attachment_name' => $file->getClientOriginalName(), 'attachment_mime' => $file->getMimeType()];
         }
         $sentAt = now();
         $id = DB::table('chat_messages')->insertGetId(array_merge([

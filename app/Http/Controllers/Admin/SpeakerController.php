@@ -63,11 +63,11 @@ class SpeakerController extends Controller
     {
         $data = $request->validate(['webinar_id' => ['required', 'exists:webinars,id'], 'name' => ['required', 'string', 'max:255'], 'email' => ['nullable', 'email'], 'headline' => ['nullable', 'string', 'max:255'], 'company' => ['nullable', 'string', 'max:255'], 'bio' => ['nullable', 'string'], 'photo' => ['nullable', 'image', 'max:5120']]);
         if ($request->hasFile('photo')) {
-            $directory = public_path('uploads/speakers');
-            File::ensureDirectoryExists($directory);
-            $name = Str::uuid().'.'.$request->file('photo')->getClientOriginalExtension();
-            $request->file('photo')->move($directory, $name);
-            $data['photo_path'] = '/uploads/speakers/'.$name;
+            $file = $request->file('photo');
+            $extension = $file->getClientOriginalExtension();
+            $name = Str::uuid().($extension ? '.'.$extension : '');
+            $path = $file->storeAs('speakers', $name, 'public');
+            $data['photo_path'] = '/storage/'.$path;
         }unset($data['photo'],$data['webinar_id']);
         $data['slug'] = $speaker->exists ? $speaker->slug : Str::slug($data['name']).'-'.Str::lower(Str::random(4));
         $data['is_active'] = $request->boolean('is_active');

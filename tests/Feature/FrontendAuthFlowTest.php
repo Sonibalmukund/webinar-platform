@@ -181,7 +181,11 @@ class FrontendAuthFlowTest extends TestCase
 
     public function test_registration_from_popup_creates_event_seat_and_opens_dashboard(): void
     {
-        $webinar = Webinar::where('slug', 'future-of-digital-healthcare-2026')->firstOrFail();
+        $webinar = Webinar::where('slug', 'future-of-digital-healthcare-2026')->first();
+        if (! $webinar) {
+            $this->seed(\Database\Seeders\DatabaseSeeder::class);
+            $webinar = Webinar::where('slug', 'future-of-digital-healthcare-2026')->firstOrFail();
+        }
         $webinar->update(['auto_approve' => false]);
         $country = Country::where('iso2', 'IN')->firstOrFail();
         $state = State::where('country_id', $country->id)->where('name', 'Gujarat')->firstOrFail();

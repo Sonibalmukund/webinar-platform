@@ -342,8 +342,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item) { item.style.left = `${x}%`; item.style.top = `${y}%`; }
         if (xInput) xInput.value = x.toFixed(1);
         if (yInput) yInput.value = y.toFixed(1);
-        if (elementSelect?.value === key) { coordinateX.value = x.toFixed(1); coordinateY.value = y.toFixed(1); }
+        if (elementSelect?.value === key && coordinateX && coordinateY) { coordinateX.value = x.toFixed(1); coordinateY.value = y.toFixed(1); }
     };
+    window.setCertificatePosition = setCertificatePosition;
+    window.setCertificateSize = setCertificateSize;
+    window.selectCertificateElement = selectCertificateElement;
     elementSelect?.addEventListener('change', () => selectCertificateElement(elementSelect.value));
     coordinateX?.addEventListener('input', () => setCertificatePosition(elementSelect.value, coordinateX.value, coordinateY.value));
     coordinateY?.addEventListener('input', () => setCertificatePosition(elementSelect.value, coordinateX.value, coordinateY.value));
@@ -617,19 +620,94 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderLivePreview=()=>{if(!livePreview)return;const url=getEmbedUrl(liveProvider?.value,liveSource?.value);livePreview.innerHTML=url?`<iframe src="${url.replace(/["<>]/g,'')}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`:'<div><i class="bi bi-play-btn"></i><span>Enter a valid video URL, ID, or iframe code.</span></div>';};
     liveProvider?.addEventListener('change',renderLivePreview);liveSource?.addEventListener('input',renderLivePreview);if(liveProvider?.value&&liveSource?.value)renderLivePreview();
 
-    const experiencePreview=document.querySelector('#experiencePreview'),roomLayout=document.querySelector('#roomLayout'),brandPrimary=document.querySelector('#brandPrimary'),brandSecondary=document.querySelector('#brandSecondary');
-    const validHex=value=>/^#[0-9a-f]{6}$/i.test(value);const renderExperiencePreview=()=>{const primary=validHex(brandPrimary?.value)?brandPrimary.value:'#6d28d9',secondary=validHex(brandSecondary?.value)?brandSecondary.value:'#2563eb';const primarySwatch=document.querySelector('[data-color-swatch="primary"]'),secondarySwatch=document.querySelector('[data-color-swatch="secondary"]');if(primarySwatch)primarySwatch.style.background=primary;if(secondarySwatch)secondarySwatch.style.background=secondary;if(!experiencePreview)return;experiencePreview.style.setProperty('--preview-primary',primary);experiencePreview.style.setProperty('--preview-secondary',secondary);const label=roomLayout?.selectedOptions[0]?.textContent||'Presentation';const target=experiencePreview.querySelector('[data-layout-preview]');if(target)target.textContent=`${label} layout`;};
+    const experienceFrame=document.querySelector('#experiencePreviewFrame'),roomLayout=document.querySelector('#roomLayout'),brandPrimary=document.querySelector('#brandPrimary'),brandSecondary=document.querySelector('#brandSecondary');
+    const validHex=value=>/^#[0-9a-f]{6}$/i.test(value);
+    const hexToRgb=hex=>{const value=parseInt(hex.slice(1),16);return {r:(value>>16)&255,g:(value>>8)&255,b:value&255};};
+    const rgbToHex=({r,g,b})=>`#${[r,g,b].map(value=>Math.round(value).toString(16).padStart(2,'0')).join('')}`;
+    const rgbToHsv=({r,g,b})=>{r/=255;g/=255;b/=255;const max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;let h=0;if(delta){if(max===r)h=60*(((g-b)/delta)%6);else if(max===g)h=60*((b-r)/delta+2);else h=60*((r-g)/delta+4);}if(h<0)h+=360;return {h,s:max?delta/max:0,v:max};};
+    const hsvToRgb=({h,s,v})=>{const c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c;let rgb=h<60?[c,x,0]:h<120?[x,c,0]:h<180?[0,c,x]:h<240?[0,x,c]:h<300?[x,0,c]:[c,0,x];return {r:(rgb[0]+m)*255,g:(rgb[1]+m)*255,b:(rgb[2]+m)*255};};
+    const escapePreview=value=>String(value||'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+    const renderExperiencePreview=()=>{const primary=validHex(brandPrimary?.value)?brandPrimary.value:'#6d28d9',secondary=validHex(brandSecondary?.value)?brandSecondary.value:'#2563eb';document.querySelectorAll('[data-color-swatch="primary"]').forEach(node=>node.style.background=primary);document.querySelectorAll('[data-color-swatch="secondary"]').forEach(node=>node.style.background=secondary);document.querySelectorAll('[data-color-code="primary"]').forEach(node=>node.textContent=primary.toUpperCase());document.querySelectorAll('[data-color-code="secondary"]').forEach(node=>node.textContent=secondary.toUpperCase());if(!experienceFrame)return;const label=roomLayout?.selectedOptions[0]?.textContent?.trim()||'Interactive';const title=escapePreview(experienceFrame.dataset.previewTitle||'Your webinar title');experienceFrame.srcdoc=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#070b14;color:#fff}.top{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:#0c1322;border-bottom:1px solid #ffffff17}.brand{display:flex;align-items:center;gap:10px;font-weight:800}.mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,${primary},${secondary});display:grid;place-items:center}.live{padding:6px 10px;border-radius:20px;background:${primary}33;color:${primary};font-size:11px;font-weight:800}.stage{padding:22px;background:radial-gradient(circle at 90% 5%,${secondary}44,transparent 34%)}.hero{min-height:205px;border:1px solid #ffffff18;border-radius:16px;padding:24px;display:flex;flex-direction:column;justify-content:flex-end;background:linear-gradient(140deg,${primary}d9,${secondary}b8)}.hero small{letter-spacing:.15em;opacity:.78}.hero h1{margin:9px 0 5px;font-size:25px}.body{display:grid;grid-template-columns:1fr 130px;gap:12px;margin-top:12px}.tile{height:74px;border:1px solid #ffffff15;border-radius:12px;background:#111a2a;padding:13px}.bar{height:8px;border-radius:8px;background:linear-gradient(90deg,${primary},${secondary});margin-top:12px}</style></head><body><div class="top"><div class="brand"><span class="mark">▶</span>Virtual Room</div><span class="live">LIVE PREVIEW</span></div><main class="stage"><section class="hero"><small>${escapePreview(label.toUpperCase())} MODE</small><h1>${title}</h1><span>Your branded attendee experience</span></section><div class="body"><div class="tile">Stream & engagement<div class="bar"></div></div><div class="tile">Chat<br>Polls<br>Q&amp;A</div></div></main></body></html>`;};
     [roomLayout,brandPrimary,brandSecondary].forEach(input=>input?.addEventListener('input',renderExperiencePreview));renderExperiencePreview();
-    document.querySelectorAll('[data-theme-preset]').forEach(button=>button.addEventListener('click',()=>{const [primary,secondary]=button.dataset.themePreset.split('|');if(brandPrimary)brandPrimary.value=primary;if(brandSecondary)brandSecondary.value=secondary;document.querySelectorAll('[data-theme-preset]').forEach(item=>item.classList.remove('active'));button.classList.add('active');renderExperiencePreview();}));
 
-    const conditionalFields=[...document.querySelectorAll('[data-conditional-field]')];
-    const inputValue=id=>{const inputs=[...document.querySelectorAll(`[name="fields[${id}]"],[name="fields[${id}][]"]`)];const checked=inputs.filter(input=>input.checked).map(input=>input.value);return checked.length?checked.join(','):(inputs[0]?.value||'');};
-    const syncConditionalFields=()=>conditionalFields.forEach(wrapper=>{const id=wrapper.dataset.conditionField;if(!id){wrapper.hidden=false;return;}const matches=String(inputValue(id)).toLowerCase()===String(wrapper.dataset.conditionValue||'').toLowerCase();const show=wrapper.dataset.conditionOperator==='not_equals'?!matches:matches;wrapper.hidden=!show;wrapper.querySelectorAll('input,select,textarea').forEach(input=>input.disabled=!show);});
-    document.querySelectorAll('[name^="fields["]').forEach(input=>input.addEventListener('change',syncConditionalFields));syncConditionalFields();
+    const svField=document.querySelector('#brandSvField'),pickerMarker=document.querySelector('#brandPickerMarker'),hueSlider=document.querySelector('#brandHueSlider'),nativeColor=document.querySelector('#brandNativeColor'),activeHex=document.querySelector('#brandActiveHex'),rgbReadout=document.querySelector('#brandRgbReadout'),hsvReadout=document.querySelector('#brandHsvReadout');
+    const colorTargets={primary:brandPrimary,secondary:brandSecondary};let activeColorTarget='primary',pickerHsv={h:260,s:.82,v:.85};
+    const syncPickerFromInput=()=>{const input=colorTargets[activeColorTarget];if(!input||!validHex(input.value))return;pickerHsv=rgbToHsv(hexToRgb(input.value));if(hueSlider)hueSlider.value=Math.round(pickerHsv.h);if(svField)svField.style.setProperty('--picker-hue',pickerHsv.h);if(pickerMarker){pickerMarker.style.left=`${pickerHsv.s*100}%`;pickerMarker.style.top=`${(1-pickerHsv.v)*100}%`;}if(nativeColor)nativeColor.value=input.value;if(activeHex)activeHex.textContent=`HEX ${input.value.toUpperCase()}`;if(rgbReadout){const rgb=hexToRgb(input.value);rgbReadout.textContent=`RGB ${rgb.r} · ${rgb.g} · ${rgb.b}`;}if(hsvReadout)hsvReadout.textContent=`HSV ${Math.round(pickerHsv.h)}° · ${Math.round(pickerHsv.s*100)}% · ${Math.round(pickerHsv.v*100)}%`;};
+    const applyPickerColor=()=>{const input=colorTargets[activeColorTarget];if(!input)return;input.value=rgbToHex(hsvToRgb(pickerHsv)).toUpperCase();renderExperiencePreview();syncPickerFromInput();};
+    document.querySelectorAll('[data-color-target]').forEach(button=>button.addEventListener('click',()=>{activeColorTarget=button.dataset.colorTarget;document.querySelectorAll('[data-color-target]').forEach(item=>item.classList.toggle('active',item===button));syncPickerFromInput();}));
+    document.querySelectorAll('[data-color-open]').forEach(button=>button.addEventListener('click',()=>{activeColorTarget=button.dataset.colorOpen;document.querySelectorAll('[data-color-target]').forEach(item=>item.classList.toggle('active',item.dataset.colorTarget===activeColorTarget));syncPickerFromInput();const modal=document.querySelector('#themeColorPickerModal');if(modal&&window.bootstrap)bootstrap.Modal.getOrCreateInstance(modal).show();}));
+    const pickSaturationValue=event=>{if(!svField)return;const rect=svField.getBoundingClientRect();pickerHsv.s=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width));pickerHsv.v=1-Math.max(0,Math.min(1,(event.clientY-rect.top)/rect.height));applyPickerColor();};
+    svField?.addEventListener('pointerdown',event=>{svField.setPointerCapture(event.pointerId);pickSaturationValue(event);});svField?.addEventListener('pointermove',event=>{if(svField.hasPointerCapture(event.pointerId))pickSaturationValue(event);});
+    hueSlider?.addEventListener('input',()=>{pickerHsv.h=Number(hueSlider.value);if(svField)svField.style.setProperty('--picker-hue',pickerHsv.h);applyPickerColor();});
+    nativeColor?.addEventListener('input',()=>{const input=colorTargets[activeColorTarget];if(input)input.value=nativeColor.value.toUpperCase();renderExperiencePreview();syncPickerFromInput();});
+    [brandPrimary,brandSecondary].forEach(input=>input?.addEventListener('input',()=>{renderExperiencePreview();if(input===colorTargets[activeColorTarget])syncPickerFromInput();}));syncPickerFromInput();
 
     document.querySelectorAll('[data-site-preview-input]').forEach(input => input.addEventListener('change', event => {
         const file = event.target.files?.[0];
         const target = document.querySelector(`[data-site-preview="${input.dataset.sitePreviewInput}"]`);
         if (file && target) { target.src = URL.createObjectURL(file); target.hidden = false; }
     }));
+
+    // Universal Media Lightbox Preview (Speakers, Banners, Brands)
+    window.openMediaPreview = function(options = {}) {
+        const modalEl = document.getElementById('mediaPreviewModal');
+        if (!modalEl || !window.bootstrap) return;
+
+        const titleEl = document.getElementById('mediaPreviewModalTitle');
+        const badgeEl = document.getElementById('mediaPreviewBadge');
+        const bodyEl = document.getElementById('mediaPreviewBody');
+        const metaEl = document.getElementById('mediaPreviewMeta');
+        const openBtn = document.getElementById('mediaPreviewOpenBtn');
+
+        const src = String(options.src || '').trim();
+        const type = String(options.type || 'image').toLowerCase();
+        const title = options.title || 'Media Preview';
+        const badge = options.badge || (['video', 'youtube', 'vimeo'].includes(type) ? 'Video' : 'Image');
+
+        if (titleEl) titleEl.textContent = title;
+        if (badgeEl) badgeEl.textContent = badge;
+        if (metaEl) metaEl.textContent = src.length > 55 ? src.slice(0, 52) + '...' : src;
+        if (openBtn) {
+            openBtn.href = src || '#';
+            openBtn.style.display = src ? 'inline-flex' : 'none';
+        }
+
+        if (bodyEl) {
+            bodyEl.innerHTML = '';
+            const ytMatch = options.youtubeId || (src.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/i) || [])[1];
+            const vimeoMatch = options.vimeoId || (src.match(/vimeo\.com\/(?:video\/)?(\d{6,12})/i) || [])[1];
+
+            if (type === 'youtube' || ytMatch) {
+                bodyEl.innerHTML = `<div class="ratio ratio-16x9 w-100 rounded-3 overflow-hidden shadow" style="max-height:68vh;"><iframe src="https://www.youtube-nocookie.com/embed/${ytMatch}?autoplay=1&rel=0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="border:0;"></iframe></div>`;
+            } else if (type === 'vimeo' || vimeoMatch) {
+                bodyEl.innerHTML = `<div class="ratio ratio-16x9 w-100 rounded-3 overflow-hidden shadow" style="max-height:68vh;"><iframe src="https://player.vimeo.com/video/${vimeoMatch}?autoplay=1" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen style="border:0;"></iframe></div>`;
+            } else if (type === 'video') {
+                bodyEl.innerHTML = `<video src="${src}" controls autoplay playsinline style="max-width:100%;max-height:68vh;border-radius:12px;outline:none;background:#000;box-shadow:0 10px 30px rgba(0,0,0,0.5);"></video>`;
+            } else {
+                bodyEl.innerHTML = `<img src="${src}" alt="${title.replace(/"/g, '&quot;')}" style="max-width:100%;max-height:68vh;object-fit:contain;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.5);">`;
+            }
+        }
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+    };
+
+    document.getElementById('mediaPreviewModal')?.addEventListener('hidden.bs.modal', () => {
+        const bodyEl = document.getElementById('mediaPreviewBody');
+        if (bodyEl) bodyEl.innerHTML = '';
+    });
+
+    document.addEventListener('click', event => {
+        const trigger = event.target.closest('[data-media-popup]');
+        if (!trigger) return;
+        event.preventDefault();
+        window.openMediaPreview({
+            src: trigger.dataset.mediaSrc || trigger.getAttribute('href') || trigger.querySelector('img,video')?.src,
+            type: trigger.dataset.mediaType || (trigger.querySelector('video') ? 'video' : 'image'),
+            title: trigger.dataset.mediaTitle || trigger.getAttribute('title') || 'Media Preview',
+            badge: trigger.dataset.mediaBadge || '',
+            youtubeId: trigger.dataset.youtubeId || '',
+            vimeoId: trigger.dataset.vimeoId || '',
+        });
+    });
 });

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Webinar;
 use App\Support\WebinarExperience;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -22,7 +23,7 @@ class AttendanceController extends Controller
                     ->orWhere('users.email', 'like', "%{$search}%")
                     ->orWhere('users.mobile', 'like', "%{$search}%");
             }))
-            ->select('webinar_attendees.*', 'users.name as user_name', 'users.email', 'users.mobile', 'webinars.title as webinar_title')
+            ->select('webinar_attendees.*', 'users.name as user_name', 'users.email', 'users.mobile', 'webinars.title as webinar_title', 'webinars.timezone as webinar_timezone')
             ->orderByDesc('joined_at');
     }
 
@@ -58,8 +59,16 @@ class AttendanceController extends Controller
             $out = fopen('php://output', 'w');
             fputcsv($out, ['User', 'Email', 'Mobile', 'Webinar', 'Joined', 'Left', 'Watch seconds', 'Last seen']);
             foreach ($rows as $row) {
-                fputcsv($out, [$row->user_name, $row->email, $row->mobile, $row->webinar_title, $row->joined_at, $row->left_at, $row->watch_seconds, $row->last_seen_at]);
-            }fclose($out);
+                $timezone = $row->webinar_timezone ?: config('app.timezone');
+                fputcsv($out, [
+                    $row->user_name, $row->email, $row->mobile, $row->webinar_title,
+                    $row->joined_at ? Carbon::parse($row->joined_at)->timezone($timezone)->format('Y-m-d H:i:s T') : null,
+                    $row->left_at ? Carbon::parse($row->left_at)->timezone($timezone)->format('Y-m-d H:i:s T') : null,
+                    $row->watch_seconds,
+                    $row->last_seen_at ? Carbon::parse($row->last_seen_at)->timezone($timezone)->format('Y-m-d H:i:s T') : null,
+                ]);
+            }
+            fclose($out);
         }, 'attendance-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv']);
     }
 }

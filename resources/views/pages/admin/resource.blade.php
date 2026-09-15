@@ -10,7 +10,7 @@
             <i class="bi bi-search"></i>
             <input name="search" value="{{ request('search') }}" placeholder="Search users by name, email, mobile..." aria-label="Search users">
         </div>
-        @if(isset($webinars) && $webinars->isNotEmpty())
+        @if(isset($webinars))
             <select class="form-select" name="webinar_id" onchange="this.form.submit()" aria-label="Filter by webinar">
                 <option value="">All webinars</option>
                 @foreach($webinars as $webinar)

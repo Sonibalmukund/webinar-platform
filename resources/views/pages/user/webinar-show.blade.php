@@ -224,11 +224,15 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
             @endif
         </nav>
         <div class="microsite-nav-actions">
-            @if(!auth()->check() || !auth()->user()->hasRole('learner'))
+            @if($isStaffPreview)
+                <a class="btn btn-register-nav" href="{{ route('admin.webinars.edit',$webinar) }}"><i class="bi bi-pencil-square me-1"></i> Admin Preview · Edit</a>
+            @elseif(!auth()->check())
                 <button type="button" class="btn-login-unique" data-landing-login data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">Login</button>
                 <button type="button" class="btn btn-register-nav" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Register</button>
+            @elseif($isRegistered && $canEnter)
+                <a class="btn btn-register-nav" href="{{ route('webinars.dashboard',$webinar) }}">Enter Webinar</a>
             @elseif($isRegistered)
-                <a class="btn btn-register-nav" href="{{ route('webinars.dashboard',$webinar) }}">Open Dashboard</a>
+                <button class="btn btn-register-nav" type="button" disabled title="Room opens {{ $opensAt?->timezone($webinar->timezone)->format('M d, Y · g:i A') }} {{ $webinar->timezone }}">Registered · Room not open</button>
                 <form method="POST" action="{{ route('logout') }}" class="d-inline">
                     @csrf
                     <input type="hidden" name="return_to" value="{{ route('webinars.show', $webinar) }}">
@@ -257,11 +261,15 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                 <a href="#brands" data-bs-toggle="collapse" data-bs-target="#micrositeMobileNav">Brands</a>
             @endif
             <div class="d-flex gap-2 pt-2 border-top mt-1">
-                @if(!auth()->check() || !auth()->user()->hasRole('learner'))
+                @if($isStaffPreview)
+                    <a class="btn btn-sm btn-register-nav rounded-pill px-3" href="{{ route('admin.webinars.edit',$webinar) }}">Admin Preview · Edit</a>
+                @elseif(!auth()->check())
                     <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" data-landing-login data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">Login</button>
                     <button type="button" class="btn btn-sm btn-register-nav rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Register</button>
+                @elseif($isRegistered && $canEnter)
+                    <a class="btn btn-sm btn-register-nav rounded-pill px-3" href="{{ route('webinars.dashboard',$webinar) }}">Enter Webinar</a>
                 @elseif($isRegistered)
-                    <a class="btn btn-sm btn-register-nav rounded-pill px-3" href="{{ route('webinars.dashboard',$webinar) }}">Open Dashboard</a>
+                    <button class="btn btn-sm btn-register-nav rounded-pill px-3" type="button" disabled>Registered · Opens {{ $opensAt?->timezone($webinar->timezone)->format('M d, g:i A') }}</button>
                 @else
                     <button type="button" class="btn btn-sm btn-register-nav rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Register</button>
                 @endif
@@ -351,6 +359,13 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                         </div>
                     </div>
                     <div class="banner-event-detail">
+                        <div class="rail-icon"><i class="bi bi-translate"></i></div>
+                        <div class="rail-info">
+                            <strong>{{ $languageName }}</strong>
+                            <small>LANGUAGE · {{ $webinar->timezone }}</small>
+                        </div>
+                    </div>
+                    <div class="banner-event-detail">
                         <div class="rail-icon"><i class="bi bi-hourglass-split"></i></div>
                         <div class="rail-info">
                             <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -406,7 +421,9 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                 <article class="speaker-profile">
                     <div class="speaker-image">
                         @if($speaker->photo_path)
-                            <img src="{{ $speaker->photo_path }}" alt="{{ $speaker->name }}" loading="lazy" onerror="this.remove()">
+                            <button type="button" class="btn p-0 border-0 bg-transparent w-100 h-100 rounded-circle overflow-hidden d-flex align-items-center justify-content-center" data-media-popup data-media-src="{{ $speaker->photo_path }}" data-media-type="image" data-media-title="{{ $speaker->name }}" data-media-badge="Speaker" title="Click to view {{ $speaker->name }}">
+                                <img src="{{ $speaker->photo_path }}" alt="{{ $speaker->name }}" loading="lazy" onerror="this.remove()">
+                            </button>
                         @else
                             {{ Str::of($speaker->name)->substr(0,2)->upper() }}
                         @endif
@@ -436,7 +453,9 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                     @foreach($brands as $brand)
                     <div class="brand-card">
                         @if($brand->logo_path)
-                            <img src="{{ $brand->logo_path }}" alt="{{ $brand->name }}" loading="lazy">
+                            <button type="button" class="btn p-0 border-0 bg-transparent d-inline-flex align-items-center justify-content-center" data-media-popup data-media-src="{{ $brand->logo_path }}" data-media-type="image" data-media-title="{{ $brand->name }}" data-media-badge="Partner Brand" title="Click to view {{ $brand->name }}">
+                                <img src="{{ $brand->logo_path }}" alt="{{ $brand->name }}" loading="lazy">
+                            </button>
                         @else
                             <strong>{{ $brand->name }}</strong>
                         @endif
@@ -628,5 +647,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 @endsection
 
 @section('auth-modals')
-@include('components.frontend-auth', ['authWebinar'=>$webinar])
+@unless($isStaffPreview)
+    @include('components.frontend-auth', ['authWebinar'=>$webinar])
+@endunless
 @endsection

@@ -13,10 +13,11 @@ class RunWebinarAutomation extends Command
 
     public function handle(): int
     {
-        // Auto-turn ON (live) 30 minutes before scheduled start
+        // Early access opens the waiting room without changing the event status.
+        // The event becomes live at its actual scheduled start time.
         Webinar::where('status', 'scheduled')
             ->whereNotNull('starts_at')
-            ->where('starts_at', '<=', now()->addMinutes(30))
+            ->where('starts_at', '<=', now())
             ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', now()->subMinutes(30)))
             ->each(fn ($w) => $w->update(['status' => 'live']));
 

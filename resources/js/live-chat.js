@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     document.querySelector('#chatPersonSearch')?.dispatchEvent(new Event('input'));
                 } else renderLearner((await response.json()).messages || []);
-                stream.scrollTop = scrollTop;
+                stream.scrollTop = nearBottom ? stream.scrollHeight : scrollTop;
             } while (queued);
         } catch (exception) { setError(exception.message); }
         finally { refreshing = false; }

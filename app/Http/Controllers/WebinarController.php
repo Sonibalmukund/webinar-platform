@@ -15,6 +15,7 @@ use App\Models\State;
 use App\Models\Webinar;
 use App\Support\AuditTrail;
 use App\Support\WebinarExperience;
+use App\Support\WebinarPreferences;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -59,19 +60,26 @@ class WebinarController extends Controller
             'agenda' => $agenda,
             'resources' => $resources,
             'isRegistered' => $webinar->registrations()->where('user_id', auth()->id())->where('status', 'approved')->exists(),
+            'canEnter' => $webinar->canEnter(),
+            'opensAt' => $webinar->opensAt(),
+            'languageName' => WebinarPreferences::languageName($webinar->language),
             'loginField' => $loginField,
             'authSettings' => $authSettings,
             'countries' => Country::where('is_active', true)->orderBy('name')->get(),
             'states' => State::where('country_id', $defaultCountryId)->where('is_active', true)->orderBy('name')->get(),
             'cities' => City::where('state_id', $defaultStateId)->where('is_active', true)->orderBy('name')->get(),
             'signupFields' => SignupField::with(['options' => fn ($q) => $q->where('is_enabled', true)])->where('is_enabled', true)->orderBy('display_order')->get(),
+            'isStaffPreview' => $canPreview,
         ]);
     }
 
     public function dashboard(Request $request, Webinar $webinar): View
     {
         $webinar->syncLifecycleStatus();
-        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->exists(), 403, 'Register for this webinar before opening its dashboard.');
+        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->admitted()->exists(), 403, 'Register for this webinar before opening its dashboard.');
+        abort_unless($webinar->canEnter(), 403, $webinar->opensAt()
+            ? 'The webinar room opens at '.$webinar->opensAt()->timezone($webinar->timezone)->format('M d, Y · g:i A').' ('.$webinar->timezone.').'
+            : 'The webinar room is not open yet.');
         $request->session()->put('frontend_event_slug', $webinar->slug);
         $webinar->load(['speakers'])->loadCount('registrations');
         $banners = Banner::where('webinar_id', $webinar->id)->where('is_active', true)->orderBy('display_order')->get();
@@ -99,24 +107,27 @@ class WebinarController extends Controller
             ->latest('chat_messages.sent_at')->limit(50)->get();
         $feedback = $webinar->feedback_enabled ? DB::table('feedback')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->latest()->first() : null;
         $now = now();
+        $attendanceStarted = $webinar->attendanceHasStarted();
         $existingAttendee = DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->first();
         $shouldResetHand = ! $existingAttendee || $existingAttendee->left_at !== null || ! $existingAttendee->last_seen_at || Carbon::parse($existingAttendee->last_seen_at)->lt($now->copy()->subMinutes(10));
 
-        DB::table('webinar_attendees')->updateOrInsert(
-            ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id],
-            [
-                'last_seen_at' => $now,
-                'left_at' => null,
-                'raised_hand' => $shouldResetHand ? false : (bool) ($existingAttendee->raised_hand ?? false),
-                'updated_at' => $now,
-                'created_at' => $now,
-            ]
-        );
+        if ($attendanceStarted) {
+            DB::table('webinar_attendees')->updateOrInsert(
+                ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id],
+                [
+                    'last_seen_at' => $now,
+                    'left_at' => null,
+                    'raised_hand' => $shouldResetHand ? false : (bool) ($existingAttendee->raised_hand ?? false),
+                    'updated_at' => $now,
+                    'created_at' => $now,
+                ]
+            );
+        }
         $liveViewers = DB::table('webinar_attendees')->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', now()->subSeconds(75))->count();
         $participants = DB::table('webinar_attendees')->join('users', 'users.id', '=', 'webinar_attendees.user_id')->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', now()->subSeconds(75))->select('users.id', 'users.name', 'raised_hand')->orderByDesc('raised_hand')->get();
         $raisedHand = (bool) DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->value('raised_hand');
 
-        if (! $participants->contains('id', $request->user()->id)) {
+        if ($attendanceStarted && ! $participants->contains('id', $request->user()->id)) {
             $participants->push((object) [
                 'id' => $request->user()->id,
                 'name' => $request->user()->name,
@@ -127,7 +138,7 @@ class WebinarController extends Controller
         if ($self) {
             $participants = $participants->reject(fn ($p) => (int) $p->id === (int) $request->user()->id)->prepend($self);
         }
-        $liveViewers = max(1, $liveViewers, $participants->count());
+        $liveViewers = $attendanceStarted ? max(1, $liveViewers, $participants->count()) : 0;
         $pollResponse = $activePoll ? DB::table('poll_responses')->where('poll_id', $activePoll->id)->where('user_id', $request->user()->id)->pluck('poll_option_id') : collect();
         $metrics = WebinarExperience::metrics($webinar, $request->user()->id);
         $certificate = DB::table('certificates')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->first();
@@ -334,6 +345,7 @@ class WebinarController extends Controller
         $selected = $poll->options()->findOrFail($data['option_id']);
         $isQuiz = $poll->options()->where('is_correct', true)->exists();
         $isCorrect = $isQuiz ? $selected->is_correct : null;
+        $showCorrectAnswer = $isQuiz && (bool) data_get($webinar->settings, 'experience.show_poll_correct_answer', false);
         DB::table('poll_responses')->insertOrIgnore(['poll_id' => $poll->id, 'poll_option_id' => $data['option_id'], 'user_id' => $request->user()->id, 'is_correct' => $isCorrect, 'voted_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
         $options = $poll->options()->withCount('responses')->get()->map(fn ($option) => ['id' => $option->id, 'count' => $option->responses_count])->all();
         try {
@@ -342,10 +354,10 @@ class WebinarController extends Controller
             report($exception);
         }
         if ($request->expectsJson()) {
-            return response()->json(['message' => 'Your answer was recorded.', 'is_quiz' => $isQuiz, 'is_correct' => $isCorrect, 'selected_option_id' => $selected->id, 'correct_option_id' => $isQuiz ? $poll->options()->where('is_correct', true)->value('id') : null, 'options' => $options]);
+            return response()->json(['message' => 'Your answer was recorded.', 'is_quiz' => $isQuiz, 'show_correct_answer' => $showCorrectAnswer, 'is_correct' => $showCorrectAnswer ? $isCorrect : null, 'selected_option_id' => $selected->id, 'correct_option_id' => $showCorrectAnswer ? $poll->options()->where('is_correct', true)->value('id') : null, 'options' => $options]);
         }
 
-        return back()->with('dashboard_status', $isQuiz ? ($isCorrect ? 'Correct Answer' : 'Answer submitted. The correct answer is highlighted.') : 'Your vote was recorded.');
+        return back()->with('dashboard_status', $isQuiz ? 'Answer submitted.' : 'Your vote was recorded.');
     }
 
     public function pollResults(Request $request, Webinar $webinar, Poll $poll): JsonResponse
@@ -355,14 +367,16 @@ class WebinarController extends Controller
         $answer = DB::table('poll_responses')->where(['poll_id' => $poll->id, 'user_id' => $request->user()->id])->first();
         abort_unless($answer, 403, 'Answer this poll to see results.');
         $correct = $poll->options()->where('is_correct', true)->value('id');
+        $showCorrectAnswer = $correct !== null && (bool) data_get($webinar->settings, 'experience.show_poll_correct_answer', false);
 
         return response()->json([
             'message' => 'Your answer was recorded.',
             'poll_id' => $poll->id,
             'is_quiz' => $correct !== null,
-            'is_correct' => $correct !== null ? (int) $answer->poll_option_id === (int) $correct : null,
+            'show_correct_answer' => $showCorrectAnswer,
+            'is_correct' => $showCorrectAnswer ? (int) $answer->poll_option_id === (int) $correct : null,
             'selected_option_id' => $answer->poll_option_id,
-            'correct_option_id' => $correct,
+            'correct_option_id' => $showCorrectAnswer ? $correct : null,
             'options' => $poll->options()->withCount('responses')->get()->map(fn ($option) => ['id' => $option->id, 'count' => $option->responses_count])->all(),
         ])->header('Cache-Control', 'no-store');
     }
@@ -517,8 +531,10 @@ class WebinarController extends Controller
     {
         $this->authorizeRegistration($request, $webinar);
         abort_unless($webinar->certificate_enabled === 'yes', 404);
-        // The webinar's backend toggle authorizes all registered attendees.
         $identity = ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id];
+        $alreadyIssued = DB::table('certificates')->where($identity)->where('status', 'approved')->whereNull('revoked_at')->exists();
+        $metrics = WebinarExperience::metrics($webinar, $request->user()->id);
+        abort_unless($alreadyIssued || $metrics['eligible'], 403, 'Certificate unlocks after '.$metrics['minimum'].'% watch time'.($metrics['pollRequired'] ? ' and one poll response' : '').'.');
         DB::table('certificates')->insertOrIgnore($identity + [
             'template_id' => data_get($webinar->settings, 'certificate_template_id'),
             'credential_id' => (string) Str::uuid(), 'status' => 'approved',
@@ -558,8 +574,19 @@ class WebinarController extends Controller
         $this->authorizeRegistration($request, $webinar);
         $item = DB::table('webinar_resources')->where('webinar_id', $webinar->id)->where('id', $resource)->where('is_public', true)->where('type', 'file')->first();
         abort_unless($item, 404);
-        $root = realpath(public_path('uploads/resources'));
-        $path = realpath(public_path(ltrim($item->path_or_url, '/')));
+
+        $cleanPath = ltrim($item->path_or_url, '/');
+        if (str_starts_with($cleanPath, 'storage/')) {
+            $relative = substr($cleanPath, 8);
+            $storageRoot = realpath(storage_path('app/public'));
+            $path = realpath(storage_path('app/public/'.$relative));
+            if ($storageRoot && $path && str_starts_with($path, $storageRoot.DIRECTORY_SEPARATOR) && is_file($path)) {
+                return response()->download($path, (Str::slug($item->title) ?: 'resource').'.'.pathinfo($path, PATHINFO_EXTENSION));
+            }
+        }
+
+        $root = realpath(public_path('uploads/resources')) ?: realpath(public_path());
+        $path = realpath(public_path($cleanPath));
         abort_unless($root && $path && str_starts_with($path, $root.DIRECTORY_SEPARATOR) && is_file($path), 404);
 
         return response()->download($path, (Str::slug($item->title) ?: 'resource').'.'.pathinfo($path, PATHINFO_EXTENSION));

@@ -89,28 +89,29 @@ class CertificateController extends Controller
         $templateId = data_get($webinar->settings, 'certificate_template_id');
         $template = $templateId ? CertificateTemplate::find($templateId) : null;
         $existingDesign = $template?->design ?? [];
-        $uploadDirectory = public_path('uploads/certificates');
-        File::ensureDirectoryExists($uploadDirectory);
         $imagePath = $existingDesign['template_image'] ?? null;
         $fontPath = $existingDesign['font_file'] ?? null;
         $signaturePath = $existingDesign['signature_image'] ?? null;
         if ($request->hasFile('template_image')) {
             $file = $request->file('template_image');
-            $name = Str::uuid().'.'.$file->getClientOriginalExtension();
-            $file->move($uploadDirectory, $name);
-            $imagePath = '/uploads/certificates/'.$name;
+            $extension = $file->getClientOriginalExtension();
+            $name = Str::uuid().($extension ? '.'.$extension : '');
+            $path = $file->storeAs('certificates', $name, 'public');
+            $imagePath = '/storage/'.$path;
         }
         if ($request->hasFile('font_file')) {
             $file = $request->file('font_file');
-            $name = Str::uuid().'.'.$file->getClientOriginalExtension();
-            $file->move($uploadDirectory, $name);
-            $fontPath = '/uploads/certificates/'.$name;
+            $extension = $file->getClientOriginalExtension();
+            $name = Str::uuid().($extension ? '.'.$extension : '');
+            $path = $file->storeAs('certificates', $name, 'public');
+            $fontPath = '/storage/'.$path;
         }
         if ($request->hasFile('signature_image')) {
             $file = $request->file('signature_image');
-            $name = Str::uuid().'.'.$file->getClientOriginalExtension();
-            $file->move($uploadDirectory, $name);
-            $signaturePath = '/uploads/certificates/'.$name;
+            $extension = $file->getClientOriginalExtension();
+            $name = Str::uuid().($extension ? '.'.$extension : '');
+            $path = $file->storeAs('certificates', $name, 'public');
+            $signaturePath = '/storage/'.$path;
         }
         $values = [
             'name' => $data['name'], 'orientation' => $data['orientation'],

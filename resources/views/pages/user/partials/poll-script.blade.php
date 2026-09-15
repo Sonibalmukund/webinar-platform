@@ -32,17 +32,15 @@ window.bindInstantPoll = (scope = document) => {
                     const selected = Number(choice.dataset.optionId) === Number(data.selected_option_id);
                     choice.classList.add('locked'); choice.classList.toggle('selected', selected);
                     choice.querySelector('input').checked = selected;
-                    choice.querySelector('[data-answer-state]').textContent = selected ? 'Your Answer' : '';
                 });
-                if (data.is_quiz) {
+                if (data.is_quiz && data.show_correct_answer) {
                     const correct = form.querySelector(`[data-option-id="${data.correct_option_id}"]`);
                     correct?.classList.add('quiz-correct');
-                    if (correct) correct.querySelector('[data-answer-state]').textContent = data.is_correct ? 'Your Answer · Correct' : 'Correct Answer';
                     if (!data.is_correct) form.querySelector('.selected')?.classList.add('quiz-incorrect');
                 }
                 window.renderPollResults(form, data.options);
-                if (form.previousElementSibling) form.previousElementSibling.textContent = 'Live results · Your answer is highlighted.';
-                showDashboardToast(data.is_quiz ? (data.is_correct ? 'Correct Answer' : 'Incorrect. Correct answer highlighted.') : data.message, data.is_quiz && !data.is_correct ? 'warning' : 'success');
+                if (form.previousElementSibling) form.previousElementSibling.textContent = 'Live results · Your selected option is highlighted.';
+                showDashboardToast(data.message, 'success');
             } catch (error) {
                 if (form.dataset.answered !== 'true') form.querySelectorAll('input[type="radio"]').forEach(option => { option.disabled = false; option.checked = false; });
                 showDashboardToast(error.name === 'AbortError' ? 'Connection is slow. Please try again. Your saved answer will be restored.' : (error.message || 'Unable to submit your vote.'), 'warning');

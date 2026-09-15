@@ -36,15 +36,10 @@ class WebinarRegistrationController extends Controller
 
         $rules = [];
         foreach ($fields as $field) {
-            $conditionMet = true;
-            if ($field->condition_field_id) {
-                $actual = data_get($request->input('fields', []), (string) $field->condition_field_id);
-                $conditionMet = $field->condition_operator === 'not_equals' ? (string) $actual !== (string) $field->condition_value : (string) $actual === (string) $field->condition_value;
-            }
             $typeRule = match ($field->field_type) {
                 'checkbox' => 'array','country' => 'exists:countries,id','state' => 'exists:states,id','city' => 'exists:cities,id',default => 'string'
             };
-            $rules['fields.'.$field->id] = [$field->is_required && $conditionMet ? 'required' : 'nullable', $typeRule];
+            $rules['fields.'.$field->id] = [$field->is_required ? 'required' : 'nullable', $typeRule];
         }
         $request->validate($rules);
         $existingRegistration = Registration::where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->first();
@@ -78,6 +73,19 @@ class WebinarRegistrationController extends Controller
         }
         AuditTrail::record('registration.created', $registration, 'Webinar registration submitted.', ['status' => $status, 'webinar_id' => $webinar->id]);
 
-        return redirect()->route($status === 'waitlisted' ? 'webinars.show' : 'webinars.dashboard', $webinar)->with('registration_status', $status === 'waitlisted' ? 'The webinar is full. You have been added to the waitlist.' : 'Your registration is confirmed. You can enter the webinar now.');
+        if ($status === 'waitlisted') {
+            return redirect()->route('webinars.show', $webinar)->with('registration_status', 'The webinar is full. You have been added to the waitlist.');
+        }
+
+        if (! $webinar->canEnter()) {
+            $opensAt = $webinar->opensAt()?->timezone($webinar->timezone)->format('M d, Y · g:i A');
+
+            return redirect()->route('webinars.show', $webinar)
+                ->with('registration_status', 'Your registration is confirmed. The room opens at '.($opensAt ?: 'the scheduled access time').' ('.$webinar->timezone.').')
+                ->with('room_opens_at', $opensAt)
+                ->with('room_timezone', $webinar->timezone);
+        }
+
+        return redirect()->route('webinars.dashboard', $webinar)->with('registration_status', 'Your registration is confirmed. You can enter the webinar now.');
     }
 }

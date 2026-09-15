@@ -45,7 +45,7 @@ class Webinar extends Model
 
     public function opensAt(): ?Carbon
     {
-        return $this->starts_at?->copy()->subMinutes($this->early_entry_minutes ?: 30);
+        return $this->starts_at?->copy()->subMinutes((int) ($this->early_entry_minutes ?? 30));
     }
 
     public function closesAt(): ?Carbon
@@ -58,12 +58,18 @@ class Webinar extends Model
         return $this->status === 'live' || ($this->opensAt() && now()->greaterThanOrEqualTo($this->opensAt()) && (! $this->closesAt() || now()->lessThanOrEqualTo($this->closesAt())));
     }
 
+    public function attendanceHasStarted(): bool
+    {
+        return $this->starts_at !== null
+            && now()->greaterThanOrEqualTo($this->starts_at);
+    }
+
     public function syncLifecycleStatus(): void
     {
         $now = now();
 
-        // 30 minutes before starts_at, automatically turn 'live'
-        if ($this->starts_at && $this->status === 'scheduled' && $now->gte($this->starts_at->copy()->subMinutes(30))) {
+        // Early room access opens the waiting room; the webinar itself becomes live at starts_at.
+        if ($this->starts_at && $this->status === 'scheduled' && $now->gte($this->starts_at)) {
             if (! $this->ends_at || $now->lt($this->ends_at->copy()->addMinutes(30))) {
                 $this->update(['status' => 'live']);
                 $this->status = 'live';

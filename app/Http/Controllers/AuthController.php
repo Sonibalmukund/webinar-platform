@@ -83,8 +83,8 @@ class AuthController extends Controller
         }
         $loginSettings = DB::table('settings')->where('group', 'registration')->pluck('value', 'key');
         $dashboardWebinar = $portal === 'user' ? FrontendAuth::webinar($request) : null;
-        $webinarHasPassword = $dashboardWebinar && $dashboardWebinar->registrationForm && $dashboardWebinar->registrationForm->fields()->where('is_enabled', true)->where('field_type', 'password')->exists();
-        $passwordEnabled = $portal === 'admin' ? true : ($dashboardWebinar ? $webinarHasPassword : (($loginSettings['registration_password_enabled'] ?? '1') === '1'));
+        // Learner access is passwordless. Admin authentication remains password protected.
+        $passwordEnabled = $portal === 'admin';
 
         $rules = ['login' => ['required', 'string']];
         if ($passwordEnabled) {
@@ -122,7 +122,9 @@ class AuthController extends Controller
                     ->onlyInput('login', '_auth_modal', 'return_to', 'webinar_id');
             }
             $request->session()->put('frontend_event_slug', $dashboardWebinar->slug);
-            $destination = route('webinars.dashboard', $dashboardWebinar);
+            $destination = $dashboardWebinar->canEnter()
+                ? route('webinars.dashboard', $dashboardWebinar)
+                : route('webinars.show', $dashboardWebinar);
             $request->session()->forget('url.intended');
         }
         if ($portal === 'user' && ! $dashboardWebinar && $destination && preg_match('#^/(?:webinars/)?([A-Za-z0-9-]+)$#', $destination, $matches)) {
@@ -132,6 +134,15 @@ class AuthController extends Controller
             }
         }
         if ($destination) {
+            if ($dashboardWebinar && ! $dashboardWebinar->canEnter()) {
+                $opensAt = $dashboardWebinar->opensAt()?->timezone($dashboardWebinar->timezone)->format('M d, Y · g:i A');
+
+                return redirect(FrontendAuth::landing($request))
+                    ->with('auth_status', 'Login successful. The room opens at '.($opensAt ?: 'the scheduled access time').' ('.$dashboardWebinar->timezone.').')
+                    ->with('room_opens_at', $opensAt)
+                    ->with('room_timezone', $dashboardWebinar->timezone);
+            }
+
             return redirect(FrontendAuth::landing($request))
                 ->with('auth_status', 'Login successfully.')
                 ->with('auth_redirect', $destination);
@@ -141,9 +152,7 @@ class AuthController extends Controller
             return redirect()->intended('/admin/dashboard')->with('auth_status', 'Login successfully.');
         }
 
-        return redirect()->route('webinars.index')
-            ->with('auth_status', 'Login successfully.')
-            ->with('auth_redirect', route('dashboard'));
+        return redirect()->route('dashboard')->with('auth_status', 'Login successfully.');
     }
 
     public function register(Request $request): RedirectResponse
@@ -325,12 +334,18 @@ class AuthController extends Controller
             $request->session()->put('frontend_event_slug', $webinar->slug);
             $request->session()->forget('url.intended');
 
+            $canEnter = $status !== 'waitlisted' && $webinar->canEnter();
+            $opensAt = $webinar->opensAt()?->timezone($webinar->timezone)->format('M d, Y · g:i A');
             $response = redirect()->route('webinars.show', $webinar)
                 ->with('registration_status', $status === 'waitlisted'
                     ? 'The webinar is full. You have been added to the waitlist.'
-                    : 'Registration successful. You can enter the webinar now.');
+                    : ($canEnter
+                        ? 'Registration successful. You can enter the webinar now.'
+                        : 'Registration successful. The room opens at '.($opensAt ?: 'the scheduled access time').' ('.$webinar->timezone.').'))
+                ->with('room_opens_at', $canEnter ? null : $opensAt)
+                ->with('room_timezone', $canEnter ? null : $webinar->timezone);
 
-            return $status === 'waitlisted'
+            return ! $canEnter
                 ? $response
                 : $response->with('auth_redirect', route('webinars.dashboard', $webinar));
         }
@@ -339,16 +354,12 @@ class AuthController extends Controller
         $fields = SignupField::with('options')->where('is_enabled', true)->get();
         $emailEnabled = ($settings['registration_email_enabled'] ?? '1') === '1';
         $mobileEnabled = ($settings['registration_mobile_enabled'] ?? '1') === '1';
-        $passwordEnabled = ($settings['registration_password_enabled'] ?? '1') === '1';
         $rules = ['name' => ['required', 'string', 'max:255']];
         if ($emailEnabled) {
             $rules['email'] = [($settings['registration_email_required'] ?? '1') === '1' ? 'required' : 'nullable', 'email', 'unique:users'];
         }
         if ($mobileEnabled) {
             $rules['mobile'] = [($settings['registration_mobile_required'] ?? '0') === '1' ? 'required' : 'nullable', 'string', 'max:30', 'unique:users,mobile'];
-        }
-        if ($passwordEnabled) {
-            $rules['password'] = [($settings['registration_password_required'] ?? '1') === '1' ? 'required' : 'nullable', 'string', 'min:6', 'confirmed'];
         }
         if (($settings['registration_country_enabled'] ?? '1') === '1') {
             $rules['country_id'] = ['required', 'exists:countries,id'];
@@ -363,8 +374,8 @@ class AuthController extends Controller
             $rules['custom.'.$field->id] = [$field->is_required ? 'required' : 'nullable', $field->field_type === 'checkbox' ? 'array' : 'string'];
         }
         $data = $this->validateFrontend($request, $rules, 'register');
-        $countryId = ($settings['registration_country_enabled'] ?? '1') === '1' ? $request->integer('country_id') : (int) $settings['registration_default_country_id'];
-        $stateId = ($settings['registration_state_enabled'] ?? '1') === '1' ? $request->integer('state_id') : (int) $settings['registration_default_state_id'];
+        $countryId = ($settings['registration_country_enabled'] ?? '1') === '1' ? $request->integer('country_id') : ((int) ($settings['registration_default_country_id'] ?? 0) ?: null);
+        $stateId = ($settings['registration_state_enabled'] ?? '1') === '1' ? $request->integer('state_id') : ((int) ($settings['registration_default_state_id'] ?? 0) ?: null);
         $cityId = ($settings['registration_city_enabled'] ?? '1') === '1' ? $request->integer('city_id') : null;
         if ($cityId) {
             $city = City::with('state.country')->findOrFail($cityId);
@@ -384,9 +395,7 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->route('webinars.index')
-            ->with('registration_status', 'Registration successfully.')
-            ->with('auth_redirect', route('dashboard'));
+        return redirect()->route('dashboard')->with('registration_status', 'Registration successfully.');
     }
 
     private function validateFrontend(Request $request, array $rules, string $modal, array $customAttributes = []): array

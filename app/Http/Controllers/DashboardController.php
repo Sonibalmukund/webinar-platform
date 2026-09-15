@@ -18,7 +18,7 @@ class DashboardController extends Controller
     public function learner(Request $request): View|RedirectResponse
     {
         $registrations = Registration::with('webinar')->where('user_id', $request->user()->id)->admitted()->latest('registered_at')->get();
-        if ($webinar = $registrations->first()?->webinar) {
+        if ($webinar = $registrations->first(fn ($registration) => $registration->webinar?->canEnter())?->webinar) {
             return redirect()->route('webinars.dashboard', $webinar);
         }
         $scheduledWebinars = $registrations

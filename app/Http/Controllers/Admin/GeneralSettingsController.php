@@ -65,6 +65,10 @@ class GeneralSettingsController extends Controller
     {
         $banner = $banner ?? new Banner;
         $type = (string) $request->input('media_type', 'image');
+        if ($type === 'image') {
+            $request->request->remove('media_url');
+            $request->request->remove('media_url_video');
+        }
         if (! $request->filled('media_url') && $request->filled('media_url_video')) {
             $request->merge(['media_url' => trim((string) $request->input('media_url_video'))]);
         }
@@ -186,17 +190,14 @@ class GeneralSettingsController extends Controller
             'webinar_id' => ['required', 'exists:webinars,id'],
             'name' => ['required', 'string', 'max:255'],
             'website_url' => ['nullable', 'url'],
-            'logo_url' => ['nullable', 'url'],
-            'logo' => [Rule::requiredIf(! $brand->exists && ! $request->filled('logo_url') && ! $brand->logo_path), 'nullable', 'image', 'max:5120'],
+            'logo' => [Rule::requiredIf(! $brand->exists && ! $brand->logo_path), 'nullable', 'image', 'max:5120'],
         ]);
 
         if ($request->hasFile('logo')) {
             $data['logo_path'] = $this->upload($request->file('logo'), 'brands');
-        } elseif ($request->filled('logo_url')) {
-            $data['logo_path'] = $request->input('logo_url');
         }
 
-        unset($data['logo'], $data['logo_url']);
+        unset($data['logo']);
         $data['is_active'] = $request->has('is_active') ? $request->boolean('is_active') : ($brand->exists ? $brand->is_active : true);
         $brand->fill($data)->save();
 
@@ -227,11 +228,10 @@ class GeneralSettingsController extends Controller
 
     private function upload($file, string $folder): string
     {
-        $directory = public_path('uploads/'.$folder);
-        File::ensureDirectoryExists($directory);
-        $name = Str::uuid().'.'.$file->getClientOriginalExtension();
-        $file->move($directory, $name);
+        $extension = $file->getClientOriginalExtension();
+        $name = Str::uuid().($extension ? '.'.$extension : '');
+        $path = $file->storeAs($folder, $name, 'public');
 
-        return '/uploads/'.$folder.'/'.$name;
+        return '/storage/'.$path;
     }
 }
