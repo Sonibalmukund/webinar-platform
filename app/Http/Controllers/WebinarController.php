@@ -23,6 +23,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\App;
 use Illuminate\View\View;
 
 class WebinarController extends Controller
@@ -34,6 +35,7 @@ class WebinarController extends Controller
 
     public function show(Webinar $webinar): View
     {
+        App::setLocale(in_array($webinar->language, ['en', 'hi', 'gu'], true) ? $webinar->language : 'en');
         $webinar->syncLifecycleStatus();
         $canPreview = auth()->check() && (auth()->user()->hasRole('super-admin') || auth()->user()->hasRole('sub-admin'));
         abort_if($webinar->status === 'draft' && ! $canPreview, 404);
@@ -345,7 +347,7 @@ class WebinarController extends Controller
         $selected = $poll->options()->findOrFail($data['option_id']);
         $isQuiz = $poll->options()->where('is_correct', true)->exists();
         $isCorrect = $isQuiz ? $selected->is_correct : null;
-        $showCorrectAnswer = $isQuiz && (bool) data_get($webinar->settings, 'experience.show_poll_correct_answer', false);
+        $showCorrectAnswer = $poll->shouldRevealAnswer($webinar);
         DB::table('poll_responses')->insertOrIgnore(['poll_id' => $poll->id, 'poll_option_id' => $data['option_id'], 'user_id' => $request->user()->id, 'is_correct' => $isCorrect, 'voted_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
         $options = $poll->options()->withCount('responses')->get()->map(fn ($option) => ['id' => $option->id, 'count' => $option->responses_count])->all();
         try {
@@ -367,7 +369,7 @@ class WebinarController extends Controller
         $answer = DB::table('poll_responses')->where(['poll_id' => $poll->id, 'user_id' => $request->user()->id])->first();
         abort_unless($answer, 403, 'Answer this poll to see results.');
         $correct = $poll->options()->where('is_correct', true)->value('id');
-        $showCorrectAnswer = $correct !== null && (bool) data_get($webinar->settings, 'experience.show_poll_correct_answer', false);
+        $showCorrectAnswer = $correct !== null && $poll->shouldRevealAnswer($webinar);
 
         return response()->json([
             'message' => 'Your answer was recorded.',

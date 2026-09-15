@@ -1,6 +1,6 @@
 ﻿@if($activePoll)
     @php($isQuiz = $activePoll->options->contains('is_correct', true))
-    @php($showCorrectAnswer = $isQuiz && (bool) data_get($webinar->settings, 'experience.show_poll_correct_answer', false))
+    @php($showCorrectAnswer = $activePoll->shouldRevealAnswer($webinar))
     <div class="poll-heading">
         <span class="poll-live-dot"></span>
         <small>{{ $isQuiz ? 'LIVE QUIZ' : 'LIVE POLL' }}</small>

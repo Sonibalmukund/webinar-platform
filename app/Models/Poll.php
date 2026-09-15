@@ -34,4 +34,12 @@ class Poll extends Model
     {
         return $this->options->contains('is_correct', true) ? 'Quiz' : 'Poll';
     }
+
+    public function shouldRevealAnswer(Webinar $webinar): bool
+    {
+        $reveal = $this->answer_reveal ?: 'host_control';
+
+        return $this->type === 'Quiz' && ($reveal === 'immediate'
+            || ($reveal === 'host_control' && (bool) data_get($webinar->settings, 'experience.show_poll_correct_answer', false)));
+    }
 }

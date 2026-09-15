@@ -174,13 +174,18 @@ class PollController extends Controller
         if (! $request->has('answers') && $request->filled('options')) {
             $request->merge(['answers' => preg_split('/\r\n|\r|\n/', $request->input('options'))]);
         }
+        if (! $request->filled('type')) {
+            $request->merge(['type' => $request->filled('correct_index') ? 'quiz' : 'poll']);
+        }
         $data = $request->validate([
             'webinar_id' => ['required', 'exists:webinars,id'],
+            'type' => ['required', 'in:poll,quiz'],
+            'answer_reveal' => ['required_if:type,quiz', 'nullable', 'in:immediate,host_control,never'],
             'question' => ['required', 'string', 'max:1000'],
             'answers' => ['required', 'array', 'min:2'],
             'answers.*' => ['nullable', 'string', 'max:255'],
             'allow_multiple' => ['nullable', 'boolean'],
-            'correct_index' => ['nullable', 'integer', 'min:0'],
+            'correct_index' => ['nullable', 'required_if:type,quiz', 'integer', 'min:0'],
             'started_at' => ['nullable', 'date'],
             'ended_at' => ['nullable', 'date', 'after:started_at'],
             'status' => ['nullable', 'in:draft,active,ended,hidden'],
@@ -190,7 +195,7 @@ class PollController extends Controller
             throw ValidationException::withMessages(['options' => 'Please enter at least two different answers.']);
         }
 
-        $correctIndex = $request->filled('correct_index') ? $request->integer('correct_index') : null;
+        $correctIndex = $data['type'] === 'quiz' && $request->filled('correct_index') ? $request->integer('correct_index') : null;
         if ($correctIndex !== null && ! $options->has($correctIndex)) {
             throw ValidationException::withMessages(['correct_index' => 'Select a valid correct answer.']);
         }
@@ -206,6 +211,7 @@ class PollController extends Controller
             'created_by' => $poll->exists ? $poll->created_by : $request->user()->id,
             'question' => $data['question'],
             'allow_multiple' => $request->boolean('allow_multiple'),
+            'answer_reveal' => $data['type'] === 'quiz' ? ($data['answer_reveal'] ?? 'host_control') : 'never',
             'status' => $data['status'] ?? ($poll->exists ? $poll->status : 'draft'),
             'started_at' => $data['started_at'] ?? null,
             'ended_at' => $data['ended_at'] ?? null,

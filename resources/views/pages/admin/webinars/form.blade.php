@@ -480,20 +480,6 @@
                 </div>
             </div>
 
-            <div class="alert alert-light border rounded-4 mb-4">
-                <strong><i class="bi bi-info-circle me-2"></i>Webinar setup guide — when, where and who sees it</strong>
-                <div class="table-responsive mt-3"><table class="table table-sm align-middle mb-0 small"><thead><tr><th>Setting</th><th>When it works</th><th>Where it appears</th><th>Who sees it</th></tr></thead><tbody>
-                    <tr><td>Basic info & schedule</td><td>After saving/publishing</td><td>Public webinar page and room header</td><td>Visitors and registered attendees</td></tr>
-                    <tr><td>Stream & early access</td><td>Room opens before start; attendance starts at start time</td><td>Webinar player / waiting room</td><td>Registered attendees</td></tr>
-                    <tr><td>Branding & layout</td><td>Immediately after save</td><td>Landing page and attendee room</td><td>Everyone opening this webinar</td></tr>
-                    <tr><td>Agenda & resources</td><td>Whenever configured and enabled</td><td>Below the video</td><td>Attendees</td></tr>
-                    <tr><td>Dynamic fields</td><td>During registration</td><td>Registration form</td><td>New registrants</td></tr>
-                    <tr><td>Poll / quiz</td><td>When Polls is enabled and a poll is Active</td><td>Interactive: right panel; Theater: below full-screen video</td><td>Registered attendees in the room</td></tr>
-                    <tr><td>Correct answer reveal</td><td>Only when Live Controller is set to Yes</td><td>Poll option highlight after answering</td><td>Attendees who submitted the poll</td></tr>
-                    <tr><td>Certificate</td><td>After watch-time/poll rules are met</td><td>Quick actions</td><td>Eligible attendees</td></tr>
-                </tbody></table></div>
-            </div>
-
             <div class="form-grid">
                 <div class="form-field full">
                     <label class="form-label-custom" for="webinarTitle">
