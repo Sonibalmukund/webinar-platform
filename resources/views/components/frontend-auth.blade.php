@@ -1,7 +1,5 @@
 @php
 $authReturn = $authWebinar ? route('webinars.show', $authWebinar, false) : route('webinars.index', [], false);
-$webinarHasPassword = $authWebinar && $authWebinar->registrationForm && $authWebinar->registrationForm->fields->where('is_enabled', true)->where('field_type', 'password')->isNotEmpty();
-$showLoginPassword = $authWebinar ? $webinarHasPassword : (($authSettings['registration_password_enabled'] ?? '1') === '1');
 @endphp
 <span hidden data-auth-open="{{ old('_auth_modal', request('auth')) }}"></span>
 <div class="modal fade microsite-auth-modal frontend-auth-modal" id="micrositeLoginModal" tabindex="-1" aria-labelledby="micrositeLoginTitle">
@@ -15,24 +13,7 @@ $showLoginPassword = $authWebinar ? $webinarHasPassword : (($authSettings['regis
                 <input type="hidden" name="return_to" value="{{ $authReturn }}">
                 @if($authWebinar)<input type="hidden" name="webinar_id" value="{{ $authWebinar->id }}">@endif
                 <div class="col-12"><label class="form-label" for="frontendLogin">{{ $loginField ? $loginField->label : 'Email address' }}</label><input id="frontendLogin" class="form-control" name="login" type="{{ ($loginField && $loginField->field_type === 'email') ? 'email' : 'text' }}" value="{{ old('login') }}" placeholder="{{ $loginField ? ($loginField->placeholder ?: 'Enter your '.$loginField->label) : 'you@example.com' }}" autocomplete="username" required></div>
-                @if($showLoginPassword)<div class="col-12"><label class="form-label" for="frontendPassword">Password</label><div class="input-group"><input id="frontendPassword" class="form-control" name="password" type="password" autocomplete="current-password" required><button class="btn btn-outline-secondary" type="button" onclick="const p=document.getElementById('frontendPassword');const icon=this.querySelector('i');if(p.type==='password'){p.type='text';icon.classList.remove('bi-eye');icon.classList.add('bi-eye-slash');}else{p.type='password';icon.classList.remove('bi-eye-slash');icon.classList.add('bi-eye');}}"><i class="bi bi-eye"></i></button></div></div>
-                <div class="col-12 text-end"><button type="button" class="auth-modal-link" data-bs-toggle="modal" data-bs-target="#frontendForgotModal">Forgot password?</button></div>@endif
                 <div class="col-12"><button class="btn btn-gradient w-100">Login <i class="bi bi-arrow-right"></i></button></div>
-            </form>
-        </div>
-    </div></div>
-</div>
-<div class="modal fade microsite-auth-modal frontend-auth-modal" id="frontendForgotModal" tabindex="-1" aria-labelledby="frontendForgotTitle">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
-        <div class="modal-header"><div><span class="auth-modal-kicker">ACCOUNT HELP</span><h2 class="modal-title" id="frontendForgotTitle">Forgot password?</h2><p>Enter the email address associated with your account.</p></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close password help"></button></div>
-        <div class="modal-body">
-            @if(old('_auth_modal')==='forgot' && $errors->any())<div class="alert alert-danger" role="alert">{{ $errors->first() }}</div>@endif
-            @if(session('status'))<div class="alert alert-success" role="status">{{ session('status') }}</div>@endif
-            <form method="POST" action="{{ route('password.request') }}" class="row g-3">@csrf
-                <input type="hidden" name="_auth_modal" value="forgot"><input type="hidden" name="return_to" value="{{ $authReturn }}">
-                <div class="col-12"><label for="frontendRecoveryEmail" class="form-label">Email address</label><input id="frontendRecoveryEmail" class="form-control" name="email" type="email" autocomplete="email" required></div>
-                <div class="col-12"><button class="btn btn-gradient w-100">Send reset instructions</button></div>
-                <div class="col-12 auth-modal-switch"><button type="button" class="auth-modal-link" data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">Back to login</button></div>
             </form>
         </div>
     </div></div>
@@ -117,13 +98,6 @@ $showLoginPassword = $authWebinar ? $webinarHasPassword : (($authSettings['regis
         <label class="form-label">City</label>
         <select class="form-select" name="city_id" id="micrositeCity" required>
         <option value="">Select city</option>@foreach($cities as $city)<option value="{{ $city->id }}" @selected((int)old('city_id')===$city->id)>{{ $city->name }}</option>@endforeach</select>
-        </div>@endif @if(($authSettings['registration_password_enabled']??'1')==='1')<div class="col-md-6">
-        <label class="form-label">Password</label>
-        <div class="input-group"><input class="form-control" id="regPassword" name="password" type="password" minlength="6" @required(($authSettings['registration_password_required']??'1')==='1')><button class="btn btn-outline-secondary" type="button" onclick="const p=document.getElementById('regPassword');const icon=this.querySelector('i');if(p.type==='password'){p.type='text';icon.classList.remove('bi-eye');icon.classList.add('bi-eye-slash');}else{p.type='password';icon.classList.remove('bi-eye-slash');icon.classList.add('bi-eye');}}"><i class="bi bi-eye"></i></button></div>
-        </div>
-        <div class="col-md-6">
-        <label class="form-label">Confirm password</label>
-        <div class="input-group"><input class="form-control" id="regPasswordConfirm" name="password_confirmation" type="password" @required(($authSettings['registration_password_required']??'1')==='1')><button class="btn btn-outline-secondary" type="button" onclick="const p=document.getElementById('regPasswordConfirm');const icon=this.querySelector('i');if(p.type==='password'){p.type='text';icon.classList.remove('bi-eye');icon.classList.add('bi-eye-slash');}else{p.type='password';icon.classList.remove('bi-eye-slash');icon.classList.add('bi-eye');}}"><i class="bi bi-eye"></i></button></div>
         </div>@endif
         @foreach($signupFields as $field)@include('components.frontend-auth-field', ['field'=>$field,'prefix'=>'custom'])@endforeach
     @endif

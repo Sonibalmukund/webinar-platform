@@ -8,6 +8,7 @@ use App\Events\WebinarQuestionUpdated;
 use App\Models\Banner;
 use App\Models\Brand;
 use App\Models\City;
+use App\Models\CertificateTemplate;
 use App\Models\Country;
 use App\Models\Poll;
 use App\Models\SignupField;
@@ -15,6 +16,7 @@ use App\Models\State;
 use App\Models\Webinar;
 use App\Support\AuditTrail;
 use App\Support\WebinarExperience;
+use App\Support\WebinarCertificateTemplate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,6 +35,7 @@ class WebinarController extends Controller
 
     public function show(Webinar $webinar): View
     {
+        $webinar->syncLifecycleStatus();
         $canPreview = auth()->check() && (auth()->user()->hasRole('super-admin') || auth()->user()->hasRole('sub-admin'));
         abort_if($webinar->status === 'draft' && ! $canPreview, 404);
         if ($webinar->status !== 'draft') {
@@ -58,18 +61,25 @@ class WebinarController extends Controller
             'agenda' => $agenda,
             'resources' => $resources,
             'isRegistered' => $webinar->registrations()->where('user_id', auth()->id())->where('status', 'approved')->exists(),
+            'canEnter' => $webinar->canEnter(),
+            'opensAt' => $webinar->opensAt(),
             'loginField' => $loginField,
             'authSettings' => $authSettings,
             'countries' => Country::where('is_active', true)->orderBy('name')->get(),
             'states' => State::where('country_id', $defaultCountryId)->where('is_active', true)->orderBy('name')->get(),
             'cities' => City::where('state_id', $defaultStateId)->where('is_active', true)->orderBy('name')->get(),
             'signupFields' => SignupField::with(['options' => fn ($q) => $q->where('is_enabled', true)])->where('is_enabled', true)->orderBy('display_order')->get(),
+            'isStaffPreview' => $canPreview,
         ]);
     }
 
     public function dashboard(Request $request, Webinar $webinar): View
     {
-        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->exists(), 403, 'Register for this webinar before opening its dashboard.');
+        $webinar->syncLifecycleStatus();
+        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->admitted()->exists(), 403, 'Register for this webinar before opening its dashboard.');
+        abort_unless($webinar->canEnter(), 403, $webinar->opensAt()
+            ? 'The webinar room opens at '.$webinar->opensAt()->timezone($webinar->timezone)->format('M d, Y · g:i A').' ('.$webinar->timezone.').'
+            : 'The webinar room is not open yet.');
         $request->session()->put('frontend_event_slug', $webinar->slug);
         $webinar->load(['speakers'])->loadCount('registrations');
         $banners = Banner::where('webinar_id', $webinar->id)->where('is_active', true)->orderBy('display_order')->get();
@@ -97,26 +107,41 @@ class WebinarController extends Controller
             ->latest('chat_messages.sent_at')->limit(50)->get();
         $feedback = $webinar->feedback_enabled ? DB::table('feedback')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->latest()->first() : null;
         $now = now();
-        if ($webinar->canEnter()) {
-            $existingAttendee = DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->first();
-            $shouldResetHand = ! $existingAttendee || $existingAttendee->left_at !== null || ! $existingAttendee->last_seen_at || Carbon::parse($existingAttendee->last_seen_at)->lt($now->copy()->subMinutes(10));
+        $attendanceStarted = $webinar->attendanceHasStarted();
+        $existingAttendee = DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->first();
+        $shouldResetHand = ! $existingAttendee || $existingAttendee->left_at !== null || ! $existingAttendee->last_seen_at || Carbon::parse($existingAttendee->last_seen_at)->lt($now->copy()->subMinutes(10));
 
-            DB::table('webinar_attendees')->updateOrInsert(
-                ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id],
-                [
+        if ($attendanceStarted) {
+            if ($existingAttendee) {
+                $attendanceValues = [
                     'last_seen_at' => $now,
                     'left_at' => null,
                     'raised_hand' => $shouldResetHand ? false : (bool) ($existingAttendee->raised_hand ?? false),
                     'updated_at' => $now,
+                ];
+                if (! $existingAttendee->joined_at) {
+                    $attendanceValues['joined_at'] = $existingAttendee->created_at ?: $now;
+                }
+                DB::table('webinar_attendees')->where('id', $existingAttendee->id)->update($attendanceValues);
+            } else {
+                DB::table('webinar_attendees')->insert([
+                    'webinar_id' => $webinar->id,
+                    'user_id' => $request->user()->id,
+                    'joined_at' => $now,
+                    'last_seen_at' => $now,
+                    'left_at' => null,
+                    'watch_seconds' => 0,
+                    'raised_hand' => false,
                     'created_at' => $now,
-                ]
-            );
+                    'updated_at' => $now,
+                ]);
+            }
         }
         $liveViewers = DB::table('webinar_attendees')->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', now()->subSeconds(75))->count();
         $participants = DB::table('webinar_attendees')->join('users', 'users.id', '=', 'webinar_attendees.user_id')->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', now()->subSeconds(75))->select('users.id', 'users.name', 'raised_hand')->orderByDesc('raised_hand')->get();
         $raisedHand = (bool) DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->value('raised_hand');
 
-        if (! $participants->contains('id', $request->user()->id)) {
+        if ($attendanceStarted && ! $participants->contains('id', $request->user()->id)) {
             $participants->push((object) [
                 'id' => $request->user()->id,
                 'name' => $request->user()->name,
@@ -127,7 +152,7 @@ class WebinarController extends Controller
         if ($self) {
             $participants = $participants->reject(fn ($p) => (int) $p->id === (int) $request->user()->id)->prepend($self);
         }
-        $liveViewers = max(1, $liveViewers, $participants->count());
+        $liveViewers = $attendanceStarted ? max(1, $liveViewers, $participants->count()) : 0;
         $pollResponse = $activePoll ? DB::table('poll_responses')->where('poll_id', $activePoll->id)->where('user_id', $request->user()->id)->pluck('poll_option_id') : collect();
         $metrics = WebinarExperience::metrics($webinar, $request->user()->id);
         $certificate = DB::table('certificates')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->first();
@@ -323,18 +348,32 @@ class WebinarController extends Controller
     {
         $this->authorizeRegistration($request, $webinar);
         abort_unless($webinar->polls_enabled && $poll->webinar_id === $webinar->id && $poll->status === 'active', 404);
-        $data = $request->validate(['option_id' => ['required', 'integer']]);
-        abort_unless($poll->options()->whereKey($data['option_id'])->exists(), 422);
+        $data = $request->validate($poll->allow_multiple
+            ? ['option_ids' => ['required', 'array', 'min:1'], 'option_ids.*' => ['required', 'integer', 'distinct']]
+            : ['option_id' => ['required', 'integer']]);
+        $selectedIds = collect($poll->allow_multiple ? $data['option_ids'] : [$data['option_id']])->map(fn ($id) => (int) $id)->unique()->values();
+        abort_unless($poll->options()->whereKey($selectedIds)->count() === $selectedIds->count(), 422);
         if (DB::table('poll_responses')->where(['poll_id' => $poll->id, 'user_id' => $request->user()->id])->exists()) {
             if ($request->expectsJson()) {
                 return $this->pollResults($request, $webinar, $poll);
             }
             return back()->with('dashboard_status', 'You have already answered this poll.')->with('dashboard_toast_tone', 'warning');
         }
-        $selected = $poll->options()->findOrFail($data['option_id']);
+        $selected = $poll->options()->whereKey($selectedIds)->get();
         $isQuiz = $poll->options()->where('is_correct', true)->exists();
-        $isCorrect = $isQuiz ? $selected->is_correct : null;
-        DB::table('poll_responses')->insertOrIgnore(['poll_id' => $poll->id, 'poll_option_id' => $data['option_id'], 'user_id' => $request->user()->id, 'is_correct' => $isCorrect, 'voted_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        $correctIds = $isQuiz ? $poll->options()->where('is_correct', true)->pluck('id')->map(fn ($id) => (int) $id)->sort()->values() : collect();
+        $isCorrect = $isQuiz ? $selectedIds->sort()->values()->all() === $correctIds->all() : null;
+        $showCorrectAnswer = $poll->shouldRevealAnswer($webinar);
+        $now = now();
+        DB::table('poll_responses')->insertOrIgnore($selected->map(fn ($option) => [
+            'poll_id' => $poll->id,
+            'poll_option_id' => $option->id,
+            'user_id' => $request->user()->id,
+            'is_correct' => $isQuiz ? (bool) $option->is_correct : null,
+            'voted_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->all());
         $options = $poll->options()->withCount('responses')->get()->map(fn ($option) => ['id' => $option->id, 'count' => $option->responses_count])->all();
         try {
             event(new WebinarPollUpdated($webinar->id, $poll->id, $options));
@@ -342,28 +381,33 @@ class WebinarController extends Controller
             report($exception);
         }
         if ($request->expectsJson()) {
-            return response()->json(['message' => 'Your answer was recorded.', 'is_quiz' => $isQuiz, 'is_correct' => $isCorrect, 'selected_option_id' => $selected->id, 'correct_option_id' => $isQuiz ? $poll->options()->where('is_correct', true)->value('id') : null, 'options' => $options]);
+            return response()->json(['message' => 'Your answer was recorded.', 'is_quiz' => $isQuiz, 'answer_reveal' => $isQuiz ? ($poll->answer_reveal ?: 'after_webinar') : 'never', 'show_correct_answer' => $showCorrectAnswer, 'is_correct' => $showCorrectAnswer ? $isCorrect : null, 'selected_option_id' => $selectedIds->first(), 'selected_option_ids' => $selectedIds->all(), 'correct_option_id' => $showCorrectAnswer ? $correctIds->first() : null, 'correct_option_ids' => $showCorrectAnswer ? $correctIds->all() : [], 'options' => $isQuiz ? [] : $options]);
         }
 
-        return back()->with('dashboard_status', $isQuiz ? ($isCorrect ? 'Correct Answer' : 'Answer submitted. The correct answer is highlighted.') : 'Your vote was recorded.');
+        return back()->with('dashboard_status', $isQuiz ? 'Answer submitted.' : 'Your vote was recorded.');
     }
 
     public function pollResults(Request $request, Webinar $webinar, Poll $poll): JsonResponse
     {
         $this->authorizeRegistration($request, $webinar);
         abort_unless($poll->webinar_id === $webinar->id && $webinar->polls_enabled, 404);
-        $answer = DB::table('poll_responses')->where(['poll_id' => $poll->id, 'user_id' => $request->user()->id])->first();
-        abort_unless($answer, 403, 'Answer this poll to see results.');
-        $correct = $poll->options()->where('is_correct', true)->value('id');
+        $answers = DB::table('poll_responses')->where(['poll_id' => $poll->id, 'user_id' => $request->user()->id])->pluck('poll_option_id')->map(fn ($id) => (int) $id)->sort()->values();
+        abort_unless($answers->isNotEmpty(), 403, 'Answer this poll to see results.');
+        $correctIds = $poll->options()->where('is_correct', true)->pluck('id')->map(fn ($id) => (int) $id)->sort()->values();
+        $showCorrectAnswer = $correctIds->isNotEmpty() && $poll->shouldRevealAnswer($webinar);
 
         return response()->json([
             'message' => 'Your answer was recorded.',
             'poll_id' => $poll->id,
-            'is_quiz' => $correct !== null,
-            'is_correct' => $correct !== null ? (int) $answer->poll_option_id === (int) $correct : null,
-            'selected_option_id' => $answer->poll_option_id,
-            'correct_option_id' => $correct,
-            'options' => $poll->options()->withCount('responses')->get()->map(fn ($option) => ['id' => $option->id, 'count' => $option->responses_count])->all(),
+            'is_quiz' => $correctIds->isNotEmpty(),
+            'answer_reveal' => $correctIds->isNotEmpty() ? ($poll->answer_reveal ?: 'after_webinar') : 'never',
+            'show_correct_answer' => $showCorrectAnswer,
+            'is_correct' => $showCorrectAnswer ? $answers->all() === $correctIds->all() : null,
+            'selected_option_id' => $answers->first(),
+            'selected_option_ids' => $answers->all(),
+            'correct_option_id' => $showCorrectAnswer ? $correctIds->first() : null,
+            'correct_option_ids' => $showCorrectAnswer ? $correctIds->all() : [],
+            'options' => $correctIds->isNotEmpty() ? [] : $poll->options()->withCount('responses')->get()->map(fn ($option) => ['id' => $option->id, 'count' => $option->responses_count])->all(),
         ])->header('Cache-Control', 'no-store');
     }
 
@@ -517,8 +561,10 @@ class WebinarController extends Controller
     {
         $this->authorizeRegistration($request, $webinar);
         abort_unless($webinar->certificate_enabled === 'yes', 404);
-        // The webinar's backend toggle authorizes all registered attendees.
         $identity = ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id];
+        $alreadyIssued = DB::table('certificates')->where($identity)->where('status', 'approved')->whereNull('revoked_at')->exists();
+        $metrics = WebinarExperience::metrics($webinar, $request->user()->id);
+        abort_unless($alreadyIssued || $metrics['eligible'], 403, 'Certificate unlocks after '.$metrics['minimum'].'% watch time'.($metrics['pollRequired'] ? ' and one poll response' : '').'.');
         DB::table('certificates')->insertOrIgnore($identity + [
             'template_id' => data_get($webinar->settings, 'certificate_template_id'),
             'credential_id' => (string) Str::uuid(), 'status' => 'approved',
@@ -540,11 +586,17 @@ class WebinarController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        AuditTrail::record('certificate.downloaded', $webinar, 'Certificate downloaded by '.$request->user()->name.'.', [
+        AuditTrail::record('certificate.downloaded', $webinar, 'Certificate downloaded by '.$request->user()->name.' ('.$request->user()->email.') for "'.$webinar->title.'".', [
             'credential_id' => $certificate->credential_id,
             'user_id' => $request->user()->id,
+            'user_name' => $request->user()->name,
+            'user_email' => $request->user()->email,
+            'webinar_id' => $webinar->id,
+            'webinar_title' => $webinar->title,
         ]);
-        $pdf = $this->certificatePdf($request->user()->name, $webinar->title, $certificate->credential_id, $certificate->issued_at ?: now());
+        $templateId = $certificate->template_id ?: data_get($webinar->settings, 'certificate_template_id');
+        $template = $templateId ? CertificateTemplate::find($templateId) : null;
+        $pdf = $this->certificatePdf($request->user()->name, $webinar->title, $certificate->credential_id, $certificate->issued_at ?: now(), $template);
 
         return response($pdf, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'attachment; filename="'.Str::slug($webinar->title).'-certificate.pdf"']);
     }
@@ -554,8 +606,19 @@ class WebinarController extends Controller
         $this->authorizeRegistration($request, $webinar);
         $item = DB::table('webinar_resources')->where('webinar_id', $webinar->id)->where('id', $resource)->where('is_public', true)->where('type', 'file')->first();
         abort_unless($item, 404);
-        $root = realpath(public_path('uploads/resources'));
-        $path = realpath(public_path(ltrim($item->path_or_url, '/')));
+
+        $cleanPath = ltrim($item->path_or_url, '/');
+        if (str_starts_with($cleanPath, 'storage/')) {
+            $relative = substr($cleanPath, 8);
+            $storageRoot = realpath(storage_path('app/public'));
+            $path = realpath(storage_path('app/public/'.$relative));
+            if ($storageRoot && $path && str_starts_with($path, $storageRoot.DIRECTORY_SEPARATOR) && is_file($path)) {
+                return response()->download($path, (Str::slug($item->title) ?: 'resource').'.'.pathinfo($path, PATHINFO_EXTENSION));
+            }
+        }
+
+        $root = realpath(public_path('uploads/resources')) ?: realpath(public_path());
+        $path = realpath(public_path($cleanPath));
         abort_unless($root && $path && str_starts_with($path, $root.DIRECTORY_SEPARATOR) && is_file($path), 404);
 
         return response()->download($path, (Str::slug($item->title) ?: 'resource').'.'.pathinfo($path, PATHINFO_EXTENSION));
@@ -566,26 +629,132 @@ class WebinarController extends Controller
         abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->exists(), 403);
     }
 
-    private function certificatePdf(string $name, string $title, string $credential, mixed $issuedAt): string
+    private function certificatePdf(string $name, string $title, string $credential, mixed $issuedAt, ?CertificateTemplate $template = null): string
     {
         $escape = fn (string $text) => str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $text);
-        $lines = [['/F2', 18, 230, 520, 'CERTIFICATE OF COMPLETION'], ['/F1', 11, 290, 475, 'THIS CERTIFIES THAT'], ['/F2', 27, 220, 420, $name], ['/F1', 12, 150, 370, 'has successfully completed the webinar'], ['/F2', 18, 120, 325, $title], ['/F1', 10, 190, 255, 'Issued: '.Carbon::parse($issuedAt)->format('F j, Y')], ['/F1', 9, 150, 220, 'Credential ID: '.$credential]];
-        $stream = "0.25 0.12 0.55 rg 0 0 842 595 re f\n0.98 0.97 1 rg 25 25 792 545 re f\n0.45 0.25 0.78 RG 3 w 42 42 758 511 re S\n0.12 0.08 0.22 rg\n";
-        foreach ($lines as [$font,$size,$x,$y,$text]) {
-            $stream .= "BT {$font} {$size} Tf {$x} {$y} Td (".$escape($text).") Tj ET\n";
+        $design = $template?->design ?? [];
+        $background = $this->certificateJpeg(WebinarCertificateTemplate::localPublicPath(data_get($design, 'template_image')));
+        $aspect = $background ? $background['width'] / $background['height'] : WebinarCertificateTemplate::aspectRatio($template);
+        if ($aspect >= 1) {
+            $pageWidth = 842.0;
+            $pageHeight = round($pageWidth / $aspect, 3);
+        } else {
+            $pageHeight = 842.0;
+            $pageWidth = round($pageHeight * $aspect, 3);
         }
-        $objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>', '<< /Length '.strlen($stream)." >>\nstream\n{$stream}endstream", '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>'];
+
+        $stream = $background
+            ? "q {$pageWidth} 0 0 {$pageHeight} 0 0 cm /Bg Do Q\n"
+            : "0.25 0.12 0.55 rg 0 0 {$pageWidth} {$pageHeight} re f\n0.98 0.97 1 rg 25 25 ".($pageWidth - 50).' '.($pageHeight - 50)." re f\n0.45 0.25 0.78 RG 3 w 42 42 ".($pageWidth - 84).' '.($pageHeight - 84)." re S\n";
+        $stream .= "0.12 0.08 0.22 rg\n";
+
+        $defaults = [
+            'headline' => ['x' => 50, 'y' => 15, 'width' => 70, 'scale' => 100],
+            'recipient' => ['x' => 50, 'y' => 44, 'scale' => 100],
+            'webinar' => ['x' => 50, 'y' => 61, 'scale' => 100],
+            'date' => ['x' => 20, 'y' => 84, 'scale' => 100],
+            'signature' => ['x' => 80, 'y' => 76, 'width' => 22, 'scale' => 100],
+            'signatory' => ['x' => 80, 'y' => 86, 'scale' => 100],
+        ];
+        $positions = array_replace_recursive($defaults, data_get($design, 'positions', []));
+        $visible = WebinarCertificateTemplate::visibleElements($design);
+        $lines = [];
+        if ($visible['headline']) {
+            $lines[] = ['/F2', 18, $positions['headline']['x'], $positions['headline']['y'], data_get($design, 'headline', 'CERTIFICATE OF COMPLETION'), $positions['headline']['scale']];
+        }
+        if ($visible['recipient']) {
+            $lines[] = ['/F2', 27, $positions['recipient']['x'], $positions['recipient']['y'], $name, $positions['recipient']['scale']];
+        }
+        if ($visible['webinar']) {
+            $lines[] = ['/F2', 18, $positions['webinar']['x'], $positions['webinar']['y'], $title, $positions['webinar']['scale']];
+        }
+        if ($visible['date']) {
+            $lines[] = ['/F1', 10, $positions['date']['x'], $positions['date']['y'], Carbon::parse($issuedAt)->format('F j, Y'), $positions['date']['scale']];
+        }
+        if ($visible['signatory'] && filled(data_get($design, 'signatory'))) {
+            $lines[] = ['/F1', 10, $positions['signatory']['x'], $positions['signatory']['y'], data_get($design, 'signatory'), $positions['signatory']['scale']];
+        }
+
+        $signature = $visible['signature']
+            ? $this->certificateJpeg(WebinarCertificateTemplate::localPublicPath(data_get($design, 'signature_image')))
+            : null;
+        if ($signature) {
+            $signatureWidth = $pageWidth * ((float) ($positions['signature']['width'] ?? 22) / 100);
+            $signatureHeight = $signatureWidth * ($signature['height'] / $signature['width']);
+            $signatureX = ($pageWidth * ((float) $positions['signature']['x'] / 100)) - ($signatureWidth / 2);
+            $signatureY = ($pageHeight * (1 - ((float) $positions['signature']['y'] / 100))) - ($signatureHeight / 2);
+            $stream .= 'q '.round($signatureWidth, 2).' 0 0 '.round($signatureHeight, 2).' '.round($signatureX, 2).' '.round($signatureY, 2)." cm /Sig Do Q\n";
+        }
+
+        foreach ($lines as $line) {
+            [$font, $baseSize, $xPercent, $yPercent, $text, $scale] = array_pad($line, 6, 100);
+            $size = round($baseSize * ((float) $scale / 100), 2);
+            $x = ($pageWidth * ((float) $xPercent / 100)) - (strlen($text) * $size * 0.25);
+            $y = $pageHeight * (1 - ((float) $yPercent / 100));
+            $stream .= "BT {$font} {$size} Tf ".round(max(10, $x), 2).' '.round(max(10, $y), 2)." Td (".$escape($text).") Tj ET\n";
+        }
+
+        $nextObjectId = 7;
+        $imageObjects = [];
+        $xObjectEntries = [];
+        if ($background) {
+            $xObjectEntries[] = '/Bg '.$nextObjectId.' 0 R';
+            $imageObjects[] = $background;
+            $nextObjectId++;
+        }
+        if ($signature) {
+            $xObjectEntries[] = '/Sig '.$nextObjectId.' 0 R';
+            $imageObjects[] = $signature;
+        }
+        $xObject = $xObjectEntries ? ' /XObject << '.implode(' ', $xObjectEntries).' >>' : '';
+        $objects = [
+            '<< /Type /Catalog /Pages 2 0 R >>',
+            '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {$pageWidth} {$pageHeight}] /Resources << /Font << /F1 5 0 R /F2 6 0 R >>{$xObject} >> /Contents 4 0 R >>",
+            '<< /Length '.strlen($stream)." >>\nstream\n{$stream}endstream",
+            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+        ];
+        foreach ($imageObjects as $image) {
+            $objects[] = '<< /Type /XObject /Subtype /Image /Width '.$image['width'].' /Height '.$image['height'].' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '.strlen($image['data'])." >>\nstream\n".$image['data']."\nendstream";
+        }
         $pdf = "%PDF-1.4\n";
         $offsets = [0];
         foreach ($objects as $index => $object) {
             $offsets[] = strlen($pdf);
             $pdf .= ($index + 1)." 0 obj\n{$object}\nendobj\n";
         }$xref = strlen($pdf);
-        $pdf .= "xref\n0 7\n0000000000 65535 f \n";
-        for ($i = 1; $i <= 6; $i++) {
+        $objectCount = count($objects);
+        $pdf .= 'xref'."\n0 ".($objectCount + 1)."\n0000000000 65535 f \n";
+        for ($i = 1; $i <= $objectCount; $i++) {
             $pdf .= sprintf('%010d 00000 n ', $offsets[$i])."\n";
-        }$pdf .= "trailer << /Size 7 /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF";
+        }$pdf .= 'trailer << /Size '.($objectCount + 1)." /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF";
 
         return $pdf;
+    }
+
+    private function certificateJpeg(?string $path): ?array
+    {
+        if (! $path || ! is_file($path) || ! extension_loaded('gd')) {
+            return null;
+        }
+
+        $source = @imagecreatefromstring((string) file_get_contents($path));
+        if (! $source) {
+            return null;
+        }
+
+        $width = imagesx($source);
+        $height = imagesy($source);
+        $canvas = imagecreatetruecolor($width, $height);
+        imagefill($canvas, 0, 0, imagecolorallocate($canvas, 255, 255, 255));
+        imagecopy($canvas, $source, 0, 0, 0, 0, $width, $height);
+        ob_start();
+        imagejpeg($canvas, null, 94);
+        $data = (string) ob_get_clean();
+        imagedestroy($source);
+        imagedestroy($canvas);
+
+        return ['data' => $data, 'width' => $width, 'height' => $height];
     }
 }

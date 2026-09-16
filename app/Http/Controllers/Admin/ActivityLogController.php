@@ -11,7 +11,14 @@ class ActivityLogController extends Controller
 {
     public function index(Request $request): View
     {
-        $logs = ActivityLog::with('user')->when($request->filled('action'), fn ($q) => $q->where('action', 'like', '%'.$request->string('action').'%'))->latest()->paginate(25)->withQueryString();
+        $logs = ActivityLog::with('user')
+            ->where(function ($q) {
+                $q->where('action', 'like', 'certificate%')
+                  ->orWhere('action', 'certificate.downloaded');
+            })
+            ->latest()
+            ->paginate(25)
+            ->withQueryString();
 
         return view('pages.admin.activity-logs', compact('logs'));
     }

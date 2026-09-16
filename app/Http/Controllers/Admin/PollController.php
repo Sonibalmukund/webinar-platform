@@ -40,6 +40,52 @@ class PollController extends Controller
         ]);
     }
 
+    public function logs(Request $request): View
+    {
+        $webinarId = $request->integer('webinar_id');
+        $search = trim((string) $request->input('search'));
+        $assignedWebinarIds = $request->user()->hasRole('sub-admin')
+            ? $request->user()->assignedWebinars()->pluck('webinars.id')
+            : null;
+
+        $logs = PollResponse::query()
+            ->join('polls', 'polls.id', '=', 'poll_responses.poll_id')
+            ->join('poll_options', 'poll_options.id', '=', 'poll_responses.poll_option_id')
+            ->join('webinars', 'webinars.id', '=', 'polls.webinar_id')
+            ->leftJoin('users', 'users.id', '=', 'poll_responses.user_id')
+            ->select([
+                'poll_responses.*',
+                'users.name as user_name',
+                'users.email as user_email',
+                'users.mobile as user_mobile',
+                'polls.question as poll_question',
+                'poll_options.label as option_label',
+                'webinars.id as webinar_id',
+                'webinars.title as webinar_title',
+            ])
+            ->when($assignedWebinarIds, fn ($query) => $query->whereIn('polls.webinar_id', $assignedWebinarIds))
+            ->when($webinarId, fn ($query) => $query->where('polls.webinar_id', $webinarId))
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($nested) use ($search) {
+                    $nested->where('users.name', 'like', "%{$search}%")
+                        ->orWhere('users.email', 'like', "%{$search}%")
+                        ->orWhere('polls.question', 'like', "%{$search}%")
+                        ->orWhere('poll_options.label', 'like', "%{$search}%")
+                        ->orWhere('webinars.title', 'like', "%{$search}%");
+                });
+            })
+            ->orderByRaw('COALESCE(poll_responses.voted_at, poll_responses.created_at) DESC')
+            ->paginate(25)
+            ->withQueryString();
+
+        return view('pages.admin.polls.logs', [
+            'logs' => $logs,
+            'webinars' => $this->webinars($request),
+            'selectedWebinarId' => $webinarId,
+            'search' => $search,
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $poll = $this->save($request, new Poll);
@@ -61,8 +107,14 @@ class PollController extends Controller
         $totalVotes = $poll->options->sum('responses_count');
         $totalUsers = PollResponse::where('poll_id', $poll->id)->distinct('user_id')->count('user_id');
         $correctVotes = $poll->options->where('is_correct', true)->sum('responses_count');
+        $voters = PollResponse::with(['user', 'option'])
+            ->where('poll_id', $poll->id)
+            ->orderByRaw('COALESCE(voted_at, created_at) DESC')
+            ->latest('id')
+            ->paginate(25, ['*'], 'voters')
+            ->withQueryString();
 
-        return view('pages.admin.polls.show', compact('poll', 'totalVotes', 'totalUsers', 'correctVotes'));
+        return view('pages.admin.polls.show', compact('poll', 'totalVotes', 'totalUsers', 'correctVotes', 'voters'));
     }
 
     public function update(Request $request, Poll $poll): RedirectResponse
@@ -122,13 +174,18 @@ class PollController extends Controller
         if (! $request->has('answers') && $request->filled('options')) {
             $request->merge(['answers' => preg_split('/\r\n|\r|\n/', $request->input('options'))]);
         }
+        if (! $request->filled('type')) {
+            $request->merge(['type' => $request->filled('correct_index') ? 'quiz' : 'poll']);
+        }
         $data = $request->validate([
             'webinar_id' => ['required', 'exists:webinars,id'],
+            'type' => ['required', 'in:poll,quiz'],
+            'answer_reveal' => ['required_if:type,quiz', 'nullable', 'in:immediate,after_webinar,never'],
             'question' => ['required', 'string', 'max:1000'],
             'answers' => ['required', 'array', 'min:2'],
             'answers.*' => ['nullable', 'string', 'max:255'],
             'allow_multiple' => ['nullable', 'boolean'],
-            'correct_index' => ['nullable', 'integer', 'min:0'],
+            'correct_index' => ['nullable', 'required_if:type,quiz', 'integer', 'min:0'],
             'started_at' => ['nullable', 'date'],
             'ended_at' => ['nullable', 'date', 'after:started_at'],
             'status' => ['nullable', 'in:draft,active,ended,hidden'],
@@ -138,7 +195,7 @@ class PollController extends Controller
             throw ValidationException::withMessages(['options' => 'Please enter at least two different answers.']);
         }
 
-        $correctIndex = $request->filled('correct_index') ? $request->integer('correct_index') : null;
+        $correctIndex = $data['type'] === 'quiz' && $request->filled('correct_index') ? $request->integer('correct_index') : null;
         if ($correctIndex !== null && ! $options->has($correctIndex)) {
             throw ValidationException::withMessages(['correct_index' => 'Select a valid correct answer.']);
         }
@@ -154,6 +211,7 @@ class PollController extends Controller
             'created_by' => $poll->exists ? $poll->created_by : $request->user()->id,
             'question' => $data['question'],
             'allow_multiple' => $request->boolean('allow_multiple'),
+            'answer_reveal' => $data['type'] === 'quiz' ? ($data['answer_reveal'] ?? 'after_webinar') : 'never',
             'status' => $data['status'] ?? ($poll->exists ? $poll->status : 'draft'),
             'started_at' => $data['started_at'] ?? null,
             'ended_at' => $data['ended_at'] ?? null,

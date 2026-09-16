@@ -62,20 +62,9 @@ final class SidebarNavigation
 
     private static function learner(): array
     {
-        $userId = auth()->id();
-        $hasRecordings = $userId && DB::table('webinar_recordings')->join('webinars', 'webinars.id', '=', 'webinar_recordings.webinar_id')->join('registrations', 'registrations.webinar_id', '=', 'webinars.id')->where('registrations.user_id', $userId)->where('webinars.status', 'completed')->where('webinar_recordings.status', 'published')->exists();
-        $hasCertificates = $userId && DB::table('certificates')->where('user_id', $userId)->where('status', 'approved')->whereNull('revoked_at')->exists();
-        $hasBookmarks = $userId && DB::table('webinar_bookmarks')->where('user_id', $userId)->exists();
-
-        return array_values(array_filter([
+        return [
             self::item('Dashboard', 'grid-1x2', '/dashboard', true),
-            self::item('Discover', 'compass', '/webinars'),
-            self::item('My Webinars', 'camera-video', '/my-webinars'),
-            $hasRecordings ? self::item('Recordings', 'play-btn', '/recordings') : null,
-            $hasCertificates ? self::item('Certificates', 'award', '/certificates') : null,
-            $hasBookmarks ? self::item('Bookmarks', 'bookmark', '/bookmarks') : null,
-            self::item('Profile', 'person', '/profile'),
-        ]));
+        ];
     }
 
     private static function item(string $label, ?string $icon, string $url, bool $exact = false): array

@@ -5,7 +5,7 @@
 @endphp
 <aside class="sidebar" id="sidebar">
     <button class="icon-btn sidebar-close d-lg-none" id="sidebarClose" type="button" aria-label="Close navigation"><i class="bi bi-x-lg"></i></button>
-    <x-site-brand light use-small />
+    <x-site-brand light class="sidebar-uploaded-brand" />
     <div class="sidebar-label">{{ $section }}</div>
     <nav class="sidebar-nav">
         @php($currentGroup = null)

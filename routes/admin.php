@@ -24,10 +24,8 @@ use App\Models\Brand;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('guest')->group(function () {
-    Route::get('/admin/login', [AuthController::class, 'showAdminLogin'])->name('admin.login');
-    Route::post('/admin/login', [AuthController::class, 'loginAdmin']);
-});
+Route::get('/admin/login', [AuthController::class, 'showAdminLogin'])->name('admin.login');
+Route::post('/admin/login', [AuthController::class, 'loginAdmin']);
 
 Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group(function () {
     Route::get('/admin/dashboard', [DashboardController::class, 'admin'])->name('admin.dashboard');
@@ -64,6 +62,7 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::post('/admin/webinars', [WebinarController::class, 'store'])->name('admin.webinars.store');
     Route::get('/admin/webinars/{webinar}/edit', [WebinarController::class, 'edit'])->name('admin.webinars.edit');
     Route::get('/admin/webinars/{webinar}/live-control', [WebinarController::class, 'live'])->name('admin.webinars.live');
+    Route::get('/admin/webinars/{webinar}/live-viewers', [WebinarController::class, 'liveViewers'])->name('admin.webinars.live-viewers');
     Route::put('/admin/webinars/{webinar}/live-control', [WebinarController::class, 'controls'])->name('admin.webinars.controls');
     Route::put('/admin/webinars/{webinar}/announcement', [WebinarController::class, 'announcement'])->name('admin.webinars.announcement');
     Route::get('/admin/webinars/{webinar}', [WebinarController::class, 'show'])->name('admin.webinars.show');
@@ -72,6 +71,7 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::delete('/admin/webinars/{webinar}', [WebinarController::class, 'destroy'])->name('admin.webinars.destroy');
     Route::post('/admin/webinars/{webinar}/clone', [WebinarController::class, 'clone'])->name('admin.webinars.clone');
     Route::get('/admin/polls', [PollController::class, 'index'])->name('admin.polls.index');
+    Route::get('/admin/poll-logs', [PollController::class, 'logs'])->name('admin.polls.logs');
     Route::get('/admin/polls/create', [PollController::class, 'create'])->name('admin.polls.create');
     Route::post('/admin/polls', [PollController::class, 'store'])->name('admin.polls.store');
     Route::get('/admin/polls/{poll}/edit', [PollController::class, 'edit'])->name('admin.polls.edit');
@@ -82,6 +82,7 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::post('/admin/polls/{poll}/duplicate', [PollController::class, 'duplicate'])->name('admin.polls.duplicate');
     Route::get('/admin/certificates', [CertificateController::class, 'index'])->name('admin.certificates.index');
     Route::get('/admin/certificates/create', [CertificateController::class, 'create'])->name('admin.certificates.create');
+    Route::get('/admin/certificates/{webinar}/preview', [CertificateController::class, 'preview'])->name('admin.certificates.preview');
     Route::get('/admin/certificates/{webinar}/edit', [CertificateController::class, 'edit'])->name('admin.certificates.edit');
     Route::put('/admin/certificates/{webinar}', [CertificateController::class, 'update'])->name('admin.certificates.update');
     Route::patch('/admin/certificates/{webinar}/visibility', [CertificateController::class, 'visibility'])->name('admin.certificates.visibility');
@@ -90,9 +91,9 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::get('/admin/certificates/logs', [CertificateController::class, 'logs'])->name('admin.certificates.logs');
     Route::get('/admin/permissions', [PermissionController::class, 'index'])->name('admin.permissions.index');
     Route::get('/admin/permissions/create', [PermissionController::class, 'create'])->name('admin.permissions.create');
-    Route::get('/admin/permissions/{user}/{webinar}/edit', [PermissionController::class, 'edit'])->name('admin.permissions.edit');
+    Route::get('/admin/permissions/{user}/edit', [PermissionController::class, 'edit'])->name('admin.permissions.edit');
     Route::put('/admin/permissions', [PermissionController::class, 'update'])->name('admin.permissions.update');
-    Route::delete('/admin/permissions/{user}/{webinar}', [PermissionController::class, 'destroy'])->name('admin.permissions.destroy');
+    Route::delete('/admin/permissions/{user}', [PermissionController::class, 'destroy'])->name('admin.permissions.destroy');
     Route::get('/admin/speakers', [SpeakerController::class, 'index'])->name('admin.speakers.index');
     Route::get('/admin/speakers/create', [SpeakerController::class, 'create'])->name('admin.speakers.create');
     Route::post('/admin/speakers', [SpeakerController::class, 'store'])->name('admin.speakers.store');

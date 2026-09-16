@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\WebinarAttendanceUpdated;
 use App\Models\Webinar;
+use App\Support\WebinarExperience;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -26,9 +27,17 @@ class WebinarAttendanceController extends Controller
         return $this->touch($request, $webinar, 'leave');
     }
 
+    public function presence(Request $request, Webinar $webinar): JsonResponse
+    {
+        return $this->touch($request, $webinar, 'presence');
+    }
+
     public function hand(Request $request, Webinar $webinar): JsonResponse
     {
-        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->exists(), 403);
+        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->admitted()->exists(), 403);
+        $webinar->syncLifecycleStatus();
+        abort_unless($webinar->canEnter(), 403, 'The webinar room is not open yet.');
+        abort_unless($webinar->attendanceHasStarted(), 409, 'Attendance and hand raising are available during the webinar access window.');
         $current = (bool) DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->value('raised_hand');
         DB::table('webinar_attendees')->updateOrInsert(
             ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id],
@@ -53,15 +62,32 @@ class WebinarAttendanceController extends Controller
 
     private function touch(Request $request, Webinar $webinar, string $state): JsonResponse
     {
-        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->exists(), 403);
-        abort_unless($webinar->canEnter(), 409, 'The webinar room is not open.');
+        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->admitted()->exists(), 403);
+        $webinar->syncLifecycleStatus();
+        abort_unless($webinar->canEnter(), 403, 'The webinar room is not open yet.');
         $now = now();
+        if (! $webinar->attendanceHasStarted()) {
+            return response()->json([
+                'tracking_started' => false,
+                'state' => 'waiting',
+                'live_viewers' => 0,
+                'watch_seconds' => 0,
+                'participants' => [],
+                'starts_at' => $webinar->opensAt()?->timezone($webinar->timezone)->toIso8601String(),
+                'message' => 'Attendance starts when the webinar access window opens.',
+            ]);
+        }
         $row = DB::transaction(function () use ($request, $webinar, $state, $now) {
             $current = DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->lockForUpdate()->first();
-            $increment = $current?->last_seen_at && ! $current?->left_at ? min(60, max(0, $now->diffInSeconds(Carbon::parse($current->last_seen_at), true))) : 0;
+            $increment = in_array($state, ['heartbeat', 'leave'], true) && $current?->last_seen_at && ! $current?->left_at
+                ? min(60, max(0, $now->diffInSeconds(Carbon::parse($current->last_seen_at), true)))
+                : 0;
             $values = ['last_seen_at' => $now, 'left_at' => $state === 'leave' ? $now : null, 'updated_at' => $now];
             if ($state === 'join') {
                 $values['raised_hand'] = false;
+                if ($current && ! $current->joined_at) {
+                    $values['joined_at'] = $current->created_at ?: $now;
+                }
             }
             if (! $current) {
                 $values += ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id, 'joined_at' => $now, 'watch_seconds' => 0, 'raised_hand' => false, 'created_at' => $now];
@@ -70,7 +96,9 @@ class WebinarAttendanceController extends Controller
                 $values['watch_seconds'] = min(PHP_INT_MAX, (int) $current->watch_seconds + $increment);
                 DB::table('webinar_attendees')->where('id', $current->id)->update($values);
             }
-            DB::table('webinar_attendance_events')->insert(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id, 'event_type' => $state, 'occurred_at' => $now, 'metadata' => json_encode(['visibility' => $request->input('visibility', 'visible')]), 'created_at' => $now, 'updated_at' => $now]);
+            if ($state !== 'presence') {
+                DB::table('webinar_attendance_events')->insert(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id, 'event_type' => $state, 'occurred_at' => $now, 'metadata' => json_encode(['visibility' => $request->input('visibility', 'visible')]), 'created_at' => $now, 'updated_at' => $now]);
+            }
 
             return DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->first();
         });
@@ -81,6 +109,21 @@ class WebinarAttendanceController extends Controller
             report($e);
         }
 
-        return response()->json(['live_viewers' => $live, 'watch_seconds' => (int) $row->watch_seconds, 'state' => $state, 'participants' => $this->participants($webinar)]);
+        $metrics = WebinarExperience::metrics($webinar, $request->user()->id);
+
+        return response()->json([
+            'tracking_started' => true,
+            'live_viewers' => $live,
+            'watch_seconds' => (int) $row->watch_seconds,
+            'state' => $state,
+            'participants' => $this->participants($webinar),
+            'certificate' => [
+                'enabled' => $webinar->certificate_enabled === 'yes',
+                'eligible' => $metrics['eligible'],
+                'minimum' => $metrics['minimum'],
+                'attendance_percent' => $metrics['attendancePercent'],
+                'poll_required' => $metrics['pollRequired'],
+            ],
+        ]);
     }
 }

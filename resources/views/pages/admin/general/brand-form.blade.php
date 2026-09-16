@@ -37,27 +37,17 @@
         </label>
 
         <div class="full">
-            <label>Brand logo</label>
-            <div class="d-flex gap-3 mb-2">
-                <label class="flex-row cursor-pointer">
-                    <input type="radio" name="logo_source" value="upload" id="logoSourceUpload" @checked(!filter_var($brand->logo_path, FILTER_VALIDATE_URL))> Upload image file
-                </label>
-                <label class="flex-row cursor-pointer">
-                    <input type="radio" name="logo_source" value="url" id="logoSourceUrl" @checked((bool)filter_var($brand->logo_path, FILTER_VALIDATE_URL))> Logo image URL
-                </label>
-            </div>
-            <div id="logoUploadBox" class="mb-2">
+            <label>Choose brand logo</label>
+            <div class="mb-2">
                 <input class="form-control" type="file" name="logo" accept="image/*">
                 <small class="text-muted">Upload PNG, SVG, or JPG (transparent background recommended, max 5MB).</small>
-            </div>
-            <div id="logoUrlBox" class="mb-2" hidden>
-                <input class="form-control" type="url" name="logo_url" value="{{ old('logo_url', filter_var($brand->logo_path, FILTER_VALIDATE_URL) ? $brand->logo_path : '') }}" placeholder="https://cdn.example.com/logo.png">
-                <small class="text-muted">Enter a direct HTTPS link to the logo image.</small>
             </div>
             @if($brand->logo_path)
                 <div class="mt-2 p-3 border rounded bg-light d-flex align-items-center gap-3" style="max-width: 320px;">
                     <span class="text-muted small">Current logo:</span>
-                    <img src="{{ $brand->logo_path }}" alt="{{ $brand->name }}" style="max-height: 48px; max-width: 160px; object-fit: contain;">
+                    <button type="button" class="btn p-0 border-0 bg-transparent" data-media-popup data-media-src="{{ $brand->logo_path }}" data-media-type="image" data-media-title="{{ $brand->name }}" data-media-badge="Brand Logo" title="Click to view logo in pop-up">
+                        <img src="{{ $brand->logo_path }}" alt="{{ $brand->name }}" style="max-height: 48px; max-width: 160px; object-fit: contain;">
+                    </button>
                 </div>
             @endif
         </div>
@@ -76,26 +66,4 @@
     </div>
 </form>
 
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const uploadRadio = document.getElementById('logoSourceUpload');
-        const urlRadio = document.getElementById('logoSourceUrl');
-        const uploadBox = document.getElementById('logoUploadBox');
-        const urlBox = document.getElementById('logoUrlBox');
-
-        function toggle() {
-            if (urlRadio && urlRadio.checked) {
-                if (uploadBox) uploadBox.hidden = true;
-                if (urlBox) urlBox.hidden = false;
-            } else {
-                if (uploadBox) uploadBox.hidden = false;
-                if (urlBox) urlBox.hidden = true;
-            }
-        }
-
-        uploadRadio?.addEventListener('change', toggle);
-        urlRadio?.addEventListener('change', toggle);
-        toggle();
-    });
-</script>
 @endsection

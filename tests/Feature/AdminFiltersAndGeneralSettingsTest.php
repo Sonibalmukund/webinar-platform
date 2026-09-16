@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\Webinar;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AdminFiltersAndGeneralSettingsTest extends TestCase
@@ -33,6 +34,7 @@ class AdminFiltersAndGeneralSettingsTest extends TestCase
         $this->actingAs($admin)
             ->get('/admin/general-settings/banners')
             ->assertOk()
+            ->assertSee('sidebar-uploaded-brand', false)
             ->assertSee('Banners')
             ->assertSee('Brands')
             ->assertSee('Site Settings')
@@ -93,6 +95,31 @@ class AdminFiltersAndGeneralSettingsTest extends TestCase
             ->assertSee('Search polls by question...')
             ->assertSee('All webinars')
             ->assertSee('Filter');
+    }
+
+    public function test_attendance_displays_webinar_local_time_without_requiring_live_status(): void
+    {
+        $admin = $this->getSuperAdmin();
+        $learner = User::factory()->create(['name' => 'Timezone Attendee']);
+        $base = ['created_by' => $admin->id, 'starts_at' => '2026-09-13 05:00:00', 'ends_at' => '2026-09-13 07:00:00', 'timezone' => 'Asia/Kolkata'];
+        $live = Webinar::create($base + ['title' => 'Visible Live Webinar', 'slug' => 'visible-live-'.uniqid(), 'status' => 'live']);
+        $scheduled = Webinar::create($base + ['title' => 'Scheduled Attendance History', 'slug' => 'scheduled-history-'.uniqid(), 'status' => 'scheduled']);
+
+        foreach ([$live, $scheduled] as $webinar) {
+            DB::table('webinar_attendees')->insert([
+                'webinar_id' => $webinar->id, 'user_id' => $learner->id,
+                'joined_at' => '2026-09-13 05:50:00', 'watch_seconds' => 30,
+                'last_seen_at' => '2026-09-13 05:50:30', 'raised_hand' => false,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($admin)->get(route('admin.attendance'))
+            ->assertOk()
+            ->assertSee('Visible Live Webinar')
+            ->assertSee('13 Sep, 11:20 AM IST')
+            ->assertSee('0.42%')
+            ->assertSee('Scheduled Attendance History');
     }
 
     public function test_admin_webinars_filters(): void

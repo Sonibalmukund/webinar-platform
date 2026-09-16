@@ -117,7 +117,7 @@ class RegistrationSettingsController extends Controller
         if ($request->boolean('login_enabled')) {
             $form->fields()->update(['login_enabled' => false]);
         }
-        $field = $form->fields()->create(['label' => $data['label'], 'field_key' => Str::slug($data['label'], '_').'_'.Str::lower(Str::random(4)), 'field_type' => $data['field_type'], 'placeholder' => $data['placeholder'] ?? null, 'icon' => $request->input('icon', 'input-cursor-text'), 'width' => $request->input('width', 'full'), 'is_required' => $request->boolean('is_required'), 'is_enabled' => true, 'login_enabled' => $request->boolean('login_enabled'), 'condition_field_id' => $data['condition_field_id'] ?? null, 'condition_operator' => $data['condition_operator'] ?? null, 'condition_value' => $data['condition_value'] ?? null, 'display_order' => ($form->fields()->max('display_order') ?? 0) + 1]);
+        $field = $form->fields()->create(['label' => $data['label'], 'field_key' => Str::slug($data['label'], '_').'_'.Str::lower(Str::random(4)), 'field_type' => $data['field_type'], 'placeholder' => $data['placeholder'] ?? null, 'icon' => $request->input('icon', 'input-cursor-text'), 'width' => $request->input('width', 'full'), 'is_required' => $request->boolean('is_required'), 'is_enabled' => true, 'login_enabled' => $request->boolean('login_enabled'), 'condition_field_id' => null, 'condition_operator' => null, 'condition_value' => null, 'display_order' => ($form->fields()->max('display_order') ?? 0) + 1]);
         if (in_array($field->field_type, ['dropdown', 'radio', 'checkbox'])) {
             foreach (array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $data['options'] ?? '')))) as $order => $label) {
                 $field->options()->create(['label' => $label, 'value' => Str::slug($label, '_'), 'display_order' => $order, 'is_enabled' => true]);
@@ -143,7 +143,7 @@ class RegistrationSettingsController extends Controller
         if ($request->boolean('login_enabled')) {
             $field->form->fields()->whereKeyNot($field->id)->update(['login_enabled' => false]);
         }
-        $field->update(['label' => $data['label'], 'field_type' => $data['field_type'], 'placeholder' => $data['placeholder'] ?? null, 'icon' => $request->input('icon', 'input-cursor-text'), 'width' => $request->input('width', 'full'), 'is_required' => $request->boolean('is_required'), 'is_enabled' => $request->boolean('is_enabled'), 'login_enabled' => $request->boolean('login_enabled'), 'condition_field_id' => $data['condition_field_id'] ?? null, 'condition_operator' => $data['condition_operator'] ?? null, 'condition_value' => $data['condition_value'] ?? null]);
+        $field->update(['label' => $data['label'], 'field_type' => $data['field_type'], 'placeholder' => $data['placeholder'] ?? null, 'icon' => $request->input('icon', 'input-cursor-text'), 'width' => $request->input('width', 'full'), 'is_required' => $request->boolean('is_required'), 'is_enabled' => $request->boolean('is_enabled'), 'login_enabled' => $request->boolean('login_enabled'), 'condition_field_id' => null, 'condition_operator' => null, 'condition_value' => null]);
         $field->options()->delete();
         if (in_array($field->field_type, ['dropdown', 'radio', 'checkbox'])) {
             foreach (array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $data['options'] ?? '')))) as $order => $label) {
@@ -212,6 +212,6 @@ class RegistrationSettingsController extends Controller
 
     private function validateWebinarField(Request $request, ?RegistrationField $field = null): array
     {
-        return $request->validate(['label' => ['required', 'string', 'max:255'], 'field_type' => ['required', 'in:text,password,dropdown,radio,checkbox,country,state,city'], 'placeholder' => ['nullable', 'string', 'max:255'], 'options' => ['nullable', 'string'], 'condition_field_id' => ['nullable', 'integer', 'exists:registration_fields,id'], 'condition_operator' => ['nullable', 'in:equals,not_equals'], 'condition_value' => ['nullable', 'string', 'max:255']]);
+        return $request->validate(['label' => ['required', 'string', 'max:255'], 'field_type' => ['required', 'in:text,password,dropdown,radio,checkbox,country,state,city'], 'placeholder' => ['nullable', 'string', 'max:255'], 'options' => ['nullable', 'string']]);
     }
 }

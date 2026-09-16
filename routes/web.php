@@ -11,15 +11,16 @@ use App\Http\Controllers\WebinarRegistrationController;
 use App\Models\Webinar;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', fn () => response()->view('pages.shared.state', ['state' => '404'], 404))->name('home');
+Route::view('/', 'pages.landing')->name('home');
+Route::redirect('/admin', '/admin/login');
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AuthController::class, 'loginUser']);
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
     Route::get('/forgot-password', [AuthController::class, 'showForgot'])->name('password.request');
     Route::post('/forgot-password', [AuthController::class, 'forgot']);
 });
+Route::post('/login', [AuthController::class, 'loginUser']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 Route::get('/locations/states', [LocationController::class, 'states'])->name('locations.states');
 Route::get('/locations/cities', [LocationController::class, 'cities'])->name('locations.cities');
@@ -46,20 +47,21 @@ Route::middleware(['auth', 'role:learner'])->group(function () {
     Route::post('/webinars/{webinar:slug}/attendance/join', [WebinarAttendanceController::class, 'join'])->name('webinars.attendance.join');
     Route::post('/webinars/{webinar:slug}/attendance/heartbeat', [WebinarAttendanceController::class, 'heartbeat'])->name('webinars.attendance.heartbeat');
     Route::post('/webinars/{webinar:slug}/attendance/leave', [WebinarAttendanceController::class, 'leave'])->name('webinars.attendance.leave');
+    Route::post('/webinars/{webinar:slug}/attendance/presence', [WebinarAttendanceController::class, 'presence'])->name('webinars.attendance.presence');
     Route::post('/webinars/{webinar:slug}/attendance/hand', [WebinarAttendanceController::class, 'hand'])->name('webinars.attendance.hand');
     Route::post('/webinars/{webinar:slug}/register', [WebinarRegistrationController::class, 'store'])->name('webinars.register');
     Route::view('/live-webinar', 'pages.user.live')->name('webinars.live');
 
-    Route::get('/recordings', [DashboardController::class, 'recordings'])->name('recordings.index');
-    Route::get('/certificates', [DashboardController::class, 'certificates'])->name('certificates.index');
-    Route::get('/bookmarks', [DashboardController::class, 'bookmarks'])->name('bookmarks.index');
-    Route::get('/my-webinars', [DashboardController::class, 'myWebinars'])->name('webinars.mine');
+    Route::redirect('/recordings', '/dashboard')->name('recordings.index');
+    Route::redirect('/certificates', '/dashboard')->name('certificates.index');
+    Route::redirect('/bookmarks', '/dashboard')->name('bookmarks.index');
+    Route::redirect('/my-webinars', '/dashboard')->name('webinars.mine');
     Route::view('/past-webinars', 'pages.shared.resource', ['title' => 'Past Webinars', 'type' => 'webinars']);
     Route::view('/upcoming-webinars', 'pages.shared.resource', ['title' => 'Upcoming Webinars', 'type' => 'webinars']);
     Route::view('/feedback', 'pages.shared.resource', ['title' => 'Share Feedback', 'type' => 'form']);
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
-    Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
+    Route::redirect('/profile', '/dashboard')->name('profile.show');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 

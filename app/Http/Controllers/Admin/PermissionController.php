@@ -5,69 +5,104 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Permission;
 use App\Models\User;
-use App\Models\Webinar;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class PermissionController extends Controller
 {
+    private const ASSIGNABLE_MODULES = [
+        'dashboard', 'webinars', 'dynamic-fields', 'speakers', 'users', 'registrations',
+        'attendance', 'chat', 'q-and-a', 'polls', 'poll-logs', 'feedback', 'certificates',
+        'certificate-logs', 'notifications', 'reports', 'live-control',
+    ];
+
     public function index(): View
     {
-        $assignments = DB::table('user_webinar_permissions')->select('user_id', 'webinar_id', DB::raw('COUNT(*) as permissions_count'))->groupBy('user_id', 'webinar_id')->get();
+        $subAdmins = User::whereHas('roles', fn ($query) => $query->where('slug', 'sub-admin'))
+            ->withCount('assignedWebinars')->latest()->get();
+        $permissionCounts = DB::table('user_webinar_permissions')
+            ->select('user_id', DB::raw('COUNT(DISTINCT permission_id) as permissions_count'))
+            ->groupBy('user_id')->pluck('permissions_count', 'user_id');
 
-        return view('pages.admin.permissions.index', ['assignments' => $assignments, 'users' => User::whereIn('id', $assignments->pluck('user_id'))->get()->keyBy('id'), 'webinars' => Webinar::whereIn('id', $assignments->pluck('webinar_id'))->get()->keyBy('id')]);
+        return view('pages.admin.permissions.index', compact('subAdmins', 'permissionCounts'));
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
-        return $this->form();
+        $selectedUser = $request->integer('user_id') ? User::find($request->integer('user_id')) : null;
+        if ($selectedUser && ! $selectedUser->hasRole('sub-admin')) {
+            $selectedUser = null;
+        }
+        $selectedUser ??= User::whereHas('roles', fn ($query) => $query->where('slug', 'sub-admin'))
+            ->orderBy('name')
+            ->first();
+
+        return $this->form($selectedUser);
     }
 
-    public function edit(User $user, Webinar $webinar): View
+    public function edit(User $user): View
     {
-        return $this->form($user, $webinar);
+        abort_unless($user->hasRole('sub-admin'), 404);
+
+        return $this->form($user);
     }
 
-    private function form(?User $selectedUser = null, ?Webinar $selectedWebinar = null): View
+    private function form(?User $selectedUser = null): View
     {
-        $assigned = ($selectedUser && $selectedWebinar) ? DB::table('user_webinar_permissions')->where('user_id', $selectedUser->id)->where('webinar_id', $selectedWebinar->id)->pluck('permission_id') : collect();
+        $assigned = $selectedUser
+            ? DB::table('user_webinar_permissions')->where('user_id', $selectedUser->id)->distinct()->pluck('permission_id')
+            : collect();
+        $permissions = Permission::whereIn('module', self::ASSIGNABLE_MODULES)
+            ->orderByRaw("CASE WHEN module = 'dashboard' THEN 0 ELSE 1 END")
+            ->orderBy('module')->orderBy('name')->get()->groupBy('module');
+        $subAdmins = User::whereHas('roles', fn ($query) => $query->where('slug', 'sub-admin'))
+            ->withCount('assignedWebinars')->orderBy('name')->get();
 
-        return view('pages.admin.permissions.form', ['subAdmins' => User::whereHas('roles', fn ($q) => $q->where('slug', 'sub-admin'))->orderBy('name')->get(), 'webinars' => Webinar::orderBy('title')->get(), 'permissions' => Permission::orderBy('module')->orderBy('name')->get()->groupBy('module'), 'selectedUserId' => $selectedUser?->id, 'selectedWebinarId' => $selectedWebinar?->id, 'assigned' => $assigned]);
+        return view('pages.admin.permissions.form', compact('subAdmins', 'permissions', 'assigned') + [
+            'selectedUserId' => $selectedUser?->id,
+        ]);
     }
 
     public function update(Request $request): RedirectResponse
     {
         $data = $request->validate([
             'user_id' => ['required', 'exists:users,id'],
-            'webinar_id' => ['required', 'exists:webinars,id'],
             'permissions' => ['nullable', 'array'],
-            'permissions.*' => ['integer', 'exists:permissions,id'],
+            'permissions.*' => ['integer', Rule::exists('permissions', 'id')->where(fn ($query) => $query->whereIn('module', self::ASSIGNABLE_MODULES))],
         ]);
-        abort_unless(User::findOrFail($data['user_id'])->hasRole('sub-admin'), 422, 'Permissions can only be assigned to a sub admin.');
-        DB::transaction(function () use ($data, $request) {
-            DB::table('user_webinar_permissions')->where('user_id', $data['user_id'])->where('webinar_id', $data['webinar_id'])->delete();
-            DB::table('user_webinar_assignments')->updateOrInsert(
-                ['user_id' => $data['user_id'], 'webinar_id' => $data['webinar_id']],
-                ['assigned_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now()]
-            );
-            foreach ($data['permissions'] ?? [] as $permissionId) {
-                DB::table('user_webinar_permissions')->insert([
-                    'user_id' => $data['user_id'], 'webinar_id' => $data['webinar_id'], 'permission_id' => $permissionId,
-                    'assigned_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now(),
-                ]);
+        $user = User::findOrFail($data['user_id']);
+        abort_unless($user->hasRole('sub-admin'), 422, 'Permissions can only be assigned to a sub admin.');
+        $webinarIds = $user->assignedWebinars()->pluck('webinars.id');
+        if ($webinarIds->isEmpty()) {
+            throw ValidationException::withMessages(['user_id' => 'Assign at least one webinar to this sub admin before saving permissions.']);
+        }
+
+        DB::transaction(function () use ($data, $request, $webinarIds) {
+            DB::table('user_webinar_permissions')->where('user_id', $data['user_id'])->delete();
+            $now = now();
+            $rows = [];
+            foreach ($webinarIds as $webinarId) {
+                foreach ($data['permissions'] ?? [] as $permissionId) {
+                    $rows[] = ['user_id' => $data['user_id'], 'webinar_id' => $webinarId, 'permission_id' => $permissionId, 'assigned_by' => $request->user()->id, 'created_at' => $now, 'updated_at' => $now];
+                }
+            }
+            if ($rows !== []) {
+                DB::table('user_webinar_permissions')->insert($rows);
             }
         });
 
-        return redirect()->route('admin.permissions.index')->with('status', 'Event permissions updated.');
+        return redirect()->route('admin.permissions.index')->with('status', 'Role permissions updated for all assigned webinars.');
     }
 
-    public function destroy(User $user, Webinar $webinar): RedirectResponse
+    public function destroy(User $user): RedirectResponse
     {
-        DB::table('user_webinar_permissions')->where('user_id', $user->id)->where('webinar_id', $webinar->id)->delete();
-        DB::table('user_webinar_assignments')->where('user_id', $user->id)->where('webinar_id', $webinar->id)->delete();
+        abort_unless($user->hasRole('sub-admin'), 404);
+        DB::table('user_webinar_permissions')->where('user_id', $user->id)->delete();
 
-        return back()->with('status', 'Event permission assignment deleted.');
+        return back()->with('status', 'Role permissions removed. Webinar assignments were kept.');
     }
 }

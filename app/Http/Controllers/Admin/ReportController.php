@@ -15,7 +15,8 @@ class ReportController extends Controller
     public function index(Request $request): View
     {
         $webinars = Webinar::when($request->user()->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $request->user()->assignedWebinars()->pluck('webinars.id')))->orderBy('title')->get();
-        $selected = $request->filled('webinar_id') ? Webinar::findOrFail($request->integer('webinar_id')) : null;
+        $selected = $request->filled('webinar_id') ? $webinars->firstWhere('id', $request->integer('webinar_id')) : null;
+        abort_if($request->filled('webinar_id') && ! $selected, 403, 'This event is not assigned to you.');
         $webinarIds = $selected ? collect([$selected->id]) : $webinars->pluck('id');
         $registrations = Registration::with(['user', 'webinar'])->whereIn('webinar_id', $webinarIds)->get();
         $attendees = DB::table('webinar_attendees')->whereIn('webinar_id', $webinarIds)->get();

@@ -3,7 +3,7 @@
 @section('content')
 <div class="page-heading">
     <div><span class="eyebrow">REGISTRATION</span><h1>Dynamic fields</h1><p>Select a webinar, then manage all of its registration fields in one simple list.</p></div>
-    @if($selectedWebinar)
+    @if($selectedWebinar && (auth()->user()->hasRole('super-admin') || auth()->user()->hasPermission('dynamic-fields.create')))
         <a class="btn btn-gradient" href="{{ route('admin.registration.webinar.fields.create',$selectedWebinar) }}"><i class="bi bi-plus"></i> Add field</a>
     @endif
 </div>
@@ -26,7 +26,7 @@
 
 @if($selectedWebinar)
     @php($form=$selectedWebinar->registrationForm)
-    <section class="panel-card mb-4"><div class="panel-title"><div><h3>Smart field generator</h3><p>Start with a proven field set, then reorder or edit it below. Existing fields stay untouched.</p></div><a class="btn btn-light" target="_blank" href="{{ route('admin.registration.preview',$selectedWebinar) }}"><i class="bi bi-eye"></i> Live preview</a></div><form class="d-flex gap-2 flex-wrap" method="POST" action="{{ route('admin.registration.webinar.preset',$selectedWebinar) }}">@csrf<select class="form-select" name="preset" style="max-width:280px" required><option value="">Select a template</option><option value="business">Business webinar</option><option value="education">Education webinar</option><option value="healthcare">Healthcare webinar</option><option value="marketing">Marketing webinar</option></select><button class="btn btn-gradient"><i class="bi bi-stars"></i> Generate fields</button></form></section>
+    <section class="panel-card mb-4"><div class="panel-title"><div><h3>Smart field generator</h3><p>Start with a proven field set, then reorder or edit it below. Existing fields stay untouched.</p></div><a class="btn btn-light" target="_blank" href="{{ route('admin.registration.preview',$selectedWebinar) }}"><i class="bi bi-eye"></i> Live preview</a></div>@if(auth()->user()->hasRole('super-admin') || auth()->user()->hasPermission('dynamic-fields.create'))<form class="d-flex gap-2 flex-wrap" method="POST" action="{{ route('admin.registration.webinar.preset',$selectedWebinar) }}">@csrf<select class="form-select" name="preset" style="max-width:280px" required><option value="">Select a template</option><option value="business">Business webinar</option><option value="education">Education webinar</option><option value="healthcare">Healthcare webinar</option><option value="marketing">Marketing webinar</option></select><button class="btn btn-gradient"><i class="bi bi-stars"></i> Generate fields</button></form>@endif</section>
     <section class="panel-card table-responsive">
         <form method="POST" action="{{ route('admin.registration.webinar.fields.bulk',$selectedWebinar) }}">@csrf @method('PUT')
             <table class="premium-table dynamic-field-table">
@@ -42,14 +42,14 @@
                         <td><label class="form-switch"><input class="form-check-input" type="checkbox" name="fields[{{ $field->id }}][is_required]" value="1" @checked($field->is_required)><span class="visually-hidden">Required</span></label></td>
                         <td><label class="form-switch"><input class="form-check-input" type="checkbox" name="fields[{{ $field->id }}][is_enabled]" value="1" @checked($field->is_enabled)><span class="visually-hidden">Enabled</span></label></td>
                         <td><input class="form-check-input" type="radio" name="login_field_id" value="{{ $field->id }}" @checked($field->login_enabled) title="Use as login field"></td>
-                        <td><div class="d-flex gap-1"><a class="btn btn-sm btn-light" href="{{ route('admin.registration.webinar.fields.edit',$field) }}"><i class="bi bi-pencil"></i></a><button class="icon-btn text-danger" type="submit" form="delete-field-{{ $field->id }}"><i class="bi bi-trash"></i></button></div></td>
+                        <td><div class="d-flex gap-1">@if(auth()->user()->hasRole('super-admin') || auth()->user()->hasPermission('dynamic-fields.edit'))<a class="btn btn-sm btn-light" href="{{ route('admin.registration.webinar.fields.edit',$field) }}"><i class="bi bi-pencil"></i></a>@endif @if(auth()->user()->hasRole('super-admin') || auth()->user()->hasPermission('dynamic-fields.delete'))<button class="icon-btn text-danger" type="submit" form="delete-field-{{ $field->id }}"><i class="bi bi-trash"></i></button>@endif</div></td>
                     </tr>
                 @empty
                     <tr><td colspan="9" class="text-center text-muted py-5">No registration fields have been added to this webinar.</td></tr>
                 @endforelse
                 </tbody>
             </table>
-            <div class="d-flex align-items-center justify-content-between mt-4"><label><input type="radio" name="login_field_id" value="" @checked(!($form?->fields?->contains('login_enabled',true)))> No custom login field</label><button class="btn btn-gradient">Save field list</button></div>
+            <div class="d-flex align-items-center justify-content-between mt-4"><label><input type="radio" name="login_field_id" value="" @checked(!($form?->fields?->contains('login_enabled',true)))> No custom login field</label>@if(auth()->user()->hasRole('super-admin') || auth()->user()->hasPermission('dynamic-fields.edit'))<button class="btn btn-gradient">Save field list</button>@endif</div>
         </form>
     </section>
     @foreach($form?->fields ?? [] as $field)

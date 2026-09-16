@@ -93,6 +93,10 @@ class DatabaseSeeder extends Seeder
             ['group'=>'registration','key'=>'registration_city_enabled','value'=>'1','is_public'=>false],['group'=>'registration','key'=>'registration_default_country_id','value'=>(string)$india?->id,'is_public'=>false],
             ['group'=>'registration','key'=>'registration_default_state_id','value'=>(string)$gujarat?->id,'is_public'=>false],['group'=>'site','key'=>'site_name','value'=>'Nexa Health Events','is_public'=>true],
             ['group'=>'site','key'=>'footer_text','value'=>'© 2026 Nexa Health Events. All rights reserved.','is_public'=>true],
-        ] as $setting) DB::table('settings')->insert($setting+['created_at'=>now(),'updated_at'=>now()]);
+        ] as $setting) {
+            DB::table('settings')->updateOrInsert(['key' => $setting['key']], $setting + ['updated_at' => now(), 'created_at' => now()]);
+        }
+
+        $this->call(DemoLayoutWebinarsSeeder::class);
     }
 }

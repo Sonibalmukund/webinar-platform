@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('shell')
-<header class="public-header sticky-top"><nav class="navbar navbar-expand-lg"><div class="container py-2"><x-site-brand /><button class="navbar-toggler border-0" data-bs-toggle="collapse" data-bs-target="#publicNav"><span class="navbar-toggler-icon"></span></button><div class="collapse navbar-collapse" id="publicNav"><ul class="navbar-nav mx-auto gap-lg-3"><li><a class="nav-link" href="/">Home</a></li><li><a class="nav-link" href="/webinars">Webinars</a></li><li><a class="nav-link" href="/#speakers">Speakers</a></li><li><a class="nav-link" href="/#categories">Categories</a></li><li><a class="nav-link" href="/#about">About</a></li></ul><div class="d-flex gap-2">@guest<button type="button" class="btn btn-ghost" data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">Log in</button><button type="button" class="btn btn-gradient" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Get started</button>@else<a class="btn btn-gradient" href="{{ route('dashboard') }}">Dashboard</a>@endguest</div></div></div></nav></header>
+<header class="public-header sticky-top"><nav class="navbar navbar-expand-lg"><div class="container py-2"><x-site-brand /><button class="navbar-toggler border-0" data-bs-toggle="collapse" data-bs-target="#publicNav"><span class="navbar-toggler-icon"></span></button><div class="collapse navbar-collapse" id="publicNav"><ul class="navbar-nav mx-auto gap-lg-3"><li><a class="nav-link" href="/">Home</a></li></ul><div class="d-flex gap-2">@guest<button type="button" class="btn btn-ghost" data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">Log in</button><button type="button" class="btn btn-gradient" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Get started</button>@else<a class="btn btn-gradient" href="{{ route('dashboard') }}">Dashboard</a>@endguest</div></div></div></nav></header>
 @php($authNotice=session('auth_status') ?: session('registration_status'))
 @if(session('auth_redirect'))
 <div class="modal fade show" id="authRedirectModal" tabindex="-1" style="display: block; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(8px); z-index: 5000;" aria-modal="true" role="dialog">
@@ -37,6 +37,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1400);
 });
 </script>
+@elseif(session('room_opens_at'))
+<div class="modal fade show" tabindex="-1" style="display:block;background:rgba(15,23,42,.72);z-index:5000" aria-modal="true" role="dialog" data-room-opening-modal>
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow-lg" style="border-radius:20px">
+        <div class="modal-body p-4 p-md-5 text-center">
+            <div class="mx-auto mb-3 d-grid place-items-center" style="width:62px;height:62px;border-radius:50%;background:#ede9fe;color:#6d28d9;font-size:1.65rem"><i class="bi bi-clock-history"></i></div>
+            <h3 class="fw-bold">Registration confirmed</h3>
+            <p class="text-muted mb-2">{{ $authNotice }}</p>
+            <p class="fw-semibold mb-4"><i class="bi bi-calendar-event me-1"></i> {{ session('room_opens_at') }} · {{ session('room_timezone') }}</p>
+            <button type="button" class="btn btn-gradient px-4" onclick="this.closest('[data-room-opening-modal]').remove()">Okay</button>
+        </div>
+    </div></div>
+</div>
 @elseif($authNotice)
 <div class="auth-redirect-notice" role="status" aria-live="polite"><span class="auth-redirect-icon"><i class="bi bi-check2"></i></span><div class="auth-redirect-content"><strong>{{ $authNotice }}</strong></div></div>
 <style>.auth-redirect-notice{position:fixed;z-index:4000;top:90px;right:24px;max-width:min(420px,calc(100vw - 32px));display:flex;align-items:center;gap:14px;padding:16px 20px 20px;border:1px solid #10b98133;border-radius:14px;background:#fff;color:#172033;box-shadow:0 20px 50px rgba(15,23,42,.15);overflow:hidden}.auth-redirect-icon{width:38px;height:38px;display:grid;place-items:center;flex:none;border-radius:10px;background:#ecfdf5;color:#059669;font-size:1.25rem}.auth-redirect-content strong{font-size:.95rem;font-weight:600;color:#0f172a}@media(max-width:600px){.auth-redirect-notice{top:74px;right:16px;left:16px}}</style>

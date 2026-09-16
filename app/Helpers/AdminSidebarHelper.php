@@ -23,11 +23,13 @@ final class AdminSidebarHelper
             ...($chatVisible ? [self::item('Live Chat', 'chat-dots', '/admin/chats', 'chat.view', false, 'Engagement')] : []),
             ...($commentsVisible ? [self::item('Comments', 'chat-square-text', '/admin/comments', 'q-and-a.view', false, 'Engagement')] : []),
             self::item('Polls', 'bar-chart', '/admin/polls', 'polls.view', false, 'Engagement'),
+            self::item('Poll Logs', 'clipboard-data', '/admin/poll-logs', 'poll-logs.view', false, 'Engagement'),
             self::item('Feedback', 'star', '/admin/feedback', 'feedback.view', false, 'Engagement'),
             self::item('Certificates', 'award', '/admin/certificates', 'certificates.view', false, 'Operations'),
-            self::item('Certificate Logs', 'journal-text', '/admin/certificates/logs', 'certificates.view', false, 'Operations'),
+            self::item('Certificate Logs', 'journal-text', '/admin/certificates/logs', 'certificate-logs.view', false, 'Operations'),
             self::item('Notifications', 'bell', '/admin/notifications', 'notifications.view', false, 'Operations'),
             self::item('Reports', 'graph-up', '/admin/reports', 'reports.view', false, 'Operations'),
+            self::item('Profile', 'person-circle', '/admin/profile', '', false, ''),
             self::item('Sub Admins', 'shield-check', '/admin/sub-admins', 'subadmins.view', true, 'Administration'),
             self::item('Roles / Permissions', 'key', '/admin/permissions', 'permissions.view', true, 'Administration'),
             self::group('General Settings', 'gear', 'generalSettingsSubmenu', [
@@ -37,7 +39,7 @@ final class AdminSidebarHelper
             ], 'settings.view', true, 'Administration'),
         ];
 
-        return array_values(array_filter($items, fn (array $item) => $user?->hasRole('super-admin') || (! $item['super_admin_only'] && ($user?->hasPermission($item['permission']) || ($item['permission'] === 'users.view' && $user?->hasPermission('registrations.view'))))));
+        return array_values(array_filter($items, fn (array $item) => $user?->hasRole('super-admin') || (! $item['super_admin_only'] && ($item['permission'] === '' || $user?->hasPermission($item['permission']) || ($item['permission'] === 'users.view' && $user?->hasPermission('registrations.view'))))));
     }
 
     private static function item(string $title, string $icon, string $route, string $permission, bool $superAdminOnly = false, string $section = 'Management'): array
@@ -52,6 +54,9 @@ final class AdminSidebarHelper
         }
         if ($route === '/admin/dynamic-fields') {
             $active = $active || Str::startsWith($path, '/admin/registration-settings/') || Str::startsWith($path, '/admin/webinar-registration-fields/');
+        }
+        if ($route === '/admin/profile' && $path === '/admin/change-password') {
+            $active = true;
         }
 
         return compact('title', 'icon', 'route', 'permission') + [

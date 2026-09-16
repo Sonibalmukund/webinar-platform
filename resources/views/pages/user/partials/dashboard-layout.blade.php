@@ -31,12 +31,9 @@ html, body.event-dashboard-body{overflow-x:hidden!important;max-width:100vw}
 .event-dashboard .poll-choice .d-flex{align-items:flex-start;gap:12px}
 .event-dashboard .poll-choice span{min-width:0;flex-wrap:wrap;gap:8px}
 .event-dashboard .poll-radio{flex:0 0 18px;margin-top:2px}
-.event-dashboard .poll-choice [data-answer-state]{font-size:.65rem;margin-left:0;color:#c4b5fd}
 .event-dashboard .poll-choice b[data-poll-result]{flex-shrink:0;font-size:.8rem}
 .event-dashboard .poll-choice.locked{opacity:1}
 .event-dashboard .poll-choice.selected{border-color:#a78bfa;background:#292044;box-shadow:inset 3px 0 #a78bfa}
-.event-dashboard .poll-choice.quiz-correct [data-answer-state]{color:#166534}
-.event-dashboard .poll-choice.quiz-incorrect [data-answer-state]{color:#991b1b}
 .event-dashboard .poll-track{height:7px;margin-top:12px}
 .event-dashboard .side-summary{padding:22px 20px;overflow:visible}
 .event-dashboard .side-summary h3{font-size:.9rem;color:#f1f5f9}

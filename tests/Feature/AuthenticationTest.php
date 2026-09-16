@@ -66,7 +66,7 @@ class AuthenticationTest extends TestCase
         $admin->roles()->sync([$adminRole->id]);
         $user = User::updateOrCreate(['email' => 'seat@example.com'], ['name' => 'Seat Learner', 'password' => 'Webinar@123']);
         $user->roles()->sync([$learnerRole->id]);
-        $webinar = Webinar::updateOrCreate(['slug' => 'test-webinar'], ['created_by' => $admin->id, 'title' => 'Test Webinar']);
+        $webinar = Webinar::updateOrCreate(['slug' => 'test-webinar'], ['created_by' => $admin->id, 'title' => 'Test Webinar', 'auto_approve' => false]);
         $webinar->registrationForm()->updateOrCreate([], ['title' => 'Registration Form', 'is_active' => true, 'require_login' => true]);
 
         $this->actingAs($user)->post("/webinars/{$webinar->slug}/register")->assertRedirect();
@@ -119,7 +119,7 @@ class AuthenticationTest extends TestCase
         $admin = User::updateOrCreate(['email' => 'webinar.admin@example.com'], ['name' => 'Webinar Admin', 'password' => 'Webinar@123']);
         $admin->roles()->sync([$role->id]);
         $response = $this->actingAs($admin)->post('/admin/webinars', [
-            'title' => 'Dynamic Registration Webinar', 'status' => 'scheduled', 'language' => 'en', 'timezone' => 'Asia/Kolkata', 'registration_type' => 'free', 'registration_enabled' => '1',
+            'title' => 'Dynamic Registration Webinar', 'status' => 'scheduled', 'language' => 'en', 'timezone' => 'Asia/Kolkata', 'starts_at' => now()->addDay()->format('Y-m-d\\TH:i'), 'ends_at' => now()->addDay()->addHour()->format('Y-m-d\\TH:i'), 'registration_type' => 'free', 'registration_enabled' => '1',
             'fields' => [['label' => 'Industry', 'field_type' => 'dropdown', 'options' => "Technology\nHealthcare", 'is_enabled' => '1', 'is_required' => '1']],
             'polls_enabled' => '1', 'polls' => [['question' => 'Which topic?', 'options' => "AI\nCloud", 'status' => 'draft']],
             'certificate_enabled' => '1', 'certificate_name' => 'Completion Template', 'certificate_headline' => 'Certificate of Completion', 'certificate_signatory' => 'Program Director',

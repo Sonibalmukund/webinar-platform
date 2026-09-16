@@ -55,8 +55,10 @@
             </label>
             @if($speaker->photo_path)
                 <div class="mt-2 d-flex align-items-center gap-3">
-                    <img src="{{ $speaker->photo_path }}" alt="{{ $speaker->name }}" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-color, #e2e8f0);">
-                    <span class="text-muted small">Current photo</span>
+                    <button type="button" class="btn p-0 border-0 bg-transparent" data-media-popup data-media-src="{{ $speaker->photo_path }}" data-media-type="image" data-media-title="{{ $speaker->name }}" data-media-badge="Speaker Photo" title="Click to view photo in pop-up">
+                        <img src="{{ $speaker->photo_path }}" alt="{{ $speaker->name }}" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-color, #e2e8f0);">
+                    </button>
+                    <span class="text-muted small">Current photo (click to enlarge)</span>
                 </div>
             @endif
         </div>

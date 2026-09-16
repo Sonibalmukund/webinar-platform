@@ -1,5 +1,5 @@
 const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || '';
-const post = (url, keepalive = false) => fetch(url, {method:'POST', keepalive, credentials:'same-origin', headers:{'X-CSRF-TOKEN':csrf(),'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}}).then(async response=>{if(response.ok){const data=await response.json();window.syncRoomParticipants?.(data);}return response;}).catch(()=>null);
+const post = (url, keepalive = false) => fetch(url, {method:'POST', keepalive, credentials:'same-origin', headers:{'X-CSRF-TOKEN':csrf(),'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}}).then(async response=>{if(response.ok){const data=await response.json();window.syncRoomParticipants?.(data);window.syncCertificateEligibility?.(data.certificate);}return response;}).catch(()=>null);
 document.addEventListener('DOMContentLoaded', () => {
     const notify = message => {
         if (window.showToast) {
@@ -12,6 +12,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.bootstrap) bootstrap.Toast.getOrCreateInstance(toast, {delay:4200}).show();
     };
     const getMyUserId = () => String(document.querySelector('[data-attendance-tracker]')?.dataset.authUserId || document.body.dataset.authUserId || '');
+    window.syncCertificateEligibility = state => {
+        const shell = document.querySelector('[data-certificate-download]');
+        const target = shell?.querySelector('[data-certificate-action-state]');
+        if (!shell || !target || !state) return;
+        shell.hidden = !state.enabled;
+        shell.style.display = state.enabled ? '' : 'none';
+        shell.dataset.attendancePercent = state.attendance_percent;
+        target.innerHTML = state.eligible
+            ? `<a href="${shell.dataset.certificateUrl}" class="btn btn-gradient w-100 d-inline-flex align-items-center justify-content-center gap-2 py-2 fw-bold text-white"><i class="bi bi-award-fill"></i>Download certificate</a>`
+            : `<div class="quick-disabled"><i class="bi bi-lock-fill"></i>Certificate unlocks at ${state.minimum}% watch time${state.poll_required ? ' + one poll response' : ''} (currently ${state.attendance_percent}%)</div>`;
+    };
     const handUpdate = event => {
         const list = document.querySelector('.participant-list');
         const myId = getMyUserId();
@@ -63,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!list) return;
         const myId = getMyUserId();
         const ids = new Set(data.participants.map(person => String(person.id)));
-        if (myId) ids.add(myId);
+        if (myId && data.tracking_started !== false) ids.add(myId);
         list.querySelectorAll('[data-participant-id]').forEach(row => {
             if (!ids.has(row.dataset.participantId) && row.dataset.participantId !== myId) row.remove();
         });
@@ -80,18 +91,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         const currentRows = list.querySelectorAll('[data-participant-id]').length;
-        const onlineCount = Math.max(1, currentRows, data.participants.length);
+        const onlineCount = data.tracking_started === false ? 0 : Math.max(1, currentRows, data.participants.length);
         document.querySelectorAll('[data-room-online]').forEach(node => node.textContent = onlineCount);
     };
-    const flash = document.querySelector('[data-app-flash]');
-    if (flash) {
-        if (window.showToast) {
-            window.showToast(flash.dataset.appFlash || flash.textContent.trim(), flash.dataset.appFlashTone || 'success');
-        } else {
-            const toast = document.querySelector('#appToast');
-            if (toast && window.bootstrap) bootstrap.Toast.getOrCreateInstance(toast, {delay:4200}).show();
-        }
-    }
     const publicWebinar=document.querySelector('[data-public-webinar]');
     if(publicWebinar && window.Echo) window.Echo.channel(`webinar.public.${publicWebinar.dataset.publicWebinar}`).listen('.room.updated',event=>{if(event.change==='status')window.location.reload();});
     const attendee = document.querySelector('[data-attendance-tracker]');
@@ -121,9 +123,10 @@ document.addEventListener('DOMContentLoaded', () => {
         let present = false;
         const join = () => { if (!present) { present = true; post(attendee.dataset.attendanceJoin); } };
         const leave = () => { if (present) { present = false; post(attendee.dataset.attendanceLeave, true); } };
+        const presence = () => { if (present && attendee.dataset.attendancePresence) post(attendee.dataset.attendancePresence); };
         join();
-        const timer = setInterval(() => { if (!document.hidden && present) post(attendee.dataset.attendanceHeartbeat); }, 30000);
-        document.addEventListener('visibilitychange', () => document.hidden ? leave() : join());
+        const timer = setInterval(() => { if (present) post(document.hidden ? attendee.dataset.attendancePresence : attendee.dataset.attendanceHeartbeat); }, 30000);
+        document.addEventListener('visibilitychange', presence);
         window.addEventListener('pagehide', leave);
         window.addEventListener('beforeunload', () => clearInterval(timer));
         if (window.Echo) window.Echo.private(`webinar.room.${attendee.dataset.webinarId}`)
@@ -150,6 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             notify('Polls have been closed by the host.');
                         }
                     }
+                    if (typeof event.state.show_poll_correct_answer !== 'undefined') {
+                        await window.refreshActivePoll?.();
+                        notify(event.state.show_poll_correct_answer ? 'Correct poll answer highlighting is now enabled.' : 'Correct poll answer highlighting is now hidden.');
+                    }
                     if (typeof event.state.comments_enabled !== 'undefined') {
                         window.setDashboardModuleState?.('comments', Boolean(event.state.comments_enabled));
                     }
@@ -163,6 +170,17 @@ document.addEventListener('DOMContentLoaded', () => {
                             certLink.style.display = event.state.certificate_enabled ? '' : 'none';
                         }
                         notify(event.state.certificate_enabled ? 'Certificate download is now available.' : 'Certificate download has been closed.');
+                    }
+                    if (typeof event.state.certificate_min_attendance !== 'undefined') {
+                        const shell = document.querySelector('[data-certificate-download]');
+                        const attendance = Number(shell?.dataset.attendancePercent || 0);
+                        window.syncCertificateEligibility?.({
+                            enabled: Boolean(event.state.certificate_enabled),
+                            eligible: attendance >= Number(event.state.certificate_min_attendance) && (shell?.dataset.certificatePollRequired !== '1' || shell?.dataset.certificatePollAnswered === '1'),
+                            minimum: Number(event.state.certificate_min_attendance),
+                            attendance_percent: attendance,
+                            poll_required: shell?.dataset.certificatePollRequired === '1',
+                        });
                     }
                     if (typeof event.state.pinned_announcement !== 'undefined') {
                         const banner = document.querySelector('#pinnedAnnouncementBanner');
@@ -335,6 +353,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-live-viewers]').forEach(panel => {
         const render = event => panel.querySelectorAll('[data-live-viewer-count]').forEach(node => { const value=node.querySelector('[data-stat]')||node; value.textContent=event.live_viewers; const dot=node.querySelector('.live-blink-dot'); dot?.classList.toggle('active',Number(event.live_viewers)>0); dot?.classList.toggle('inactive',Number(event.live_viewers)===0); });
         (panel.dataset.webinarIds||panel.dataset.webinarId||'').split(',').filter(Boolean).forEach(id => window.Echo?.private(`webinar.manage.${id}`).listen('.attendance.updated',event => { render(event); handUpdate(event); }));
+        const refreshUrl = panel.dataset.liveViewersUrl;
+        if (refreshUrl) {
+            const refreshLiveViewers = async () => {
+                try {
+                    const response = await fetch(refreshUrl, {headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}, cache:'no-store'});
+                    if (response.ok) render(await response.json());
+                } catch { /* The next polling cycle retries quietly. */ }
+            };
+            refreshLiveViewers();
+            const viewerTimer = setInterval(refreshLiveViewers, 10000);
+            window.addEventListener('pagehide', () => clearInterval(viewerTimer), {once:true});
+        }
     });
     const userId=document.body.dataset.authUserId;
     if(userId && window.Echo) window.Echo.private(`App.Models.User.${userId}`).listen('.notification.created', event => {

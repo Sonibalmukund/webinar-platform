@@ -36,19 +36,17 @@ class WebinarRegistrationController extends Controller
 
         $rules = [];
         foreach ($fields as $field) {
-            $conditionMet = true;
-            if ($field->condition_field_id) {
-                $actual = data_get($request->input('fields', []), (string) $field->condition_field_id);
-                $conditionMet = $field->condition_operator === 'not_equals' ? (string) $actual !== (string) $field->condition_value : (string) $actual === (string) $field->condition_value;
-            }
             $typeRule = match ($field->field_type) {
                 'checkbox' => 'array','country' => 'exists:countries,id','state' => 'exists:states,id','city' => 'exists:cities,id',default => 'string'
             };
-            $rules['fields.'.$field->id] = [$field->is_required && $conditionMet ? 'required' : 'nullable', $typeRule];
+            $rules['fields.'.$field->id] = [$field->is_required ? 'required' : 'nullable', $typeRule];
         }
         $request->validate($rules);
-        $approvedCount = $webinar->registrations()->where('status', 'approved')->count();
-        $status = $webinar->max_attendees && $approvedCount >= $webinar->max_attendees ? 'waitlisted' : ($webinar->auto_approve ? 'approved' : 'pending');
+        $existingRegistration = Registration::where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->first();
+        $admittedCount = $webinar->registrations()->admitted()->count();
+        $status = $existingRegistration && ! in_array($existingRegistration->status, ['waitlisted', 'cancelled', 'rejected'], true)
+            ? 'approved'
+            : ($webinar->max_attendees && $admittedCount >= $webinar->max_attendees ? 'waitlisted' : 'approved');
         $registration = Registration::updateOrCreate(
             ['webinar_id' => $webinar->id, 'email' => $request->user()->email],
             ['user_id' => $request->user()->id, 'status' => $status, 'source' => 'web', 'registered_at' => now(), 'approved_at' => $status === 'approved' ? now() : null]
@@ -75,6 +73,19 @@ class WebinarRegistrationController extends Controller
         }
         AuditTrail::record('registration.created', $registration, 'Webinar registration submitted.', ['status' => $status, 'webinar_id' => $webinar->id]);
 
-        return redirect()->route('webinars.dashboard', $webinar)->with('registration_status', $status === 'waitlisted' ? 'The webinar is full. You have been added to the waitlist.' : ($status === 'pending' ? 'Your registration is awaiting approval.' : 'Your seat has been reserved successfully.'));
+        if ($status === 'waitlisted') {
+            return redirect()->route('webinars.show', $webinar)->with('registration_status', 'The webinar is full. You have been added to the waitlist.');
+        }
+
+        if (! $webinar->canEnter()) {
+            $opensAt = $webinar->opensAt()?->timezone($webinar->timezone)->format('M d, Y · g:i A');
+
+            return redirect()->route('webinars.show', $webinar)
+                ->with('registration_status', 'Your registration is confirmed. The room opens at '.($opensAt ?: 'the scheduled access time').' ('.$webinar->timezone.').')
+                ->with('room_opens_at', $opensAt)
+                ->with('room_timezone', $webinar->timezone);
+        }
+
+        return redirect()->route('webinars.dashboard', $webinar)->with('registration_status', 'Your registration is confirmed. You can enter the webinar now.');
     }
 }

@@ -8,6 +8,7 @@ use App\Models\CertificateTemplate;
 use App\Models\Webinar;
 use App\Support\AuditTrail;
 use App\Support\WebinarExperience;
+use App\Support\WebinarCertificateTemplate;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,6 +61,16 @@ class CertificateController extends Controller
         ]);
     }
 
+    public function preview(Webinar $webinar): View
+    {
+        $templateId = data_get($webinar->settings, 'certificate_template_id');
+
+        return view('pages.admin.certificates.preview', [
+            'webinar' => $webinar,
+            'template' => $templateId ? CertificateTemplate::find($templateId) : null,
+        ]);
+    }
+
     public function update(Request $request, Webinar $webinar): RedirectResponse
     {
         $data = $request->validate([
@@ -75,41 +86,54 @@ class CertificateController extends Controller
             'positions.*.y' => ['required', 'numeric', 'between:0,100'],
             'positions.*.width' => ['required', 'numeric', 'between:5,90'],
             'positions.*.scale' => ['required', 'numeric', 'between:50,200'],
+            'visible_elements' => ['nullable', 'array'],
+            'visible_elements.*' => ['nullable', 'boolean'],
         ]);
         $templateId = data_get($webinar->settings, 'certificate_template_id');
         $template = $templateId ? CertificateTemplate::find($templateId) : null;
+        $template = WebinarCertificateTemplate::editableCopy($template, $webinar, $request->user()->id);
         $existingDesign = $template?->design ?? [];
-        $uploadDirectory = public_path('uploads/certificates');
-        File::ensureDirectoryExists($uploadDirectory);
         $imagePath = $existingDesign['template_image'] ?? null;
         $fontPath = $existingDesign['font_file'] ?? null;
         $signaturePath = $existingDesign['signature_image'] ?? null;
         if ($request->hasFile('template_image')) {
             $file = $request->file('template_image');
-            $name = Str::uuid().'.'.$file->getClientOriginalExtension();
-            $file->move($uploadDirectory, $name);
-            $imagePath = '/uploads/certificates/'.$name;
+            $existingDesign = array_replace($existingDesign, WebinarCertificateTemplate::imageDimensions($file));
+            $extension = $file->getClientOriginalExtension();
+            $name = Str::uuid().($extension ? '.'.$extension : '');
+            $path = $file->storeAs('certificates', $name, 'public');
+            $imagePath = '/storage/'.$path;
         }
         if ($request->hasFile('font_file')) {
             $file = $request->file('font_file');
-            $name = Str::uuid().'.'.$file->getClientOriginalExtension();
-            $file->move($uploadDirectory, $name);
-            $fontPath = '/uploads/certificates/'.$name;
+            $extension = $file->getClientOriginalExtension();
+            $name = Str::uuid().($extension ? '.'.$extension : '');
+            $path = $file->storeAs('certificates', $name, 'public');
+            $fontPath = '/storage/'.$path;
         }
         if ($request->hasFile('signature_image')) {
             $file = $request->file('signature_image');
-            $name = Str::uuid().'.'.$file->getClientOriginalExtension();
-            $file->move($uploadDirectory, $name);
-            $signaturePath = '/uploads/certificates/'.$name;
+            $extension = $file->getClientOriginalExtension();
+            $name = Str::uuid().($extension ? '.'.$extension : '');
+            $path = $file->storeAs('certificates', $name, 'public');
+            $signaturePath = '/storage/'.$path;
         }
         $values = [
             'name' => $data['name'], 'orientation' => $data['orientation'],
             'design' => [
-                'headline' => $data['headline'], 'signatory' => $data['signatory'],
+                'headline' => $data['headline'], 'signatory' => $data['signatory'] ?? null,
                 'template_image' => $imagePath,
                 'font_file' => $fontPath, 'font_family' => $fontPath ? 'CustomCertificateFont' : 'Manrope',
                 'signature_image' => $signaturePath,
                 'positions' => $data['positions'],
+                'visible_elements' => $request->has('visible_elements')
+                    ? collect(WebinarCertificateTemplate::ELEMENT_VISIBILITY_DEFAULTS)
+                        ->mapWithKeys(fn ($default, $key) => [$key => $request->boolean('visible_elements.'.$key)])
+                        ->all()
+                    : WebinarCertificateTemplate::visibleElements($existingDesign),
+                'image_width' => $existingDesign['image_width'] ?? null,
+                'image_height' => $existingDesign['image_height'] ?? null,
+                'canvas_aspect_ratio' => $existingDesign['canvas_aspect_ratio'] ?? null,
             ],
             'created_by' => $template?->created_by ?? $request->user()->id,
         ];
@@ -117,6 +141,10 @@ class CertificateController extends Controller
         $settings = $webinar->settings ?? [];
         $settings['certificate_template_id'] = $template->id;
         $webinar->update(['settings' => $settings, 'certificate_enabled' => 'yes']);
+        DB::table('certificates')->where('webinar_id', $webinar->id)->update([
+            'template_id' => $template->id,
+            'updated_at' => now(),
+        ]);
 
         return redirect()->route('admin.certificates.index')->with('status', 'Certificate template saved and enabled.');
     }
@@ -155,7 +183,7 @@ class CertificateController extends Controller
             $templateId = data_get($webinar->settings, 'certificate_template_id');
             if (! $templateId) {
                 continue;
-            }foreach ($webinar->registrations()->where('status', 'approved')->whereNotNull('user_id')->get() as $registration) {
+            }foreach ($webinar->registrations()->admitted()->whereNotNull('user_id')->get() as $registration) {
                 $metrics = WebinarExperience::metrics($webinar, $registration->user_id);
                 if ($metrics['eligible']) {
                     DB::table('certificates')->insertOrIgnore(['webinar_id' => $webinar->id, 'user_id' => $registration->user_id, 'template_id' => $templateId, 'credential_id' => (string) Str::uuid(), 'status' => 'pending', 'created_at' => now(), 'updated_at' => now()]);
@@ -207,7 +235,6 @@ class CertificateController extends Controller
                 $q->where('users.name', 'like', "%{$search}%")
                     ->orWhere('users.email', 'like', "%{$search}%")
                     ->orWhere('webinars.title', 'like', "%{$search}%")
-                    ->orWhere('certificate_downloads.credential_id', 'like', "%{$search}%")
                     ->orWhere('certificate_downloads.ip_address', 'like', "%{$search}%");
             });
         }

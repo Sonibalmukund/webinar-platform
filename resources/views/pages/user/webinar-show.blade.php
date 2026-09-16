@@ -186,8 +186,8 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
     .microsite-nav-inner{min-height:62px;padding:8px 14px}
     .microsite-logo img{max-height:38px;max-width:130px}
     .microsite-nav-actions{gap:8px}
-    .btn-login-unique{padding:6px 14px;font-size:.8rem}
-    .btn-register-nav{padding:6px 14px;font-size:.8rem}
+    .microsite-nav-actions>.btn-login-unique,.microsite-nav-actions>.btn-register-nav,.microsite-nav-actions>form{display:none!important}
+    .mobile-menu .btn-login-unique,.mobile-menu .btn-register-nav{display:inline-flex!important;padding:8px 14px;font-size:.8rem;flex:1}
     .speaker-grid{grid-template-columns:1fr}
     .content-section{padding:52px 0}
     .footer-grid{grid-template-columns:1fr}
@@ -206,64 +206,60 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
         <a class="microsite-logo" href="{{ route('webinars.show',$webinar) }}">
             @if(!empty($theme['logo_url']))
                 <img src="{{ $theme['logo_url'] }}" alt="{{ $webinar->title }}">
-            @elseif(!empty($siteSettings['site_logo']))
-                <img src="{{ $siteSettings['site_logo'] }}" alt="{{ $siteSettings['site_name'] ?? $webinar->title }}">
             @else
                 <span>{{ $webinar->title }}</span>
             @endif
         </a>
         <nav class="microsite-links d-none d-lg-flex">
             @if(filled($webinar->description) || filled($webinar->short_description))
-                <a href="#about-event">About Event</a>
+                <a href="#about-event">{{ __('webinar.about_event') }}</a>
             @endif
             @if($webinar->speakers->isNotEmpty())
-                <a href="#speakers">Speakers</a>
+                <a href="#speakers">{{ __('webinar.speakers') }}</a>
             @endif
             @if($brands->isNotEmpty())
-                <a href="#brands">Brands</a>
+                <a href="#brands">{{ __('webinar.brands') }}</a>
             @endif
         </nav>
         <div class="microsite-nav-actions">
-            @if(!auth()->check() || !auth()->user()->hasRole('learner'))
-                <button type="button" class="btn-login-unique" data-landing-login data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">Login</button>
-                <button type="button" class="btn btn-register-nav" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Register</button>
+            @if($isStaffPreview)
+                <a class="btn btn-register-nav" href="{{ route('admin.webinars.edit',$webinar) }}"><i class="bi bi-pencil-square me-1"></i> {{ __('webinar.admin_edit') }}</a>
+            @elseif(!auth()->check())
+                <button type="button" class="btn-login-unique" data-landing-login data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">{{ __('webinar.login') }}</button>
+                <button type="button" class="btn btn-register-nav" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
+            @elseif($isRegistered && $canEnter)
+                <a class="btn btn-register-nav" href="{{ route('webinars.dashboard',$webinar) }}">{{ __('webinar.enter') }}</a>
             @elseif($isRegistered)
-                <a class="btn btn-register-nav" href="{{ route('webinars.dashboard',$webinar) }}">Open Dashboard</a>
-                <form method="POST" action="{{ route('logout') }}" class="d-inline">
-                    @csrf
-                    <input type="hidden" name="return_to" value="{{ route('webinars.show', $webinar) }}">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill px-3 ms-1" title="Logout">Logout</button>
-                </form>
+                <button class="btn btn-register-nav" type="button" disabled>{{ __('webinar.registered_closed') }}</button>
             @else
-                <button type="button" class="btn btn-register-nav" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Register</button>
-                <form method="POST" action="{{ route('logout') }}" class="d-inline">
-                    @csrf
-                    <input type="hidden" name="return_to" value="{{ route('webinars.show', $webinar) }}">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill px-3 ms-1" title="Logout">Logout</button>
-                </form>
+                <button type="button" class="btn btn-register-nav" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
             @endif
-            <button class="microsite-menu-toggle d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#micrositeMobileNav" aria-label="Open navigation"><i class="bi bi-list fs-4"></i></button>
+            <button class="microsite-menu-toggle d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#micrositeMobileNav" aria-label="{{ __('webinar.open_navigation') }}"><i class="bi bi-list fs-4"></i></button>
         </div>
     </div>
     <div class="collapse mobile-menu" id="micrositeMobileNav">
         <nav class="microsite-mobile-container">
             @if(filled($webinar->description) || filled($webinar->short_description))
-                <a href="#about-event" data-bs-toggle="collapse" data-bs-target="#micrositeMobileNav">About Event</a>
+                <a href="#about-event" data-bs-toggle="collapse" data-bs-target="#micrositeMobileNav">{{ __('webinar.about_event') }}</a>
             @endif
             @if($webinar->speakers->isNotEmpty())
-                <a href="#speakers" data-bs-toggle="collapse" data-bs-target="#micrositeMobileNav">Speakers</a>
+                <a href="#speakers" data-bs-toggle="collapse" data-bs-target="#micrositeMobileNav">{{ __('webinar.speakers') }}</a>
             @endif
             @if($brands->isNotEmpty())
-                <a href="#brands" data-bs-toggle="collapse" data-bs-target="#micrositeMobileNav">Brands</a>
+                <a href="#brands" data-bs-toggle="collapse" data-bs-target="#micrositeMobileNav">{{ __('webinar.brands') }}</a>
             @endif
             <div class="d-flex gap-2 pt-2 border-top mt-1">
-                @if(!auth()->check() || !auth()->user()->hasRole('learner'))
-                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" data-landing-login data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">Login</button>
-                    <button type="button" class="btn btn-sm btn-register-nav rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Register</button>
+                @if($isStaffPreview)
+                    <a class="btn btn-sm btn-register-nav rounded-pill px-3" href="{{ route('admin.webinars.edit',$webinar) }}">{{ __('webinar.admin_edit') }}</a>
+                @elseif(!auth()->check())
+                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" data-landing-login data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">{{ __('webinar.login') }}</button>
+                    <button type="button" class="btn btn-sm btn-register-nav rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
+                @elseif($isRegistered && $canEnter)
+                    <a class="btn btn-sm btn-register-nav rounded-pill px-3" href="{{ route('webinars.dashboard',$webinar) }}">{{ __('webinar.enter') }}</a>
                 @elseif($isRegistered)
-                    <a class="btn btn-sm btn-register-nav rounded-pill px-3" href="{{ route('webinars.dashboard',$webinar) }}">Open Dashboard</a>
+                    <button class="btn btn-sm btn-register-nav rounded-pill px-3" type="button" disabled>{{ __('webinar.opens', ['time' => $opensAt?->timezone($webinar->timezone)->locale(app()->getLocale())->translatedFormat('d M, g:i A')]) }}</button>
                 @else
-                    <button type="button" class="btn btn-sm btn-register-nav rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Register</button>
+                    <button type="button" class="btn btn-sm btn-register-nav rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
                 @endif
             </div>
         </nav>
@@ -272,12 +268,12 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
 
 <div class="landing-announcement-bar" id="landingAnnouncementBar" @if(empty($pinnedAnnouncement['enabled']) || empty($pinnedAnnouncement['message'])) style="display:none;" @endif>
     <div class="landing-announcement-inner">
-        <span class="announcement-pill"><i class="bi bi-pin-angle-fill"></i> IMPORTANT NOTE</span>
+        <span class="announcement-pill"><i class="bi bi-pin-angle-fill"></i> {{ __('webinar.important') }}</span>
         <div class="announcement-marquee-track">
             <span class="announcement-marquee-text" data-landing-announcement-message>{{ $pinnedAnnouncement['message'] ?? '' }}</span>
         </div>
         <a href="{{ $pinnedAnnouncement['button_url'] ?? '#' }}" target="_blank" rel="noopener" class="announcement-cta" data-landing-announcement-btn @if(empty($pinnedAnnouncement['button_url'])) style="display:none;" @endif>
-            <span data-landing-announcement-btn-text>{{ ($pinnedAnnouncement['button_text'] ?? null) ?: 'Learn more' }}</span>
+            <span data-landing-announcement-btn-text>{{ ($pinnedAnnouncement['button_text'] ?? null) ?: __('webinar.learn_more') }}</span>
             <i class="bi bi-arrow-up-right"></i>
         </a>
     </div>
@@ -320,7 +316,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                         <div class="banner-placeholder d-flex flex-column align-items-center justify-content-center text-center p-5 h-100" style="background: linear-gradient(135deg, color-mix(in srgb, var(--webinar-primary) 70%, #0f172a), color-mix(in srgb, var(--webinar-secondary) 70%, #0f172a));">
                             <i class="bi bi-camera-video text-white opacity-50 mb-3" style="font-size: 3.5rem;"></i>
                             <h2 class="text-white fw-bold mb-2">{{ $webinar->title }}</h2>
-                            <span class="text-white-50">{{ $webinar->starts_at?->timezone($webinar->timezone)->format('F d, Y · g:i A') ?: 'Upcoming Webinar' }}</span>
+                            <span class="text-white-50">{{ $webinar->starts_at?->timezone($webinar->timezone)->locale(app()->getLocale())->translatedFormat('d F Y · g:i A') ?: __('webinar.upcoming') }}</span>
                         </div>
                     @endif
                 </div>
@@ -330,34 +326,34 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                         <div class="rail-icon"><i class="bi bi-calendar-event"></i></div>
                         <div class="rail-info">
                             <strong>
-                                {{ $webinar->starts_at?->timezone($webinar->timezone)->format('d F, Y') ?: 'Date to be announced' }}
+                                {{ $webinar->starts_at?->timezone($webinar->timezone)->locale(app()->getLocale())->translatedFormat('d F Y') ?: __('webinar.date_tba') }}
                                 @if($webinar->ends_at && $webinar->ends_at->format('Y-m-d') !== $webinar->starts_at?->format('Y-m-d'))
-                                    - {{ $webinar->ends_at->timezone($webinar->timezone)->format('d F, Y') }}
+                                    - {{ $webinar->ends_at->timezone($webinar->timezone)->locale(app()->getLocale())->translatedFormat('d F Y') }}
                                 @endif
                             </strong>
-                            <small>SUMMIT DATE</small>
+                            <small>{{ __('webinar.summit_date') }}</small>
                         </div>
                     </div>
                     <div class="banner-event-detail">
                         <div class="rail-icon"><i class="bi bi-clock"></i></div>
                         <div class="rail-info">
                             <strong>
-                                {{ $webinar->starts_at?->timezone($webinar->timezone)->format('g:i A') ?: 'Time to be announced' }}
+                                {{ $webinar->starts_at?->timezone($webinar->timezone)->format('g:i A') ?: __('webinar.time_tba') }}
                                 @if($webinar->starts_at)
-                                    Onwards
+                                    {{ __('webinar.onwards') }}
                                 @endif
                             </strong>
-                            <small>REPORTING</small>
+                            <small>{{ __('webinar.reporting') }}</small>
                         </div>
                     </div>
                     <div class="banner-event-detail">
                         <div class="rail-icon"><i class="bi bi-hourglass-split"></i></div>
                         <div class="rail-info">
                             <div class="d-flex align-items-center gap-2 flex-wrap">
-                                <strong>{{ $webinar->status === 'live' ? 'Live Stream' : ($webinar->status === 'ended' ? 'Concluded' : 'Registration Open') }}</strong>
-                                <span class="badge-status-pill" data-banner-countdown>{{ $webinar->status === 'live' ? 'LIVE NOW' : ($webinar->status === 'ended' ? 'CONCLUDED' : 'STARTING SOON') }}</span>
+                                <strong>{{ $webinar->status === 'live' ? __('webinar.live_stream') : ($webinar->status === 'ended' ? __('webinar.concluded') : __('webinar.registration_open')) }}</strong>
+                                <span class="badge-status-pill" data-banner-countdown>{{ $webinar->status === 'live' ? __('webinar.live_now') : ($webinar->status === 'ended' ? __('webinar.concluded') : __('webinar.starting_soon')) }}</span>
                             </div>
-                            <small>EVENT STATUS</small>
+                            <small>{{ __('webinar.event_status') }}</small>
                         </div>
                     </div>
                 </div>
@@ -368,10 +364,10 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                 $googleCal = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text='.rawurlencode($webinar->title).'&dates='.($webinar->starts_at?->copy()->utc()->format('Ymd\THis\Z')??'').'/'.($webinar->ends_at?->copy()->utc()->format('Ymd\THis\Z')??'').'&details='.rawurlencode($webinar->short_description?:$webinar->description).'&location='.rawurlencode($webinar->venue?:'Online');
                 @endphp
                 <div class="event-action-bar">
-                    <a href="{{ $googleCal }}" target="_blank" rel="noopener"><i class="bi bi-calendar-plus"></i> Add to Calendar</a>
+                    <a href="{{ $googleCal }}" target="_blank" rel="noopener"><i class="bi bi-calendar-plus"></i> {{ __('webinar.add_calendar') }}</a>
                     <a href="https://wa.me/?text={{ $shareText }}%20{{ $shareUrl }}" target="_blank" rel="noopener"><i class="bi bi-whatsapp"></i> WhatsApp</a>
                     <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ $shareUrl }}" target="_blank" rel="noopener"><i class="bi bi-linkedin"></i> LinkedIn</a>
-                    <button type="button" data-copy-event-link><i class="bi bi-link-45deg"></i><span>Copy Link</span></button>
+                    <button type="button" data-copy-event-link><i class="bi bi-link-45deg"></i><span>{{ __('webinar.copy_link') }}</span></button>
                 </div>
             </div>
         </div>
@@ -387,7 +383,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
     <section class="content-section microsite-section" id="about-event">
         <div class="container landing-container">
             <div class="about-event-card">
-                <h2 class="about-card-heading">About Us</h2>
+                <h2 class="about-card-heading">{{ __('webinar.about_us') }}</h2>
                 <div class="about-copy">{!! nl2br(e($webinar->description ?: $webinar->short_description)) !!}</div>
             </div>
         </div>
@@ -398,15 +394,17 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
     <section class="content-section microsite-section" id="speakers">
         <div class="container landing-container">
             <div class="section-head">
-                <span class="eyebrow">MEET THE EXPERTS</span>
-                <h2>Our speakers</h2>
+                <span class="eyebrow">{{ __('webinar.meet_experts') }}</span>
+                <h2>{{ __('webinar.our_speakers') }}</h2>
             </div>
             <div class="speaker-grid">
                 @foreach($webinar->speakers as $speaker)
                 <article class="speaker-profile">
                     <div class="speaker-image">
                         @if($speaker->photo_path)
-                            <img src="{{ $speaker->photo_path }}" alt="{{ $speaker->name }}" loading="lazy" onerror="this.remove()">
+                            <button type="button" class="btn p-0 border-0 bg-transparent w-100 h-100 rounded-circle overflow-hidden d-flex align-items-center justify-content-center" data-media-popup data-media-src="{{ $speaker->photo_path }}" data-media-type="image" data-media-title="{{ $speaker->name }}" data-media-badge="Speaker" title="Click to view {{ $speaker->name }}">
+                                <img src="{{ $speaker->photo_path }}" alt="{{ $speaker->name }}" loading="lazy" onerror="this.remove()">
+                            </button>
                         @else
                             {{ Str::of($speaker->name)->substr(0,2)->upper() }}
                         @endif
@@ -429,14 +427,16 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
         <div class="container landing-container">
             <div class="brands-section-card">
                 <div class="section-head mb-4">
-                    <span class="eyebrow"><i class="bi bi-award-fill me-1"></i> OUR PARTNERS</span>
-                    <h2 class="mt-1">Presented by</h2>
+                    <span class="eyebrow"><i class="bi bi-award-fill me-1"></i> {{ __('webinar.our_partners') }}</span>
+                    <h2 class="mt-1">{{ __('webinar.presented_by') }}</h2>
                 </div>
                 <div class="brand-grid">
                     @foreach($brands as $brand)
                     <div class="brand-card">
                         @if($brand->logo_path)
-                            <img src="{{ $brand->logo_path }}" alt="{{ $brand->name }}" loading="lazy">
+                            <button type="button" class="btn p-0 border-0 bg-transparent d-inline-flex align-items-center justify-content-center" data-media-popup data-media-src="{{ $brand->logo_path }}" data-media-type="image" data-media-title="{{ $brand->name }}" data-media-badge="Partner Brand" title="Click to view {{ $brand->name }}">
+                                <img src="{{ $brand->logo_path }}" alt="{{ $brand->name }}" loading="lazy">
+                            </button>
                         @else
                             <strong>{{ $brand->name }}</strong>
                         @endif
@@ -455,8 +455,6 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
             <div class="footer-brand">
                 @if(!empty($theme['logo_url']))
                     <img src="{{ $theme['logo_url'] }}" alt="{{ $webinar->title }}">
-                @elseif(!empty($siteSettings['site_logo']))
-                    <img src="{{ $siteSettings['site_logo'] }}" alt="{{ $siteSettings['site_name'] ?? $webinar->title }}">
                 @endif
                 <h3>{{ $webinar->title }}</h3>
                 @if($webinar->short_description)
@@ -464,25 +462,25 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                 @endif
             </div>
             <nav class="footer-column">
-                <strong>Quick Links</strong>
+                <strong>{{ __('webinar.quick_links') }}</strong>
                 @if(filled($webinar->description) || filled($webinar->short_description))
-                    <a href="#about-event">About Event</a>
+                    <a href="#about-event">{{ __('webinar.about_event') }}</a>
                 @endif
                 @if($webinar->speakers->isNotEmpty())
-                    <a href="#speakers">Speakers</a>
+                    <a href="#speakers">{{ __('webinar.speakers') }}</a>
                 @endif
                 @if($brands->isNotEmpty())
-                    <a href="#brands">Brands</a>
+                    <a href="#brands">{{ __('webinar.brands') }}</a>
                 @endif
             </nav>
             <nav class="footer-column">
-                <strong>Support</strong>
+                <strong>{{ __('webinar.support') }}</strong>
                 @if(filled(data_get($webinar->settings,'contact_mobile')))
                     <a href="tel:{{ preg_replace('/[^0-9+]/','',data_get($webinar->settings,'contact_mobile')) }}"><i class="bi bi-telephone"></i> {{ data_get($webinar->settings,'contact_mobile') }}</a>
                 @endif
-                <a href="mailto:{{ $siteSettings['admin_email']??'support@example.com' }}">Contact Us</a>
-                <a href="#">Privacy Policy</a>
-                <a href="#">Terms & Conditions</a>
+                <a href="mailto:{{ $siteSettings['admin_email']??'support@example.com' }}">{{ __('webinar.contact_us') }}</a>
+                <a href="#">{{ __('webinar.privacy') }}</a>
+                <a href="#">{{ __('webinar.terms') }}</a>
             </nav>
         </div>
         <div class="footer-bottom">
@@ -492,7 +490,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
     </div>
 </footer>
 
-<button type="button" id="scrollToTopBtn" class="scroll-to-top-btn" aria-label="Scroll to top" title="Scroll to top">
+<button type="button" id="scrollToTopBtn" class="scroll-to-top-btn" aria-label="{{ __('webinar.scroll_top') }}" title="{{ __('webinar.scroll_top') }}">
     <i class="bi bi-arrow-up"></i>
 </button>
 
@@ -526,7 +524,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     copyBtn?.addEventListener('click',async event=>{
         await navigator.clipboard.writeText(window.location.href);
         const span=event.currentTarget.querySelector('span');
-        if(span){span.textContent='Copied';setTimeout(()=>span.textContent='Copy Link',1600);}
+        if(span){span.textContent=@json(__('webinar.copied'));setTimeout(()=>span.textContent=@json(__('webinar.copy_link')),1600);}
     });
     const countdown=document.querySelector('[data-banner-countdown]');
     @if($webinar->starts_at && !in_array($webinar->status,['live','completed','cancelled']))
@@ -628,5 +626,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 @endsection
 
 @section('auth-modals')
-@include('components.frontend-auth', ['authWebinar'=>$webinar])
+@unless($isStaffPreview)
+    @include('components.frontend-auth', ['authWebinar'=>$webinar])
+@endunless
 @endsection

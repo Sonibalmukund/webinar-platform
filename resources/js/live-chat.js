@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (message.reply_to_user_name) {
                 const quote = document.createElement('div');
                 quote.className = 'chat-reply-quote';
-                quote.innerHTML = `<i class="bi bi-reply-fill"></i><span>Replying to <strong>${escapeHtml(message.reply_to_user_name)}</strong>: ${escapeHtml((message.reply_to_message || '').slice(0, 45))}</span>`;
+                quote.innerHTML = `<strong>${escapeHtml(message.reply_to_user_name)}</strong><span>${escapeHtml((message.reply_to_message || '').slice(0, 65))}</span>`;
                 copy.append(quote);
             }
 
@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     document.querySelector('#chatPersonSearch')?.dispatchEvent(new Event('input'));
                 } else renderLearner((await response.json()).messages || []);
-                stream.scrollTop = scrollTop;
+                stream.scrollTop = nearBottom ? stream.scrollHeight : scrollTop;
             } while (queued);
         } catch (exception) { setError(exception.message); }
         finally { refreshing = false; }
