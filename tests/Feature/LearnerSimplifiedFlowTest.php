@@ -53,7 +53,7 @@ class LearnerSimplifiedFlowTest extends TestCase
         $this->assertDatabaseHas('users', ['email' => 'passwordless@example.test']);
     }
 
-    public function test_early_room_access_does_not_create_attendance_until_start_time(): void
+    public function test_attendance_starts_when_early_room_access_opens(): void
     {
         Carbon::setTestNow('2026-09-13 10:00:00');
         $admin = $this->user('super-admin');
@@ -67,11 +67,7 @@ class LearnerSimplifiedFlowTest extends TestCase
         Registration::create(['webinar_id' => $webinar->id, 'user_id' => $learner->id, 'email' => $learner->email, 'status' => 'approved']);
 
         $this->actingAs($learner)->get(route('webinars.dashboard', $webinar))->assertOk();
-        $this->postJson(route('webinars.attendance.join', $webinar))
-            ->assertOk()->assertJsonPath('tracking_started', false)->assertJsonPath('state', 'waiting');
-        $this->assertDatabaseMissing('webinar_attendees', ['webinar_id' => $webinar->id, 'user_id' => $learner->id]);
-
-        Carbon::setTestNow('2026-09-13 10:20:00');
+        $this->assertNotNull(DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $learner->id])->value('joined_at'));
         $this->postJson(route('webinars.attendance.join', $webinar))
             ->assertOk()->assertJsonPath('tracking_started', true)->assertJsonPath('state', 'join');
         $this->assertDatabaseHas('webinar_attendees', ['webinar_id' => $webinar->id, 'user_id' => $learner->id]);

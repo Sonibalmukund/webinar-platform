@@ -180,7 +180,7 @@ class PollController extends Controller
         $data = $request->validate([
             'webinar_id' => ['required', 'exists:webinars,id'],
             'type' => ['required', 'in:poll,quiz'],
-            'answer_reveal' => ['required_if:type,quiz', 'nullable', 'in:immediate,host_control,never'],
+            'answer_reveal' => ['required_if:type,quiz', 'nullable', 'in:immediate,after_webinar,never'],
             'question' => ['required', 'string', 'max:1000'],
             'answers' => ['required', 'array', 'min:2'],
             'answers.*' => ['nullable', 'string', 'max:255'],
@@ -211,7 +211,7 @@ class PollController extends Controller
             'created_by' => $poll->exists ? $poll->created_by : $request->user()->id,
             'question' => $data['question'],
             'allow_multiple' => $request->boolean('allow_multiple'),
-            'answer_reveal' => $data['type'] === 'quiz' ? ($data['answer_reveal'] ?? 'host_control') : 'never',
+            'answer_reveal' => $data['type'] === 'quiz' ? ($data['answer_reveal'] ?? 'after_webinar') : 'never',
             'status' => $data['status'] ?? ($poll->exists ? $poll->status : 'draft'),
             'started_at' => $data['started_at'] ?? null,
             'ended_at' => $data['ended_at'] ?? null,

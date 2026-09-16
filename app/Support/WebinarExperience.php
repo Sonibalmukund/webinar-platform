@@ -12,7 +12,7 @@ class WebinarExperience
         $attendance = DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $userId])->first();
         $duration = max(1, $webinar->starts_at && $webinar->ends_at ? $webinar->starts_at->diffInSeconds($webinar->ends_at) : 3600);
         $watch = (int) ($attendance->watch_seconds ?? 0);
-        $attendancePercent = min(100, (int) round(($watch / $duration) * 100));
+        $attendancePercent = min(100, round(($watch / $duration) * 100, 2));
         $pollAnswers = DB::table('poll_responses')->join('polls', 'polls.id', '=', 'poll_responses.poll_id')->where('polls.webinar_id', $webinar->id)->where('poll_responses.user_id', $userId)->count();
         $engagement = min(100, (int) round(($attendancePercent * .75) + ($pollAnswers > 0 ? 20 : 0) + ($attendance ? 5 : 0)));
         $settings = data_get($webinar->settings, 'experience', []);

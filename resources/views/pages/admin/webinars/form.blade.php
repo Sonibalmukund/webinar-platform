@@ -191,6 +191,116 @@
     gap: 5px !important;
 }
 
+/* Schedule date/time controls */
+.schedule-picker-shell {
+    position: relative;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) 44px;
+    align-items: center;
+    width: 100%;
+    min-height: 58px;
+    overflow: hidden;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+    transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.schedule-picker-shell:focus-within {
+    border-color: #ee1f2d;
+    box-shadow: 0 0 0 4px rgba(238, 31, 45, .12), 0 12px 28px rgba(185, 21, 34, .1);
+    transform: translateY(-1px);
+}
+.schedule-picker-icon {
+    align-self: stretch;
+    display: grid;
+    place-items: center;
+    color: #ee1f2d;
+    background: linear-gradient(145deg, #fff5f5, #ffe4e6);
+    border-right: 1px solid #fecdd3;
+    font-size: 1.15rem;
+}
+.schedule-picker-shell input[type="datetime-local"],
+.schedule-picker-shell .flatpickr-input {
+    width: 100%;
+    min-width: 0;
+    height: 56px;
+    padding: 8px 12px;
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: #0f172a;
+    font-weight: 700;
+    color-scheme: light;
+    accent-color: #ee1f2d;
+}
+.schedule-picker-shell > input[type="hidden"] { display: none; }
+.flatpickr-calendar {
+    overflow: hidden;
+    border: 1px solid #fecdd3 !important;
+    border-radius: 16px !important;
+    box-shadow: 0 24px 55px rgba(15, 23, 42, .2) !important;
+    font-family: inherit;
+}
+.flatpickr-months { padding: 7px 4px; background: linear-gradient(135deg, #ff3341, #ee1f2d); }
+.flatpickr-months .flatpickr-month,
+.flatpickr-current-month,
+.flatpickr-months .flatpickr-prev-month,
+.flatpickr-months .flatpickr-next-month { color: #fff !important; fill: #fff !important; }
+.flatpickr-weekdays { background: #fff1f2; }
+span.flatpickr-weekday { color: #9f1239 !important; background: #fff1f2 !important; }
+.flatpickr-day.selected,
+.flatpickr-day.startRange,
+.flatpickr-day.endRange,
+.flatpickr-day.selected:hover,
+.flatpickr-day.selected:focus {
+    border-color: #ee1f2d !important;
+    background: #ee1f2d !important;
+}
+.flatpickr-day.today { border-color: #fb7185 !important; color: #be123c; }
+.flatpickr-day:hover { border-color: #ffe4e6 !important; background: #ffe4e6 !important; }
+.flatpickr-time input:hover,
+.flatpickr-time input:focus,
+.flatpickr-time .flatpickr-am-pm:hover,
+.flatpickr-time .flatpickr-am-pm:focus { background: #fff1f2 !important; }
+.schedule-picker-shell input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    opacity: 0;
+    width: 0;
+    padding: 0;
+}
+.schedule-picker-open {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 10px;
+    color: #ffffff;
+    background: linear-gradient(135deg, #ff3341, #ee1f2d);
+    box-shadow: 0 5px 12px rgba(238, 31, 45, .25);
+}
+.schedule-picker-open:hover { transform: translateY(-1px); filter: brightness(1.05); }
+.schedule-field-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+}
+.schedule-timezone-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    color: #be123c;
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    font-size: .7rem;
+    font-weight: 800;
+}
+
 /* Section Dividers inside Cards */
 .form-subhead {
     display: flex;
@@ -501,6 +611,22 @@
                     <small class="text-muted">Title type karte hi slug automatically generate hoga. Aap ise manually bhi edit kar sakte hain.</small>
                 </div>
 
+                <div class="form-field full">
+                    <label class="form-label-custom" for="brandLogoFile">
+                        <span>Client / Webinar Logo</span>
+                        @if(empty($experience['logo_url']))<span class="req">*</span>@endif
+                    </label>
+                    <input class="form-control @error('brand_logo_file') is-invalid @enderror" type="file" id="brandLogoFile" name="brand_logo_file" accept="image/png,image/jpeg,image/webp,image/svg+xml" @required(empty($experience['logo_url']))>
+                    @error('brand_logo_file')<div class="wizard-field-error"><i class="bi bi-exclamation-circle-fill"></i> {{ $message }}</div>@enderror
+                    <small class="text-muted">This client-specific logo is shown on the webinar landing page and attendee room. PNG, JPG, SVG or WebP, up to 5 MB.</small>
+                    @if(!empty($experience['logo_url']))
+                        <div class="mt-3 p-3 bg-light border rounded-3 d-inline-flex align-items-center gap-3">
+                            <span class="text-muted small">Current client logo:</span>
+                            <img src="{{ $experience['logo_url'] }}" alt="Current client logo" style="max-height:36px;max-width:160px;object-fit:contain;background:#fff;padding:4px 10px;border:1px solid #e2e8f0;border-radius:8px;">
+                        </div>
+                    @endif
+                </div>
+
                 <div class="form-field">
                     <label class="form-label-custom" for="webinarStatus">
                         <span>Event Status</span>
@@ -522,7 +648,7 @@
                             <option value="{{ $code }}" @selected(old('language', $webinar->language ?: 'en') === $code)>{{ $label }}</option>
                         @endforeach
                     </select>
-                    <small class="text-muted">The selected webinar language is shown to attendees.</small>
+                    <small class="text-muted">Stored as webinar metadata. This selection does not automatically translate page content.</small>
                 </div>
 
                 <div class="form-field">
@@ -544,18 +670,28 @@
                 </div>
 
                 <div class="form-field">
-                    <label class="form-label-custom" for="webinarStartsAt">
-                        <span>Starts At</span>
-                    </label>
-                    <input class="form-control" type="datetime-local" id="webinarStartsAt" name="starts_at" value="{{ old('starts_at', $webinar->starts_at?->copy()->timezone($webinar->timezone ?: 'Asia/Kolkata')->format('Y-m-d\TH:i')) }}">
-                    <small class="text-muted">Entered in selected webinar timezone.</small>
+                    <div class="schedule-field-meta">
+                        <label class="form-label-custom mb-0" for="webinarStartsAt"><span>Starts At</span></label>
+                        <span class="schedule-timezone-chip" data-schedule-timezone><i class="bi bi-globe2"></i> {{ old('timezone', $webinar->timezone ?: 'Asia/Kolkata') }}</span>
+                    </div>
+                    <div class="schedule-picker-shell">
+                        <span class="schedule-picker-icon"><i class="bi bi-calendar-event"></i></span>
+                        <input class="form-control" type="datetime-local" id="webinarStartsAt" name="starts_at" data-webinar-datetime-picker value="{{ old('starts_at', $webinar->starts_at?->copy()->timezone($webinar->timezone ?: 'Asia/Kolkata')->format('Y-m-d\TH:i')) }}">
+                        <button class="schedule-picker-open" type="button" data-open-picker="webinarStartsAt" aria-label="Open start date and time picker"><i class="bi bi-calendar3"></i></button>
+                    </div>
+                    <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Date and time selected webinar timezone mein save honge.</small>
                 </div>
 
                 <div class="form-field">
-                    <label class="form-label-custom" for="webinarEndsAt">
-                        <span>Ends At</span>
-                    </label>
-                    <input class="form-control" type="datetime-local" id="webinarEndsAt" name="ends_at" value="{{ old('ends_at', $webinar->ends_at?->copy()->timezone($webinar->timezone ?: 'Asia/Kolkata')->format('Y-m-d\TH:i')) }}">
+                    <div class="schedule-field-meta">
+                        <label class="form-label-custom mb-0" for="webinarEndsAt"><span>Ends At</span></label>
+                        <span class="schedule-timezone-chip" data-schedule-timezone><i class="bi bi-globe2"></i> {{ old('timezone', $webinar->timezone ?: 'Asia/Kolkata') }}</span>
+                    </div>
+                    <div class="schedule-picker-shell">
+                        <span class="schedule-picker-icon"><i class="bi bi-calendar-check"></i></span>
+                        <input class="form-control" type="datetime-local" id="webinarEndsAt" name="ends_at" data-webinar-datetime-picker value="{{ old('ends_at', $webinar->ends_at?->copy()->timezone($webinar->timezone ?: 'Asia/Kolkata')->format('Y-m-d\TH:i')) }}">
+                        <button class="schedule-picker-open" type="button" data-open-picker="webinarEndsAt" aria-label="Open end date and time picker"><i class="bi bi-calendar3"></i></button>
+                    </div>
                 </div>
 
                 <div class="form-field full">
@@ -649,7 +785,7 @@
                         <span>Early Room Access (minutes)</span>
                     </label>
                     <input class="form-control" type="number" min="0" max="240" id="earlyEntryMinutes" name="early_entry_minutes" value="{{ old('early_entry_minutes', $webinar->early_entry_minutes ?? 30) }}">
-                    <small class="text-muted">How early registered attendees can enter the room before starts_at.</small>
+                    <small class="text-muted">How early registered attendees can enter the room before starts_at. Attendance tracking begins at the same time.</small>
                 </div>
                 <div></div>
 
@@ -713,9 +849,11 @@
                 <div class="form-field" id="liveSourceField">
                     <label class="form-label-custom" for="liveSource">
                         <span>Video URL, ID, or Iframe Code</span>
+                        <span class="req" id="liveSourceRequiredMark" hidden>*</span>
                     </label>
-                    <textarea class="form-control" name="live_source" id="liveSource" rows="3" placeholder="Paste YouTube/Vimeo URL, video ID, or iframe code">{{ old('live_source', $webinar->live_url) }}</textarea>
-                    <small class="text-muted">The secure responsive embed player is configured automatically.</small>
+                    <textarea class="form-control @error('live_source') is-invalid @enderror" name="live_source" id="liveSource" rows="3" placeholder="Paste YouTube/Vimeo URL, video ID, or iframe code">{{ old('live_source', $webinar->live_url) }}</textarea>
+                    @error('live_source')<div class="wizard-field-error"><i class="bi bi-exclamation-circle-fill"></i> {{ $message }}</div>@enderror
+                    <small class="text-muted" id="liveSourceHelp">Player select karne par valid video source required hai. Secure responsive embed automatically configure hoga.</small>
                 </div>
                     </div>
                 </div>
@@ -756,6 +894,15 @@
 
                 <label class="setting-toggle">
                     <span>
+                        <strong>Live Q&amp;A</strong>
+                        <small>Allow attendees to ask questions and vote on questions during the session.</small>
+                    </span>
+                    <input type="hidden" name="qa_enabled" value="0">
+                    <input type="checkbox" name="qa_enabled" value="1" @checked(old('qa_enabled', $webinar->qa_enabled ?? true))>
+                </label>
+
+                <label class="setting-toggle">
+                    <span>
                         <strong>Private Comments</strong>
                         <small>Allow attendees to send private messages directly to the host.</small>
                     </span>
@@ -773,7 +920,7 @@
                 <label class="setting-toggle">
                     <span>
                         <strong>Live Polls & Quizzes</strong>
-                        <small>Enable interactive audience polls & quizzes. Adds Step 5 for configuring questions.</small>
+                        <small>Enable interactive audience polls & quizzes. Adds Step 6 for configuring questions.</small>
                     </span>
                     <input type="hidden" name="polls_enabled" value="0">
                     <input type="checkbox" name="polls_enabled" id="togglePollsEnabled" value="1" @checked(old('polls_enabled', (bool) ($webinar->polls_enabled ?? false)))>
@@ -787,6 +934,19 @@
                     <input type="hidden" name="certificate_enabled" value="0">
                     <input type="checkbox" name="certificate_enabled" id="toggleCertificateEnabled" value="1" @checked(old('certificate_enabled', ($webinar->certificate_enabled ?? 'no') === 'yes'))>
                 </label>
+
+                <div class="form-subhead">
+                    <i class="bi bi-image"></i>
+                    <strong>No Player / Waiting Room Image</strong>
+                </div>
+
+                <div class="form-field full">
+                    <label class="form-label-custom" for="waitingMediaFile"><span>Waiting Room Background Image</span></label>
+                    <input class="form-control" type="file" id="waitingMediaFile" name="waiting_media_file" accept="image/png,image/jpeg,image/webp">
+                    <small class="text-muted">No Player mode mein ye image webinar room mein dikhegi. Image na dene par webinar banner, phir default image use hogi. PNG, JPG or WebP, up to 8 MB.</small>
+                    @if(!empty($experience['waiting_media_url']))<img class="mt-2 rounded border" src="{{ $experience['waiting_media_url'] }}" alt="Current waiting room background" style="max-height:120px;max-width:240px;object-fit:cover">@endif
+                </div>
+
             </div>
         </section>
     </div>
@@ -823,25 +983,6 @@
                 </div>
 
                 <div class="form-subhead">
-                    <i class="bi bi-image"></i>
-                    <strong>Webinar Logo (Navbar & Footer Display)</strong>
-                </div>
-
-                <div class="full">
-                    <div class="form-field">
-                        <label class="form-label-custom"><span>Choose Custom Logo Image</span></label>
-                        <input class="form-control" type="file" name="brand_logo_file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
-                        <small class="text-muted">PNG, JPG, SVG or WebP, up to 5 MB.</small>
-                    </div>
-                    @if(!empty($experience['logo_url']))
-                        <div class="mt-3 p-3 bg-light border rounded-3 d-inline-flex align-items-center gap-3">
-                            <span class="text-muted small">Current active logo:</span>
-                            <img src="{{ $experience['logo_url'] }}" alt="Active logo preview" style="max-height:36px;max-width:160px;object-fit:contain;background:#fff;padding:4px 10px;border:1px solid #e2e8f0;border-radius:8px;">
-                        </div>
-                    @endif
-                </div>
-
-                <div class="form-subhead">
                     <i class="bi bi-chat-left-quote"></i>
                     <strong>Custom Attendee Messages</strong>
                 </div>
@@ -851,13 +992,6 @@
                         <span>Waiting Room Greeting Message</span>
                     </label>
                     <textarea class="form-control" id="waitingMessage" name="waiting_message" rows="2">{{ old('waiting_message', $experience['waiting_message'] ?? 'The session will begin shortly. You are in the right place.') }}</textarea>
-                </div>
-
-                <div class="form-field full">
-                    <label class="form-label-custom" for="waitingMediaFile"><span>Choose Waiting Room Background Image</span></label>
-                    <input class="form-control" type="file" id="waitingMediaFile" name="waiting_media_file" accept="image/png,image/jpeg,image/webp">
-                    <small class="text-muted">Optional PNG, JPG or WebP image, up to 8 MB.</small>
-                    @if(!empty($experience['waiting_media_url']))<img class="mt-2 rounded border" src="{{ $experience['waiting_media_url'] }}" alt="Current waiting room background" style="max-height:120px;max-width:240px;object-fit:cover">@endif
                 </div>
 
                 <div class="form-field full">
@@ -1082,6 +1216,15 @@
                         @endforeach
                     </div>
                     <div class="form-field mt-3" style="max-width:420px"><label class="form-label-custom" for="pollCorrectIndex"><span>Correct Answer</span></label><select class="form-select" name="poll_correct_index" id="pollCorrectIndex"><option value="">No correct answer (standard poll)</option>@foreach($wizardAnswers as $idx=>$ans)<option value="{{ $idx }}" @selected((string)$wizardCorrect===(string)$idx)>Option {{ chr(65+$idx) }}{{ filled($ans) ? ' — '.$ans : '' }}</option>@endforeach</select><small class="text-muted">Quiz answers and live results are broadcast to the room through Reverb.</small></div>
+                    <div class="form-field mt-3" style="max-width:420px" id="wizardAnswerRevealField">
+                        <label class="form-label-custom" for="pollAnswerReveal"><span>Correct Answer Visibility</span></label>
+                        <select class="form-select" name="poll_answer_reveal" id="pollAnswerReveal">
+                            <option value="immediate" @selected(old('poll_answer_reveal') === 'immediate')>Show immediately after attendee answers</option>
+                            <option value="after_webinar" @selected(old('poll_answer_reveal', 'after_webinar') === 'after_webinar')>Show after the webinar finishes</option>
+                            <option value="never" @selected(old('poll_answer_reveal') === 'never')>Don't show the correct answer</option>
+                        </select>
+                        <small class="text-muted">Quiz percentages are always hidden. This only controls correct-answer highlighting.</small>
+                    </div>
                 </div>
 
                 <div class="form-field">
@@ -1126,10 +1269,12 @@
     {{-- ======================================================== --}}
     @php($selectedTemplateId = old('certificate_template_id', data_get($webinar->settings, 'certificate_template_id')))
     @php($activeTemplateDesign = $activeCertificateTemplate?->design ?? [])
-    @php($certDefaults = ['recipient'=>['x'=>50,'y'=>44,'width'=>55,'scale'=>100],'webinar'=>['x'=>50,'y'=>61,'width'=>55,'scale'=>100],'date'=>['x'=>20,'y'=>84,'width'=>25,'scale'=>100],'signature'=>['x'=>80,'y'=>76,'width'=>22,'scale'=>100],'signatory'=>['x'=>80,'y'=>86,'width'=>30,'scale'=>100]])
+    @php($certDefaults = ['headline'=>['x'=>50,'y'=>15,'width'=>70,'scale'=>100],'recipient'=>['x'=>50,'y'=>44,'width'=>55,'scale'=>100],'webinar'=>['x'=>50,'y'=>61,'width'=>55,'scale'=>100],'date'=>['x'=>20,'y'=>84,'width'=>25,'scale'=>100],'signature'=>['x'=>80,'y'=>76,'width'=>22,'scale'=>100],'signatory'=>['x'=>80,'y'=>86,'width'=>30,'scale'=>100]])
     @php($certPositions = old('positions', data_get($activeTemplateDesign, 'positions', $certDefaults)))
     @php($certImage = data_get($activeTemplateDesign, 'template_image'))
     @php($certSignature = data_get($activeTemplateDesign, 'signature_image'))
+    @php($certAspect = \App\Support\WebinarCertificateTemplate::aspectRatio($activeCertificateTemplate))
+    @php($certVisibleElements = old('certificate_visible_elements', \App\Support\WebinarCertificateTemplate::visibleElements($activeTemplateDesign)))
     <div class="wizard-step-pane" data-step-pane="certificate">
         <section class="panel-card mb-4">
             <div class="panel-title">
@@ -1156,6 +1301,8 @@
                                         data-headline="{{ data_get($tpl->design, 'headline', 'Certificate of Completion') }}"
                                         data-signatory="{{ data_get($tpl->design, 'signatory', '') }}"
                                         data-orientation="{{ $tpl->orientation }}"
+                                        data-aspect="{{ \App\Support\WebinarCertificateTemplate::aspectRatio($tpl) }}"
+                                        data-visibility='@json(\App\Support\WebinarCertificateTemplate::visibleElements($tpl->design ?? []))'
                                         data-positions='@json(data_get($tpl->design, 'positions', $certDefaults))'
                                         data-image="{{ data_get($tpl->design, 'template_image', '') }}"
                                         data-signature="{{ data_get($tpl->design, 'signature_image', '') }}">
@@ -1172,10 +1319,11 @@
                         <div class="col-md-6">
                             <div class="form-field">
                                 <label class="form-label-custom" for="certificateName">
-                                    <span>Template Name</span>
+                                    <span>Internal Template Name</span>
                                     <span class="req">*</span>
                                 </label>
                                 <input class="form-control" id="certificateName" name="certificate_name" value="{{ old('certificate_name', $activeCertificateTemplate?->name ?? ($webinar->title ? $webinar->title.' Certificate' : 'Webinar Completion Certificate')) }}" placeholder="e.g. Masterclass Completion Certificate">
+                                <small class="text-muted">Admin identification only; this name is never printed on the certificate.</small>
                             </div>
                         </div>
 
@@ -1216,7 +1364,7 @@
                                     <span>Upload Certificate Template Background</span>
                                 </label>
                                 <input class="form-control" type="file" id="certificateImageInput" name="certificate_template_image" accept="image/png,image/jpeg">
-                                <small class="text-muted">PNG or JPG, up to 10 MB. High-resolution 1920x1080 recommended.</small>
+                                <small class="text-muted">PNG or JPG, up to 10 MB. The original image ratio is preserved without stretching.</small>
                             </div>
                         </div>
 
@@ -1242,6 +1390,26 @@
                     </label>
                 </div>
 
+                <div class="form-field">
+                    <label class="form-label-custom" for="certificateMinAttendance"><span>Minimum Attendance / Watch Time (%)</span></label>
+                    <input class="form-control" type="number" min="0" max="100" id="certificateMinAttendance" name="certificate_min_attendance" value="{{ old('certificate_min_attendance', data_get($webinar->settings, 'experience.certificate_min_attendance', 80)) }}">
+                    <small class="text-muted">Attendee ko certificate unlock karne ke liye itna webinar attend karna hoga.</small>
+                </div>
+
+                <div class="form-field full">
+                    <label class="form-label-custom"><span>Show on Certificate</span></label>
+                    <div class="certificate-visibility-grid w-100">
+                        @foreach(['headline'=>'Headline','recipient'=>'Attendee name','webinar'=>'Webinar title','date'=>'Issue date','signature'=>'Signature image','signatory'=>'Signatory name'] as $key=>$label)
+                            <label class="certificate-visibility-option">
+                                <input type="hidden" name="certificate_visible_elements[{{ $key }}]" value="0">
+                                <input class="form-check-input" type="checkbox" name="certificate_visible_elements[{{ $key }}]" value="1" data-certificate-visibility="{{ $key }}" @checked((bool)data_get($certVisibleElements,$key,true))>
+                                <span>{{ $label }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                    <small class="text-muted">Only checked elements will appear in the preview and attendee PDF.</small>
+                </div>
+
                 <!-- Element Position & Coordinates (X, Y) Control Panel -->
                 <div class="full mt-3 p-3 border rounded-3 bg-light">
                     <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
@@ -1257,6 +1425,7 @@
                         <div class="col-md-4">
                             <label class="form-label-custom small mb-1" for="certificateElementSelect"><span>Target Element</span></label>
                             <select class="form-select form-select-sm" id="certificateElementSelect">
+                                <option value="headline">Headline</option>
                                 <option value="recipient">Attendee Name</option>
                                 <option value="webinar">Webinar Title</option>
                                 <option value="date">Issue Date</option>
@@ -1297,29 +1466,29 @@
                         <span class="badge bg-purple-subtle text-purple small"><i class="bi bi-hand-index me-1"></i> Drag to reposition or edit X/Y inputs</span>
                     </div>
                     <div class="certificate-preview designer-preview p-3 rounded-4 bg-light border d-flex justify-content-center overflow-hidden">
-                        <div class="cert-inner draggable-certificate bg-white shadow-sm" id="certificateCanvas" style="max-width:700px;width:100%;aspect-ratio:1.414;--cert-accent:#6d28d9;border:3px solid #ddd6fe;position:relative;background-size:100% 100%;background-position:center;background-repeat:no-repeat;background-image:{{ $certImage ? "url('$certImage')" : 'none' }};min-height:360px;">
+                        <div class="cert-inner draggable-certificate bg-white shadow-sm" id="certificateCanvas" style="max-width:700px;width:100%;aspect-ratio:{{ $certAspect }};--cert-accent:#6d28d9;border:3px solid #ddd6fe;position:relative;background-size:contain;background-position:center;background-repeat:no-repeat;background-image:{{ $certImage ? "url('$certImage')" : 'none' }};min-height:360px;">
 
-                            <div class="certificate-watermark text-center p-3" style="position: absolute; top: 16%; left: 0; right: 0; pointer-events: none; opacity: 0.22; user-select: none;">
-                                <h3 class="fw-bold text-uppercase" style="letter-spacing: 0.12em; font-size: 1.35rem; color: #475569;" id="certPreviewHeadlineWatermark">{{ old('certificate_headline', data_get($activeTemplateDesign, 'headline', 'Certificate of Completion')) }}</h3>
+                            <div class="certificate-drag-item webinar {{ data_get($certVisibleElements,'headline',true)?'':'d-none' }}" data-certificate-element="headline" style="left:{{ data_get($certPositions,'headline.x',50) }}%;top:{{ data_get($certPositions,'headline.y',15) }}%;width:{{ data_get($certPositions,'headline.width',70) }}%;--element-scale:{{ data_get($certPositions,'headline.scale',100)/100 }};opacity:.35;text-transform:uppercase">
+                                <h3 class="fw-bold text-uppercase m-0" style="letter-spacing: 0.12em; font-size: 1.35rem; color: #475569;" id="certPreviewHeadlineWatermark">{{ old('certificate_headline', data_get($activeTemplateDesign, 'headline', 'Certificate of Completion')) }}</h3>
                             </div>
 
-                            <div class="certificate-drag-item recipient" data-certificate-element="recipient" style="left:{{ data_get($certPositions,'recipient.x',50) }}%;top:{{ data_get($certPositions,'recipient.y',44) }}%;width:{{ data_get($certPositions,'recipient.width',55) }}%;--element-scale:{{ data_get($certPositions,'recipient.scale',100)/100 }}">
+                            <div class="certificate-drag-item recipient {{ data_get($certVisibleElements,'recipient',true)?'':'d-none' }}" data-certificate-element="recipient" style="left:{{ data_get($certPositions,'recipient.x',50) }}%;top:{{ data_get($certPositions,'recipient.y',44) }}%;width:{{ data_get($certPositions,'recipient.width',55) }}%;--element-scale:{{ data_get($certPositions,'recipient.scale',100)/100 }}">
                                 Attendee Name
                             </div>
 
-                            <div class="certificate-drag-item webinar" data-certificate-element="webinar" style="left:{{ data_get($certPositions,'webinar.x',50) }}%;top:{{ data_get($certPositions,'webinar.y',61) }}%;width:{{ data_get($certPositions,'webinar.width',55) }}%;--element-scale:{{ data_get($certPositions,'webinar.scale',100)/100 }}" id="certPreviewWebinarTitle">
+                            <div class="certificate-drag-item webinar {{ data_get($certVisibleElements,'webinar',true)?'':'d-none' }}" data-certificate-element="webinar" style="left:{{ data_get($certPositions,'webinar.x',50) }}%;top:{{ data_get($certPositions,'webinar.y',61) }}%;width:{{ data_get($certPositions,'webinar.width',55) }}%;--element-scale:{{ data_get($certPositions,'webinar.scale',100)/100 }}" id="certPreviewWebinarTitle">
                                 {{ $webinar->title ?: 'Your Webinar Title' }}
                             </div>
 
-                            <div class="certificate-drag-item meta" data-certificate-element="date" style="left:{{ data_get($certPositions,'date.x',20) }}%;top:{{ data_get($certPositions,'date.y',84) }}%;width:{{ data_get($certPositions,'date.width',25) }}%;--element-scale:{{ data_get($certPositions,'date.scale',100)/100 }}">
+                            <div class="certificate-drag-item meta {{ data_get($certVisibleElements,'date',true)?'':'d-none' }}" data-certificate-element="date" style="left:{{ data_get($certPositions,'date.x',20) }}%;top:{{ data_get($certPositions,'date.y',84) }}%;width:{{ data_get($certPositions,'date.width',25) }}%;--element-scale:{{ data_get($certPositions,'date.scale',100)/100 }}">
                                 {{ now()->format('F d, Y') }}
                             </div>
 
-                            <div class="certificate-drag-item signature-image {{ $certSignature ? '' : 'd-none' }}" data-certificate-element="signature" style="left:{{ data_get($certPositions,'signature.x',80) }}%;top:{{ data_get($certPositions,'signature.y',76) }}%;width:{{ data_get($certPositions,'signature.width',22) }}%;--element-scale:{{ data_get($certPositions,'signature.scale',100)/100 }}">
+                            <div class="certificate-drag-item signature-image {{ $certSignature && data_get($certVisibleElements,'signature',true) ? '' : 'd-none' }}" data-certificate-element="signature" style="left:{{ data_get($certPositions,'signature.x',80) }}%;top:{{ data_get($certPositions,'signature.y',76) }}%;width:{{ data_get($certPositions,'signature.width',22) }}%;--element-scale:{{ data_get($certPositions,'signature.scale',100)/100 }}">
                                 <img id="signaturePreview" src="{{ $certSignature ?: '' }}" alt="Signature" style="max-width:100%;max-height:50px;object-fit:contain;">
                             </div>
 
-                            <div class="certificate-drag-item meta" data-certificate-element="signatory" style="left:{{ data_get($certPositions,'signatory.x',80) }}%;top:{{ data_get($certPositions,'signatory.y',86) }}%;width:{{ data_get($certPositions,'signatory.width',30) }}%;--element-scale:{{ data_get($certPositions,'signatory.scale',100)/100 }}" id="certPreviewSignatoryText">
+                            <div class="certificate-drag-item meta {{ data_get($certVisibleElements,'signatory',true)?'':'d-none' }}" data-certificate-element="signatory" style="left:{{ data_get($certPositions,'signatory.x',80) }}%;top:{{ data_get($certPositions,'signatory.y',86) }}%;width:{{ data_get($certPositions,'signatory.width',30) }}%;--element-scale:{{ data_get($certPositions,'signatory.scale',100)/100 }}" id="certPreviewSignatoryText">
                                 {{ old('certificate_signatory', data_get($activeTemplateDesign, 'signatory', 'Authorized Director')) }}
                             </div>
                         </div>
@@ -1529,15 +1698,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const markInvalid = (input, message) => {
             isValid = false;
-            input.classList.add('is-invalid');
+            const visibleInput = input._flatpickr?.altInput || input;
+            visibleInput.classList.add('is-invalid');
             const err = document.createElement('div');
             err.className = 'wizard-field-error text-danger small mt-1 fw-bold';
             err.innerHTML = `<i class="bi bi-exclamation-circle-fill me-1"></i> ${message}`;
-            const targetParent = input.closest('.input-group') || input;
+            const targetParent = visibleInput.closest('.schedule-picker-shell, .input-group') || visibleInput;
             targetParent.parentNode.insertBefore(err, targetParent.nextSibling);
 
             input.addEventListener('input', () => {
-                input.classList.remove('is-invalid');
+                visibleInput.classList.remove('is-invalid');
                 err.remove();
             }, { once: true });
         };
@@ -1553,10 +1723,23 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const startsAt = currentPane.querySelector('#webinarStartsAt');
             const endsAt = currentPane.querySelector('#webinarEndsAt');
+            const status = currentPane.querySelector('#webinarStatus')?.value;
+            if (['scheduled', 'live'].includes(status)) {
+                if (startsAt && !startsAt.value) markInvalid(startsAt, 'Scheduled or Live webinar ke liye start date and time required hai.');
+                if (endsAt && !endsAt.value) markInvalid(endsAt, 'Scheduled or Live webinar ke liye end date and time required hai.');
+            }
             if (startsAt && endsAt && startsAt.value && endsAt.value) {
                 if (new Date(endsAt.value) <= new Date(startsAt.value)) {
                     markInvalid(endsAt, 'End date and time must be after the start date and time.');
                 }
+            }
+        }
+
+        if (stepKey === '2') {
+            const provider = currentPane.querySelector('#liveProvider');
+            const source = currentPane.querySelector('#liveSource');
+            if (provider?.value && source && !source.value.trim()) {
+                markInvalid(source, 'Video URL, ID, or iframe code is required for the selected player.');
             }
         }
 
@@ -1751,14 +1934,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const canvas = document.querySelector('#certificateCanvas');
             if (canvas) {
                 canvas.style.backgroundImage = opt.dataset.image ? `url('${opt.dataset.image}')` : 'none';
+                if (opt.dataset.aspect) canvas.style.aspectRatio = opt.dataset.aspect;
+            }
+            if (opt.dataset.visibility) {
+                try {
+                    const visibility = JSON.parse(opt.dataset.visibility);
+                    Object.entries(visibility).forEach(([key, shown]) => {
+                        const checkbox = document.querySelector(`[data-certificate-visibility="${key}"]`);
+                        if (checkbox) {
+                            checkbox.checked = Boolean(shown);
+                            checkbox.dispatchEvent(new Event('change'));
+                        }
+                    });
+                } catch (e) {}
             }
             const sigEl = document.querySelector('[data-certificate-element="signature"]');
             const sigImg = document.querySelector('#signaturePreview');
             if (sigEl && sigImg) {
-                if (opt.dataset.signature) {
+                const signatureVisible = document.querySelector('[data-certificate-visibility="signature"]')?.checked ?? true;
+                if (opt.dataset.signature && signatureVisible) {
                     sigImg.src = opt.dataset.signature;
                     sigEl.classList.remove('d-none');
                 } else {
+                    sigImg.src = opt.dataset.signature || '';
                     sigEl.classList.add('d-none');
                 }
             }
@@ -1838,6 +2036,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const schedulePreview = document.querySelector('#scheduleTimezonePreview');
     const languageInput = document.querySelector('#webinarLanguage');
 
+    document.querySelectorAll('[data-open-picker]').forEach(button => {
+        button.addEventListener('click', () => {
+            const input = document.getElementById(button.dataset.openPicker);
+            if (!input) return;
+            if (input._flatpickr) input._flatpickr.open();
+            else if (typeof input.showPicker === 'function') input.showPicker();
+            else input.focus();
+        });
+    });
+
     function readableLocalDate(value) {
         if (!value) return null;
         const [date, time] = value.split('T');
@@ -1851,6 +2059,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateSchedulePreview() {
         if (!schedulePreview) return;
         const timezone = timezoneInput?.value || 'UTC';
+        document.querySelectorAll('[data-schedule-timezone]').forEach(chip => {
+            chip.innerHTML = `<i class="bi bi-globe2"></i> ${timezone}`;
+        });
         const start = readableLocalDate(startsInput?.value);
         const end = readableLocalDate(endsInput?.value);
         const language = languageInput?.selectedOptions?.[0]?.text || 'English';
@@ -1881,6 +2092,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // -------------------------------------------------------------
     const providerRadios = document.querySelectorAll('input[name="live_provider_choice"]');
     const liveProviderSelect = document.querySelector('#liveProvider');
+    const liveSourceInput = document.querySelector('#liveSource');
+    const liveSourceRequiredMark = document.querySelector('#liveSourceRequiredMark');
+    const liveSourceHelp = document.querySelector('#liveSourceHelp');
+
+    function syncLiveSourceRequirement() {
+        const provider = liveProviderSelect?.value || '';
+        const isRequired = provider !== '';
+        if (liveSourceInput) {
+            liveSourceInput.required = isRequired;
+            liveSourceInput.setAttribute('aria-required', isRequired ? 'true' : 'false');
+            liveSourceInput.placeholder = isRequired
+                ? `Paste ${provider === 'custom' ? 'a secure iframe URL or iframe code' : `${provider[0].toUpperCase() + provider.slice(1)} URL or ID`}`
+                : 'No player selected — video source is not required';
+        }
+        if (liveSourceRequiredMark) liveSourceRequiredMark.hidden = !isRequired;
+        if (liveSourceHelp) {
+            liveSourceHelp.textContent = isRequired
+                ? 'Required: valid source dene par secure responsive player automatically configure hoga.'
+                : 'No Player mode mein video source required nahi hai.';
+        }
+    }
 
     providerRadios.forEach(radio => {
         radio.addEventListener('change', () => {
@@ -1888,8 +2120,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 liveProviderSelect.value = radio.value;
                 liveProviderSelect.dispatchEvent(new Event('change'));
             }
+            syncLiveSourceRequirement();
         });
     });
+    syncLiveSourceRequirement();
 
     // -------------------------------------------------------------
     // Room Layout Segmented Cards Sync

@@ -10,6 +10,7 @@ use App\Models\CertificateTemplate;
 use App\Models\Webinar;
 use App\Support\AuditTrail;
 use App\Support\VideoEmbed;
+use App\Support\WebinarCertificateTemplate;
 use App\Support\WebinarHealth;
 use App\Support\WebinarPreferences;
 use Illuminate\Http\JsonResponse;
@@ -137,13 +138,11 @@ class WebinarController extends Controller
         $controlData = $request->validate([
             'status' => ['required', 'in:scheduled,live,completed,cancelled'],
             'certificate_min_attendance' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'show_poll_correct_answer' => ['nullable', 'boolean'],
         ]);
         $settings = $webinar->settings ?? [];
         $settings['experience']['certificate_min_attendance'] = $request->filled('certificate_min_attendance')
             ? (int) $controlData['certificate_min_attendance']
             : (int) data_get($settings, 'experience.certificate_min_attendance', 80);
-        $settings['experience']['show_poll_correct_answer'] = $request->boolean('show_poll_correct_answer');
         $webinar->update([
             'status' => $controlData['status'],
             'chat_enabled' => $request->boolean('chat_enabled'),
@@ -167,7 +166,6 @@ class WebinarController extends Controller
                 'feedback_enabled' => $webinar->feedback_enabled,
                 'certificate_enabled' => $webinar->certificate_enabled === 'yes',
                 'certificate_min_attendance' => (int) data_get($webinar->settings, 'experience.certificate_min_attendance', 80),
-                'show_poll_correct_answer' => (bool) data_get($webinar->settings, 'experience.show_poll_correct_answer', false),
             ]);
         }
 
@@ -309,8 +307,9 @@ class WebinarController extends Controller
     {
         $request->merge([
             'early_entry_minutes' => $request->input('early_entry_minutes', 30),
-            'registration_type' => $request->input('registration_type', 'free'),
-            'price' => $request->input('price', 0),
+            'registration_type' => 'free',
+            'price' => 0,
+            'language' => $request->input('language', $webinar?->language ?: 'en'),
         ]);
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -320,16 +319,23 @@ class WebinarController extends Controller
             'status' => ['required', 'in:draft,scheduled,live,completed,cancelled'],
             'language' => ['required', 'string', 'max:10'],
             'timezone' => ['required', 'timezone'],
-            'starts_at' => ['nullable', 'date'],
-            'ends_at' => ['nullable', 'date', 'after:starts_at'],
+            'starts_at' => [Rule::requiredIf(fn () => in_array($request->input('status'), ['scheduled', 'live'], true)), 'nullable', 'date'],
+            'ends_at' => [Rule::requiredIf(fn () => in_array($request->input('status'), ['scheduled', 'live'], true)), 'nullable', 'date', 'after:starts_at'],
             'early_entry_minutes' => ['required', 'integer', 'min:0', 'max:240'],
             'max_attendees' => ['nullable', 'integer', 'min:1'],
-            'registration_type' => ['required', 'in:free,paid'],
+            'registration_type' => ['required', 'in:free'],
             'price' => ['nullable', 'numeric', 'min:0'],
         ], [
+            'starts_at.required' => 'Start date and time are required for a scheduled or live webinar.',
+            'ends_at.required' => 'End date and time are required for a scheduled or live webinar.',
             'ends_at.after' => 'The end date and time must be after the start date and time.',
         ]);
-        $player = $request->validate(['live_provider' => ['nullable', 'in:youtube,vimeo,custom'], 'live_source' => ['nullable', 'string', 'max:5000']]);
+        $player = $request->validate([
+            'live_provider' => ['nullable', 'in:youtube,vimeo,custom'],
+            'live_source' => ['nullable', 'required_if:live_provider,youtube,vimeo,custom', 'string', 'max:5000'],
+        ], [
+            'live_source.required_if' => 'Video URL, ID, or iframe code is required when a video player is selected.',
+        ]);
         $provider = $player['live_provider'] ?? null;
         $data['live_provider'] = $provider;
         $data['live_url'] = $provider ? VideoEmbed::url($provider, $player['live_source'] ?? null) : null;
@@ -352,10 +358,11 @@ class WebinarController extends Controller
         }
         $data['slug'] = filled($data['slug'] ?? null) ? $data['slug'] : $this->uniqueSlug($data['title'], $webinar?->id);
         $data['published_at'] = $data['status'] === 'draft' ? null : ($webinar?->published_at ?? now());
+        $existingLogo = data_get($webinar?->settings, 'experience.logo_url');
         $experience = $request->validate([
             'room_layout' => ['nullable', 'in:theater,presentation'],
             'brand_primary' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'], 'brand_secondary' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
-            'brand_logo_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:5120'],
+            'brand_logo_file' => [Rule::requiredIf(blank($existingLogo)), 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:5120'],
             'waiting_message' => ['nullable', 'string', 'max:500'], 'waiting_media_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'], 'post_message' => ['nullable', 'string', 'max:500'], 'registration_success_title' => ['nullable', 'string', 'max:120'], 'registration_success_message' => ['nullable', 'string', 'max:500'],
             'video_chapters' => ['nullable', 'string', 'max:5000'], 'certificate_min_attendance' => ['nullable', 'integer', 'min:0', 'max:100'], 'certificate_require_poll' => ['nullable', 'boolean'],
         ]);
@@ -364,7 +371,6 @@ class WebinarController extends Controller
         if ($request->has('contact_mobile')) {
             $settings['contact_mobile'] = $contact['contact_mobile'] ?? null;
         }
-        $existingLogo = data_get($webinar?->settings, 'experience.logo_url');
         $logoUrl = $existingLogo;
         if ($request->hasFile('brand_logo_file')) {
             $logoFile = $request->file('brand_logo_file');
@@ -436,10 +442,15 @@ class WebinarController extends Controller
         // 1. Save single/wizard Poll if filled
         if ($request->filled('poll_question')) {
             $pollId = $request->input('poll_id');
+            $correctIndex = $request->input('poll_correct_index');
+            $answerReveal = in_array($request->input('poll_answer_reveal'), ['immediate', 'after_webinar', 'never'], true)
+                ? $request->input('poll_answer_reveal')
+                : 'after_webinar';
             $poll = $webinar->polls()->updateOrCreate(['id' => $pollId ?: null], [
                 'created_by' => $request->user()->id,
                 'question' => trim($request->input('poll_question')),
                 'allow_multiple' => $request->boolean('poll_allow_multiple'),
+                'answer_reveal' => $correctIndex !== null && $correctIndex !== '' ? $answerReveal : 'never',
                 'status' => $request->input('poll_status', 'draft'),
                 'started_at' => $request->filled('poll_started_at') ? Carbon::parse($request->input('poll_started_at')) : null,
                 'ended_at' => $request->filled('poll_ended_at') ? Carbon::parse($request->input('poll_ended_at')) : null,
@@ -448,7 +459,6 @@ class WebinarController extends Controller
             $answers = $request->input('poll_answers', []);
             if (!empty($answers)) {
                 $poll->options()->delete();
-                $correctIndex = $request->input('poll_correct_index');
                 foreach ($answers as $idx => $label) {
                     if (filled($label)) {
                         $poll->options()->create([
@@ -487,6 +497,7 @@ class WebinarController extends Controller
         if ($request->boolean('certificate_enabled')) {
             $settings = $webinar->settings ?? [];
             $defaults = [
+                'headline'  => ['x' => 50, 'y' => 15, 'width' => 70, 'scale' => 100],
                 'recipient' => ['x' => 50, 'y' => 44, 'width' => 55, 'scale' => 100],
                 'webinar'   => ['x' => 50, 'y' => 61, 'width' => 55, 'scale' => 100],
                 'date'      => ['x' => 20, 'y' => 84, 'width' => 25, 'scale' => 100],
@@ -495,70 +506,77 @@ class WebinarController extends Controller
             ];
             $submittedPositions = $request->input('positions');
 
-            // Case A: Selected an existing template ID from the dropdown
-            if ($request->filled('certificate_template_id') && $request->input('certificate_template_id') !== 'custom') {
-                $tplId = (int) $request->input('certificate_template_id');
-                $settings['certificate_template_id'] = $tplId;
+            $request->validate([
+                'certificate_template_image' => ['nullable', 'image', 'mimes:png,jpg,jpeg', 'max:10240'],
+                'certificate_signature_image' => ['nullable', 'image', 'mimes:png,jpg,jpeg', 'max:5120'],
+            ]);
 
-                if (is_array($submittedPositions) && $tpl = CertificateTemplate::find($tplId)) {
-                    $design = $tpl->design ?? [];
-                    $design['positions'] = array_replace_recursive($design['positions'] ?? $defaults, $submittedPositions);
-                    if ($request->filled('certificate_headline')) {
-                        $design['headline'] = $request->input('certificate_headline');
-                    }
-                    if ($request->filled('certificate_signatory')) {
-                        $design['signatory'] = $request->input('certificate_signatory');
-                    }
-                    $tpl->update(['design' => $design]);
-                }
+            // Both the webinar wizard and Certificate Studio edit this webinar's
+            // currently assigned template. Any shared/issued template is cloned
+            // first so changes cannot leak into another webinar.
+            $selectedTemplateId = $request->filled('certificate_template_id') && $request->input('certificate_template_id') !== 'custom'
+                ? (int) $request->input('certificate_template_id')
+                : ($settings['certificate_template_id'] ?? null);
+            $template = $selectedTemplateId ? CertificateTemplate::find($selectedTemplateId) : null;
+            $template = WebinarCertificateTemplate::editableCopy($template, $webinar, $request->user()->id);
+            $existingDesign = $template?->design ?? [];
+            $imagePath = $existingDesign['template_image'] ?? null;
+            $sigPath = $existingDesign['signature_image'] ?? null;
+
+            if ($request->hasFile('certificate_template_image')) {
+                $file = $request->file('certificate_template_image');
+                $existingDesign = array_replace($existingDesign, WebinarCertificateTemplate::imageDimensions($file));
+                $extension = $file->getClientOriginalExtension();
+                $name = Str::uuid().($extension ? '.'.$extension : '');
+                $path = $file->storeAs('certificates', $name, 'public');
+                $imagePath = '/storage/'.$path;
             }
-            // Case B: Created or customized template
-            elseif (filled($request->input('certificate_name'))) {
-                $templateId = $settings['certificate_template_id'] ?? null;
-                $template = $templateId ? CertificateTemplate::find($templateId) : null;
-                $existingDesign = $template?->design ?? [];
 
-                $imagePath = $existingDesign['template_image'] ?? null;
-                $sigPath = $existingDesign['signature_image'] ?? null;
-
-                if ($request->hasFile('certificate_template_image')) {
-                    $file = $request->file('certificate_template_image');
-                    $extension = $file->getClientOriginalExtension();
-                    $name = Str::uuid().($extension ? '.'.$extension : '');
-                    $path = $file->storeAs('certificates', $name, 'public');
-                    $imagePath = '/storage/'.$path;
-                }
-
-                if ($request->hasFile('certificate_signature_image')) {
-                    $file = $request->file('certificate_signature_image');
-                    $extension = $file->getClientOriginalExtension();
-                    $name = Str::uuid().($extension ? '.'.$extension : '');
-                    $path = $file->storeAs('certificates', $name, 'public');
-                    $sigPath = '/storage/'.$path;
-                }
-
-                $positionsToSave = is_array($submittedPositions) ? array_replace_recursive($defaults, $submittedPositions) : ($existingDesign['positions'] ?? $defaults);
-
-                $values = [
-                    'name' => $request->input('certificate_name'),
-                    'orientation' => $request->input('certificate_orientation', 'landscape'),
-                    'design' => [
-                        'headline' => $request->input('certificate_headline', 'Certificate of Completion'),
-                        'signatory' => $request->input('certificate_signatory'),
-                        'template_image' => $imagePath,
-                        'signature_image' => $sigPath,
-                        'positions' => $positionsToSave,
-                    ],
-                    'created_by' => $template?->created_by ?? $request->user()->id,
-                ];
-
-                if ($template) {
-                    $template->update($values);
-                } else {
-                    $template = CertificateTemplate::create($values);
-                }
-                $settings['certificate_template_id'] = $template->id;
+            if ($request->hasFile('certificate_signature_image')) {
+                $file = $request->file('certificate_signature_image');
+                $extension = $file->getClientOriginalExtension();
+                $name = Str::uuid().($extension ? '.'.$extension : '');
+                $path = $file->storeAs('certificates', $name, 'public');
+                $sigPath = '/storage/'.$path;
             }
+
+            $positionsToSave = is_array($submittedPositions)
+                ? array_replace_recursive($defaults, $submittedPositions)
+                : ($existingDesign['positions'] ?? $defaults);
+            $visibleElements = $request->has('certificate_visible_elements')
+                ? collect(WebinarCertificateTemplate::ELEMENT_VISIBILITY_DEFAULTS)
+                    ->mapWithKeys(fn ($default, $key) => [$key => $request->boolean('certificate_visible_elements.'.$key)])
+                    ->all()
+                : WebinarCertificateTemplate::visibleElements($existingDesign);
+            $values = [
+                'name' => $request->input('certificate_name', $template?->name ?? $webinar->title.' Certificate'),
+                'orientation' => $request->input('certificate_orientation', $template?->orientation ?? 'landscape'),
+                'design' => [
+                    'headline' => $request->input('certificate_headline', $existingDesign['headline'] ?? 'Certificate of Completion'),
+                    'signatory' => $request->input('certificate_signatory', $existingDesign['signatory'] ?? null),
+                    'template_image' => $imagePath,
+                    'signature_image' => $sigPath,
+                    'font_file' => $existingDesign['font_file'] ?? null,
+                    'font_family' => $existingDesign['font_family'] ?? 'Manrope',
+                    'positions' => $positionsToSave,
+                    'visible_elements' => $visibleElements,
+                    'image_width' => $existingDesign['image_width'] ?? null,
+                    'image_height' => $existingDesign['image_height'] ?? null,
+                    'canvas_aspect_ratio' => $existingDesign['canvas_aspect_ratio'] ?? null,
+                ],
+                'created_by' => $template?->created_by ?? $request->user()->id,
+            ];
+
+            if ($template) {
+                $template->update($values);
+            } else {
+                $template = CertificateTemplate::create($values);
+            }
+            $settings['certificate_template_id'] = $template->id;
+            DB::table('certificates')->where('webinar_id', $webinar->id)->update([
+                'template_id' => $template->id,
+                'updated_at' => now(),
+            ]);
 
             if ($request->has('certificate_min_attendance')) {
                 $settings['experience']['certificate_min_attendance'] = max(0, min(100, (int) $request->input('certificate_min_attendance', 80)));
@@ -590,7 +608,6 @@ class WebinarController extends Controller
                 'feedback_enabled' => (bool) $webinar->feedback_enabled,
                 'certificate_enabled' => $webinar->certificate_enabled === 'yes',
                 'certificate_min_attendance' => (int) data_get($webinar->settings, 'experience.certificate_min_attendance', 80),
-                'show_poll_correct_answer' => (bool) data_get($webinar->settings, 'experience.show_poll_correct_answer', false),
                 'pinned_announcement' => data_get($webinar->settings, 'pinned_announcement'),
             ]));
         } catch (\Throwable $e) {

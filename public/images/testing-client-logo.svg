@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="150" viewBox="0 0 520 150" role="img" aria-labelledby="title desc">
+  <title id="title">Test Client Events</title>
+  <desc id="desc">Red test client webinar logo</desc>
+  <rect width="520" height="150" rx="26" fill="#ffffff"/>
+  <rect x="12" y="12" width="126" height="126" rx="24" fill="#ee1f2d"/>
+  <path d="M47 49h56v16H84v48H66V65H47z" fill="#ffffff"/>
+  <circle cx="103" cy="104" r="10" fill="#ffffff"/>
+  <text x="162" y="70" fill="#111827" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">TEST CLIENT</text>
+  <text x="163" y="106" fill="#ee1f2d" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" letter-spacing="5">EVENTS</text>
+</svg>

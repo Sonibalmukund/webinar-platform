@@ -37,9 +37,11 @@ class Poll extends Model
 
     public function shouldRevealAnswer(Webinar $webinar): bool
     {
-        $reveal = $this->answer_reveal ?: 'host_control';
+        $reveal = $this->answer_reveal ?: 'after_webinar';
+        $webinarFinished = $webinar->status === 'completed'
+            || ($webinar->ends_at && now()->greaterThanOrEqualTo($webinar->ends_at));
 
         return $this->type === 'Quiz' && ($reveal === 'immediate'
-            || ($reveal === 'host_control' && (bool) data_get($webinar->settings, 'experience.show_poll_correct_answer', false)));
+            || (in_array($reveal, ['after_webinar', 'host_control'], true) && $webinarFinished));
     }
 }

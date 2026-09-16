@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (message.reply_to_user_name) {
                 const quote = document.createElement('div');
                 quote.className = 'chat-reply-quote';
-                quote.innerHTML = `<i class="bi bi-reply-fill"></i><span>Replying to <strong>${escapeHtml(message.reply_to_user_name)}</strong>: ${escapeHtml((message.reply_to_message || '').slice(0, 45))}</span>`;
+                quote.innerHTML = `<strong>${escapeHtml(message.reply_to_user_name)}</strong><span>${escapeHtml((message.reply_to_message || '').slice(0, 65))}</span>`;
                 copy.append(quote);
             }
 

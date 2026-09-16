@@ -118,6 +118,7 @@ class AdminFiltersAndGeneralSettingsTest extends TestCase
             ->assertOk()
             ->assertSee('Visible Live Webinar')
             ->assertSee('13 Sep, 11:20 AM IST')
+            ->assertSee('0.42%')
             ->assertSee('Scheduled Attendance History');
     }
 

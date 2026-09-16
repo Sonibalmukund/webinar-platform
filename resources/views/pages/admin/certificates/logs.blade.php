@@ -12,16 +12,15 @@
 
 @if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
 
-<x-admin-webinar-filter :webinars="$webinars" :selected="$webinarId" :search="$search" placeholder="Search attendee name, email, credential ID, or IP..." />
+<x-admin-webinar-filter :webinars="$webinars" :selected="$webinarId" :search="$search" placeholder="Search attendee name, email, webinar, or IP..." />
 
 <div class="panel-card table-responsive">
     <table class="premium-table">
         <thead>
             <tr>
-                <th>#</th>
+                <th>Index</th>
                 <th>Attendee</th>
                 <th>Webinar</th>
-                <th>Credential ID</th>
                 <th>IP Address</th>
                 <th>Downloaded At</th>
             </tr>
@@ -38,9 +37,6 @@
                         <strong>{{ $log->webinar_title }}</strong>
                     </td>
                     <td>
-                        <code>{{ $log->credential_id ? Str::limit($log->credential_id, 18) : 'N/A' }}</code>
-                    </td>
-                    <td>
                         <span class="badge bg-light text-dark border">{{ $log->ip_address ?: 'Unknown' }}</span>
                     </td>
                     <td>
@@ -52,7 +48,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" class="text-center py-5 text-muted">
+                    <td colspan="5" class="text-center py-5 text-muted">
                         <i class="bi bi-journal-x fs-1 d-block mb-2 text-secondary"></i>
                         No certificate download records found.
                     </td>

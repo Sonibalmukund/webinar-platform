@@ -37,7 +37,7 @@ class WebinarAttendanceController extends Controller
         abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->admitted()->exists(), 403);
         $webinar->syncLifecycleStatus();
         abort_unless($webinar->canEnter(), 403, 'The webinar room is not open yet.');
-        abort_unless($webinar->attendanceHasStarted(), 409, 'Attendance and hand raising start when the webinar begins.');
+        abort_unless($webinar->attendanceHasStarted(), 409, 'Attendance and hand raising are available during the webinar access window.');
         $current = (bool) DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->value('raised_hand');
         DB::table('webinar_attendees')->updateOrInsert(
             ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id],
@@ -73,8 +73,8 @@ class WebinarAttendanceController extends Controller
                 'live_viewers' => 0,
                 'watch_seconds' => 0,
                 'participants' => [],
-                'starts_at' => $webinar->starts_at?->timezone($webinar->timezone)->toIso8601String(),
-                'message' => 'You are in the early-access room. Attendance starts when the webinar begins.',
+                'starts_at' => $webinar->opensAt()?->timezone($webinar->timezone)->toIso8601String(),
+                'message' => 'Attendance starts when the webinar access window opens.',
             ]);
         }
         $row = DB::transaction(function () use ($request, $webinar, $state, $now) {
@@ -85,6 +85,9 @@ class WebinarAttendanceController extends Controller
             $values = ['last_seen_at' => $now, 'left_at' => $state === 'leave' ? $now : null, 'updated_at' => $now];
             if ($state === 'join') {
                 $values['raised_hand'] = false;
+                if ($current && ! $current->joined_at) {
+                    $values['joined_at'] = $current->created_at ?: $now;
+                }
             }
             if (! $current) {
                 $values += ['webinar_id' => $webinar->id, 'user_id' => $request->user()->id, 'joined_at' => $now, 'watch_seconds' => 0, 'raised_hand' => false, 'created_at' => $now];

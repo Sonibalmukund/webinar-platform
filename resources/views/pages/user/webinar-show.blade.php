@@ -206,8 +206,6 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
         <a class="microsite-logo" href="{{ route('webinars.show',$webinar) }}">
             @if(!empty($theme['logo_url']))
                 <img src="{{ $theme['logo_url'] }}" alt="{{ $webinar->title }}">
-            @elseif(!empty($siteSettings['site_logo']))
-                <img src="{{ $siteSettings['site_logo'] }}" alt="{{ $siteSettings['site_name'] ?? $webinar->title }}">
             @else
                 <span>{{ $webinar->title }}</span>
             @endif
@@ -233,18 +231,8 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                 <a class="btn btn-register-nav" href="{{ route('webinars.dashboard',$webinar) }}">{{ __('webinar.enter') }}</a>
             @elseif($isRegistered)
                 <button class="btn btn-register-nav" type="button" disabled>{{ __('webinar.registered_closed') }}</button>
-                <form method="POST" action="{{ route('logout') }}" class="d-inline">
-                    @csrf
-                    <input type="hidden" name="return_to" value="{{ route('webinars.show', $webinar) }}">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill px-3 ms-1" title="{{ __('webinar.logout') }}">{{ __('webinar.logout') }}</button>
-                </form>
             @else
                 <button type="button" class="btn btn-register-nav" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
-                <form method="POST" action="{{ route('logout') }}" class="d-inline">
-                    @csrf
-                    <input type="hidden" name="return_to" value="{{ route('webinars.show', $webinar) }}">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill px-3 ms-1" title="{{ __('webinar.logout') }}">{{ __('webinar.logout') }}</button>
-                </form>
             @endif
             <button class="microsite-menu-toggle d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#micrositeMobileNav" aria-label="{{ __('webinar.open_navigation') }}"><i class="bi bi-list fs-4"></i></button>
         </div>
@@ -359,13 +347,6 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                         </div>
                     </div>
                     <div class="banner-event-detail">
-                        <div class="rail-icon"><i class="bi bi-translate"></i></div>
-                        <div class="rail-info">
-                            <strong>{{ $languageName }}</strong>
-                            <small>{{ __('webinar.language') }} · {{ $webinar->timezone }}</small>
-                        </div>
-                    </div>
-                    <div class="banner-event-detail">
                         <div class="rail-icon"><i class="bi bi-hourglass-split"></i></div>
                         <div class="rail-info">
                             <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -474,8 +455,6 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
             <div class="footer-brand">
                 @if(!empty($theme['logo_url']))
                     <img src="{{ $theme['logo_url'] }}" alt="{{ $webinar->title }}">
-                @elseif(!empty($siteSettings['site_logo']))
-                    <img src="{{ $siteSettings['site_logo'] }}" alt="{{ $siteSettings['site_name'] ?? $webinar->title }}">
                 @endif
                 <h3>{{ $webinar->title }}</h3>
                 @if($webinar->short_description)

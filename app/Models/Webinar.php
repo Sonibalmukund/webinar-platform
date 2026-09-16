@@ -60,8 +60,12 @@ class Webinar extends Model
 
     public function attendanceHasStarted(): bool
     {
-        return $this->starts_at !== null
-            && now()->greaterThanOrEqualTo($this->starts_at);
+        $opensAt = $this->opensAt();
+        $closesAt = $this->closesAt();
+
+        return $opensAt !== null
+            && now()->greaterThanOrEqualTo($opensAt)
+            && ($closesAt === null || now()->lessThanOrEqualTo($closesAt));
     }
 
     public function syncLifecycleStatus(): void

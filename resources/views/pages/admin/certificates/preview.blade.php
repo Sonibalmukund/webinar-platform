@@ -6,6 +6,8 @@
     $positions=data_get($design,'positions',[]);
     $image=data_get($design,'template_image');
     $signature=data_get($design,'signature_image');
+    $certificateAspect=\App\Support\WebinarCertificateTemplate::aspectRatio($template);
+    $visibleElements=\App\Support\WebinarCertificateTemplate::visibleElements($design);
 @endphp
 <div class="page-heading">
     <div><span class="eyebrow">CERTIFICATE PREVIEW</span><h1>{{ $webinar->title }}</h1><p>This is how the configured certificate will look with sample attendee data.</p></div>
@@ -16,13 +18,13 @@
 @else
     @if(data_get($design,'font_file'))<style>@font-face{font-family:CustomCertificateFont;src:url('{{ data_get($design,'font_file') }}')}</style>@endif
     <section class="panel-card certificate-preview-shell"><div class="certificate-preview certificate-readonly">
-        <div class="cert-inner draggable-certificate" style="--cert-accent:#ee1f2d;background-image:{{ $image?"url('$image')":'none' }};font-family:{{ data_get($design,'font_family','Manrope') }}">
-            @unless($image)<small>VIRTUALPORTAL CERTIFICATE</small><h2>{{ data_get($design,'headline','Certificate of Participation') }}</h2>@endunless
-            <div class="certificate-drag-item recipient" style="left:{{ data_get($positions,'recipient.x',50) }}%;top:{{ data_get($positions,'recipient.y',44) }}%;width:{{ data_get($positions,'recipient.width',55) }}%;--element-scale:{{ data_get($positions,'recipient.scale',100)/100 }}">Sample Attendee</div>
-            <div class="certificate-drag-item webinar" style="left:{{ data_get($positions,'webinar.x',50) }}%;top:{{ data_get($positions,'webinar.y',61) }}%;width:{{ data_get($positions,'webinar.width',55) }}%;--element-scale:{{ data_get($positions,'webinar.scale',100)/100 }}">{{ $webinar->title }}</div>
-            <div class="certificate-drag-item meta" style="left:{{ data_get($positions,'date.x',20) }}%;top:{{ data_get($positions,'date.y',84) }}%;width:{{ data_get($positions,'date.width',25) }}%;--element-scale:{{ data_get($positions,'date.scale',100)/100 }}">{{ now()->format('F d, Y') }}</div>
-            @if($signature)<div class="certificate-drag-item signature-image" style="left:{{ data_get($positions,'signature.x',80) }}%;top:{{ data_get($positions,'signature.y',76) }}%;width:{{ data_get($positions,'signature.width',22) }}%;--element-scale:{{ data_get($positions,'signature.scale',100)/100 }}"><img src="{{ $signature }}" alt="Signature"></div>@endif
-            <div class="certificate-drag-item meta" style="left:{{ data_get($positions,'signatory.x',80) }}%;top:{{ data_get($positions,'signatory.y',86) }}%;width:{{ data_get($positions,'signatory.width',30) }}%;--element-scale:{{ data_get($positions,'signatory.scale',100)/100 }}">{{ data_get($design,'signatory','Authorized Signatory') }}</div>
+        <div class="cert-inner draggable-certificate" style="--cert-accent:#ee1f2d;aspect-ratio:{{ $certificateAspect }};background-image:{{ $image?"url('$image')":'none' }};font-family:{{ data_get($design,'font_family','Manrope') }}">
+            @if(data_get($visibleElements,'headline',true))<div class="certificate-drag-item webinar" style="left:{{ data_get($positions,'headline.x',50) }}%;top:{{ data_get($positions,'headline.y',15) }}%;width:{{ data_get($positions,'headline.width',70) }}%;--element-scale:{{ data_get($positions,'headline.scale',100)/100 }}">{{ data_get($design,'headline','Certificate of Participation') }}</div>@endif
+            @if(data_get($visibleElements,'recipient',true))<div class="certificate-drag-item recipient" style="left:{{ data_get($positions,'recipient.x',50) }}%;top:{{ data_get($positions,'recipient.y',44) }}%;width:{{ data_get($positions,'recipient.width',55) }}%;--element-scale:{{ data_get($positions,'recipient.scale',100)/100 }}">Sample Attendee</div>@endif
+            @if(data_get($visibleElements,'webinar',true))<div class="certificate-drag-item webinar" style="left:{{ data_get($positions,'webinar.x',50) }}%;top:{{ data_get($positions,'webinar.y',61) }}%;width:{{ data_get($positions,'webinar.width',55) }}%;--element-scale:{{ data_get($positions,'webinar.scale',100)/100 }}">{{ $webinar->title }}</div>@endif
+            @if(data_get($visibleElements,'date',true))<div class="certificate-drag-item meta" style="left:{{ data_get($positions,'date.x',20) }}%;top:{{ data_get($positions,'date.y',84) }}%;width:{{ data_get($positions,'date.width',25) }}%;--element-scale:{{ data_get($positions,'date.scale',100)/100 }}">{{ now()->format('F d, Y') }}</div>@endif
+            @if($signature && data_get($visibleElements,'signature',true))<div class="certificate-drag-item signature-image" style="left:{{ data_get($positions,'signature.x',80) }}%;top:{{ data_get($positions,'signature.y',76) }}%;width:{{ data_get($positions,'signature.width',22) }}%;--element-scale:{{ data_get($positions,'signature.scale',100)/100 }}"><img src="{{ $signature }}" alt="Signature"></div>@endif
+            @if(data_get($visibleElements,'signatory',true))<div class="certificate-drag-item meta" style="left:{{ data_get($positions,'signatory.x',80) }}%;top:{{ data_get($positions,'signatory.y',86) }}%;width:{{ data_get($positions,'signatory.width',30) }}%;--element-scale:{{ data_get($positions,'signatory.scale',100)/100 }}">{{ data_get($design,'signatory','Authorized Signatory') }}</div>@endif
         </div>
     </div></section>
 @endif

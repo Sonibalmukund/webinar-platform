@@ -248,7 +248,6 @@ class RealtimeExperienceTest extends TestCase
             'polls_enabled' => 1,
             'comments_enabled' => 1,
             'feedback_enabled' => 1,
-            'show_poll_correct_answer' => 1,
         ])->assertRedirect();
 
         Event::assertDispatched(WebinarRoomUpdated::class, fn ($event) =>
@@ -258,7 +257,6 @@ class RealtimeExperienceTest extends TestCase
             $event->state['polls_enabled'] === true &&
             $event->state['comments_enabled'] === true &&
             $event->state['feedback_enabled'] === true &&
-            $event->state['show_poll_correct_answer'] === true &&
             $event->state['status'] === 'live'
         );
 
@@ -373,6 +371,48 @@ class RealtimeExperienceTest extends TestCase
             ->assertSee('https://www.linkedin.com/sharing/share-offsite/', false);
     }
 
+    public function test_multiple_choice_poll_saves_all_selected_options_in_one_submission(): void
+    {
+        Event::fake([\App\Events\WebinarPollUpdated::class]);
+        $admin = $this->user('super-admin');
+        $learner = $this->user('learner');
+        $webinar = $this->webinar($admin);
+        Registration::create(['webinar_id' => $webinar->id, 'user_id' => $learner->id, 'email' => $learner->email, 'status' => 'approved']);
+        $poll = Poll::create(['webinar_id' => $webinar->id, 'created_by' => $admin->id, 'question' => 'Select topics', 'status' => 'active', 'allow_multiple' => true]);
+        $one = $poll->options()->create(['label' => 'First', 'display_order' => 0]);
+        $two = $poll->options()->create(['label' => 'Second', 'display_order' => 1]);
+        $poll->options()->create(['label' => 'Third', 'display_order' => 2]);
+
+        $this->actingAs($learner)->get(route('webinars.dashboard', $webinar))
+            ->assertOk()->assertSee('type="checkbox"', false)->assertSee('Submit selected answers');
+
+        $this->postJson(route('webinars.polls.vote', [$webinar, $poll]), ['option_ids' => [$one->id, $two->id]])
+            ->assertOk()->assertJsonPath('selected_option_ids.0', $one->id)->assertJsonPath('selected_option_ids.1', $two->id);
+
+        $this->assertSame(2, DB::table('poll_responses')->where('poll_id', $poll->id)->where('user_id', $learner->id)->count());
+    }
+
+    public function test_no_player_uses_waiting_room_image_and_dashboard_shows_timezone_context(): void
+    {
+        $admin = $this->user('super-admin');
+        $learner = $this->user('learner');
+        $webinar = $this->webinar($admin);
+        $webinar->update([
+            'live_provider' => null,
+            'live_url' => null,
+            'language' => 'hi',
+            'timezone' => 'Asia/Kolkata',
+            'settings' => ['experience' => ['waiting_media_url' => '/storage/webinars/waiting-room.jpg']],
+        ]);
+        Registration::create(['webinar_id' => $webinar->id, 'user_id' => $learner->id, 'email' => $learner->email, 'status' => 'approved']);
+
+        $this->actingAs($learner)->get(route('webinars.dashboard', $webinar))
+            ->assertOk()
+            ->assertSee('/storage/webinars/waiting-room.jpg', false)
+            ->assertDontSee('Hindi')
+            ->assertSee('Asia/Kolkata');
+    }
+
     public function test_background_presence_keeps_user_online_without_adding_watch_time(): void
     {
         Carbon::setTestNow('2026-09-13 10:00:00');
@@ -389,31 +429,42 @@ class RealtimeExperienceTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_correct_poll_answer_is_only_highlighted_when_live_controller_enables_it(): void
+    public function test_quiz_hides_percentages_and_reveals_answer_after_webinar_finishes(): void
     {
         $admin = $this->user('super-admin');
         $learner = $this->user('learner');
         $webinar = $this->webinar($admin);
         Registration::create(['webinar_id' => $webinar->id, 'user_id' => $learner->id, 'email' => $learner->email, 'status' => 'approved']);
-        $poll = Poll::create(['webinar_id' => $webinar->id, 'created_by' => $admin->id, 'question' => 'Reveal test?', 'status' => 'active']);
+        $poll = Poll::create(['webinar_id' => $webinar->id, 'created_by' => $admin->id, 'question' => 'Reveal test?', 'status' => 'active', 'answer_reveal' => 'after_webinar']);
         $wrong = $poll->options()->create(['label' => 'Wrong choice', 'is_correct' => false, 'display_order' => 0]);
         $correct = $poll->options()->create(['label' => 'Right choice', 'is_correct' => true, 'display_order' => 1]);
 
         $this->actingAs($learner)->postJson(route('webinars.polls.vote', [$webinar, $poll]), ['option_id' => $wrong->id])
             ->assertOk()->assertJsonPath('show_correct_answer', false)->assertJsonPath('correct_option_id', null);
         $this->get(route('webinars.polls.active', $webinar))->assertOk()
-            ->assertDontSee('quiz-correct', false)->assertDontSee('Your Answer')->assertDontSee('Correct Answer');
+            ->assertDontSee('quiz-correct', false)->assertDontSee('data-poll-result', false)->assertDontSee('total votes');
 
-        $this->actingAs($admin)->put(route('admin.webinars.controls', $webinar), [
-            'status' => 'live', 'chat_enabled' => 1, 'polls_enabled' => 1,
-            'comments_enabled' => 1, 'feedback_enabled' => 1,
-            'show_poll_correct_answer' => 1,
-        ])->assertRedirect();
+        $webinar->update(['status' => 'completed', 'ends_at' => now()->subMinute()]);
 
         $this->actingAs($learner)->get(route('webinars.polls.active', $webinar))->assertOk()
             ->assertSee('data-option-id="'.$correct->id.'"', false)
             ->assertSee('quiz-correct', false)
-            ->assertDontSee('Your Answer')->assertDontSee('Correct Answer');
+            ->assertDontSee('data-poll-result', false)->assertDontSee('total votes');
+    }
+
+    public function test_quiz_immediate_and_never_reveal_modes_are_respected(): void
+    {
+        $admin = $this->user('super-admin');
+        $webinar = $this->webinar($admin);
+
+        $immediate = Poll::create(['webinar_id' => $webinar->id, 'created_by' => $admin->id, 'question' => 'Immediate?', 'status' => 'active', 'answer_reveal' => 'immediate']);
+        $immediate->options()->create(['label' => 'Correct', 'is_correct' => true, 'display_order' => 0]);
+        $this->assertTrue($immediate->fresh('options')->shouldRevealAnswer($webinar));
+
+        $never = Poll::create(['webinar_id' => $webinar->id, 'created_by' => $admin->id, 'question' => 'Never?', 'status' => 'active', 'answer_reveal' => 'never']);
+        $never->options()->create(['label' => 'Correct', 'is_correct' => true, 'display_order' => 0]);
+        $webinar->update(['status' => 'completed', 'ends_at' => now()->subMinute()]);
+        $this->assertFalse($never->fresh('options')->shouldRevealAnswer($webinar->fresh()));
     }
 
     public function test_live_controller_viewer_fallback_endpoint_counts_recent_attendees(): void
@@ -456,11 +507,8 @@ class RealtimeExperienceTest extends TestCase
             ->assertSee('Poll voter logs')
             ->assertSee($learner->email)
             ->assertSee('VirtualPortal answer')
-            ->assertSee('View results')
-            ->assertSee(route('admin.polls.show', $poll), false)
-            ->assertSee('sidebar-uploaded-brand', false)
-            ->assertSee('site-brand-logo', false)
-            ->assertSee('/storage/site/', false);
+            ->assertDontSee('View results')
+            ->assertDontSee(route('admin.polls.show', $poll), false);
 
         $this->actingAs($sub)->get(route('admin.polls.logs'))->assertForbidden();
         $this->actingAs($sub)->get(route('admin.certificates.logs'))->assertForbidden();

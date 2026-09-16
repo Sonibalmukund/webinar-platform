@@ -62,7 +62,7 @@ class AttendanceController extends Controller
                 $timezone = $row->webinar_timezone ?: config('app.timezone');
                 fputcsv($out, [
                     $row->user_name, $row->email, $row->mobile, $row->webinar_title,
-                    $row->joined_at ? Carbon::parse($row->joined_at)->timezone($timezone)->format('Y-m-d H:i:s T') : null,
+                    ($row->joined_at ?: $row->created_at) ? Carbon::parse($row->joined_at ?: $row->created_at)->timezone($timezone)->format('Y-m-d H:i:s T') : null,
                     $row->left_at ? Carbon::parse($row->left_at)->timezone($timezone)->format('Y-m-d H:i:s T') : null,
                     $row->watch_seconds,
                     $row->last_seen_at ? Carbon::parse($row->last_seen_at)->timezone($timezone)->format('Y-m-d H:i:s T') : null,

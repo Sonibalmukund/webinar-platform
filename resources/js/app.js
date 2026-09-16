@@ -5,9 +5,35 @@ import '../css/event-experience.css';
 import $ from 'jquery';
 import 'jquery-validation';
 import Chart from 'chart.js/auto';
+import flatpickr from 'flatpickr';
+import 'flatpickr/dist/flatpickr.min.css';
 
 window.$ = window.jQuery = $;
 window.Chart = Chart;
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-webinar-datetime-picker]').forEach(input => {
+        const picker = flatpickr(input, {
+            enableTime: true,
+            time_24hr: false,
+            minuteIncrement: 5,
+            allowInput: true,
+            altInput: true,
+            altFormat: 'd M Y · h:i K',
+            dateFormat: 'Y-m-d\\TH:i',
+            disableMobile: true,
+            onChange: () => input.dispatchEvent(new Event('input', { bubbles: true })),
+        });
+        input._flatpickr = picker;
+    });
+
+    const startsAt = document.querySelector('#webinarStartsAt');
+    const endsAt = document.querySelector('#webinarEndsAt');
+    startsAt?._flatpickr?.config.onChange.push((dates) => {
+        endsAt?._flatpickr?.set('minDate', dates[0] || null);
+    });
+    if (startsAt?.value) endsAt?._flatpickr?.set('minDate', startsAt.value);
+});
 
 window.showToast = function(message, tone = 'success') {
     if (!message) return;
@@ -154,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('.sidebar-help').remove();
     $('.premium-table').each(function () {
         const table = $(this);
-        if (!table.find('thead th').filter(function () { return $(this).text().trim().toLowerCase() === 'index'; }).length) {
+        if (!table.find('thead th').filter(function () { return ['index', '#', 'sr. no.', 'sr no'].includes($(this).text().trim().toLowerCase()); }).length) {
             table.find('thead tr').prepend('<th>Index</th>');
             table.find('tbody tr').each(function (index) {
                 const row = $(this);
@@ -319,6 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const elementWidth = document.querySelector('#certificateWidth');
     const elementScale = document.querySelector('#certificateScale');
     const certificateItems = [...document.querySelectorAll('[data-certificate-element]')];
+    const certificatePositionInputs = [coordinateX, coordinateY, elementWidth, elementScale].filter(Boolean);
     const selectCertificateElement = key => {
         elementSelect.value = key;
         certificateItems.forEach(item => item.classList.toggle('selected', item.dataset.certificateElement === key));
@@ -401,7 +428,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (elementSelect) selectCertificateElement(elementSelect.value);
     document.querySelector('#certificateImageInput')?.addEventListener('change', event => {
         const file = event.target.files?.[0];
-        if (file && certificateCanvas) certificateCanvas.style.backgroundImage = `url('${URL.createObjectURL(file)}')`;
+        if (file && certificateCanvas) {
+            const objectUrl = URL.createObjectURL(file);
+            certificateCanvas.style.backgroundImage = `url('${objectUrl}')`;
+            const image = new Image();
+            image.addEventListener('load', () => {
+                if (image.naturalWidth && image.naturalHeight) {
+                    certificateCanvas.style.aspectRatio = `${image.naturalWidth} / ${image.naturalHeight}`;
+                }
+                URL.revokeObjectURL(objectUrl);
+            }, { once: true });
+            image.src = objectUrl;
+        }
     });
     document.querySelector('#signatureImageInput')?.addEventListener('change', event => {
         const file = event.target.files?.[0];
@@ -409,10 +447,57 @@ document.addEventListener('DOMContentLoaded', () => {
         const signatureElement = document.querySelector('[data-certificate-element="signature"]');
         if (file && preview && signatureElement) {
             preview.src = URL.createObjectURL(file);
+            const visibility = document.querySelector('[data-certificate-visibility="signature"]');
+            if (visibility) {
+                visibility.checked = true;
+                visibility.dispatchEvent(new Event('change'));
+            }
             signatureElement.classList.remove('d-none');
             selectCertificateElement('signature');
         }
     });
+    const syncCertificateVisibility = input => {
+        const key = input.dataset.certificateVisibility;
+        const target = document.querySelector(`[data-certificate-element="${key}"]`);
+        if (!target) return;
+        const hasSignature = key !== 'signature' || Boolean(target.querySelector('img')?.getAttribute('src'));
+        target.classList.toggle('d-none', !input.checked || !hasSignature);
+    };
+    const syncCertificatePositionOptions = () => {
+        if (!elementSelect) return;
+
+        const enabledElements = new Set(
+            [...document.querySelectorAll('[data-certificate-visibility]:checked')]
+                .map(input => input.dataset.certificateVisibility),
+        );
+
+        [...elementSelect.options].forEach(option => {
+            const enabled = enabledElements.has(option.value);
+            option.hidden = !enabled;
+            option.disabled = !enabled;
+        });
+
+        const availableOption = [...elementSelect.options].find(option => !option.disabled);
+        elementSelect.disabled = !availableOption;
+        certificatePositionInputs.forEach(input => { input.disabled = !availableOption; });
+
+        if (!availableOption) {
+            certificatePositionInputs.forEach(input => { input.value = ''; });
+            certificateItems.forEach(item => item.classList.remove('selected'));
+            return;
+        }
+
+        if (!enabledElements.has(elementSelect.value)) elementSelect.value = availableOption.value;
+        selectCertificateElement(elementSelect.value);
+    };
+    document.querySelectorAll('[data-certificate-visibility]').forEach(input => {
+        input.addEventListener('change', () => {
+            syncCertificateVisibility(input);
+            syncCertificatePositionOptions();
+        });
+        syncCertificateVisibility(input);
+    });
+    syncCertificatePositionOptions();
 
     const sidebar = document.querySelector('#sidebar');
     document.querySelector('.sidebar-nav > a[href="/admin/profile"]')?.remove();
