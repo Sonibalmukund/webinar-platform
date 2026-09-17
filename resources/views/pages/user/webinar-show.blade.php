@@ -230,7 +230,9 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
             @elseif($isRegistered && $canEnter)
                 <a class="btn btn-register-nav" href="{{ route('webinars.dashboard',$webinar) }}">{{ __('webinar.enter') }}</a>
             @elseif($isRegistered)
-                <button class="btn btn-register-nav" type="button" disabled>{{ __('webinar.registered_closed') }}</button>
+                <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill fw-bold" style="font-size: 0.84rem;">
+                    <i class="bi bi-check2-circle me-1"></i> {{ __('webinar.registered') }}
+                </span>
             @else
                 <button type="button" class="btn btn-register-nav" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
             @endif
@@ -248,7 +250,7 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
             @if($brands->isNotEmpty())
                 <a href="#brands" data-bs-toggle="collapse" data-bs-target="#micrositeMobileNav">{{ __('webinar.brands') }}</a>
             @endif
-            <div class="d-flex gap-2 pt-2 border-top mt-1">
+            <div class="d-flex align-items-center gap-2 pt-2 border-top mt-1 flex-wrap">
                 @if($isStaffPreview)
                     <a class="btn btn-sm btn-register-nav rounded-pill px-3" href="{{ route('admin.webinars.edit',$webinar) }}">{{ __('webinar.admin_edit') }}</a>
                 @elseif(!auth()->check())
@@ -257,7 +259,9 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                 @elseif($isRegistered && $canEnter)
                     <a class="btn btn-sm btn-register-nav rounded-pill px-3" href="{{ route('webinars.dashboard',$webinar) }}">{{ __('webinar.enter') }}</a>
                 @elseif($isRegistered)
-                    <button class="btn btn-sm btn-register-nav rounded-pill px-3" type="button" disabled>{{ __('webinar.opens', ['time' => $opensAt?->timezone($webinar->timezone)->locale(app()->getLocale())->translatedFormat('d M, g:i A')]) }}</button>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill fw-bold">
+                        <i class="bi bi-check2-circle me-1"></i> {{ __('webinar.registered') }}
+                    </span>
                 @else
                     <button type="button" class="btn btn-sm btn-register-nav rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
                 @endif
@@ -325,7 +329,10 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                     <div class="banner-event-detail">
                         <div class="rail-icon"><i class="bi bi-calendar-event"></i></div>
                         <div class="rail-info">
-                            <strong>
+                            <strong data-event-rail-date 
+                                    data-utc="{{ $webinar->starts_at?->toIso8601String() }}" 
+                                    data-event-tz="{{ $webinar->timezone }}" 
+                                    data-event-formatted="{{ $webinar->starts_at?->timezone($webinar->timezone)->locale(app()->getLocale())->translatedFormat('d F Y') }}">
                                 {{ $webinar->starts_at?->timezone($webinar->timezone)->locale(app()->getLocale())->translatedFormat('d F Y') ?: __('webinar.date_tba') }}
                                 @if($webinar->ends_at && $webinar->ends_at->format('Y-m-d') !== $webinar->starts_at?->format('Y-m-d'))
                                     - {{ $webinar->ends_at->timezone($webinar->timezone)->locale(app()->getLocale())->translatedFormat('d F Y') }}
@@ -337,10 +344,13 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,.webinar-microsite-page::-webkit
                     <div class="banner-event-detail">
                         <div class="rail-icon"><i class="bi bi-clock"></i></div>
                         <div class="rail-info">
-                            <strong>
+                            <strong data-event-rail-time 
+                                    data-utc="{{ $webinar->starts_at?->toIso8601String() }}" 
+                                    data-event-tz="{{ $webinar->timezone }}" 
+                                    data-event-formatted="{{ $webinar->starts_at?->timezone($webinar->timezone)->format('g:i A') }}">
                                 {{ $webinar->starts_at?->timezone($webinar->timezone)->format('g:i A') ?: __('webinar.time_tba') }}
                                 @if($webinar->starts_at)
-                                    {{ __('webinar.onwards') }}
+                                    ({{ $webinar->timezone }})
                                 @endif
                             </strong>
                             <small>{{ __('webinar.reporting') }}</small>
@@ -621,8 +631,93 @@ document.addEventListener('DOMContentLoaded',()=>{
                 }
             });
     }
+
+    // Local Timezone (e.g. IST) vs Event Timezone (e.g. Pacific/Wake)
+    function getFriendlyTzLabel(date) {
+        try {
+            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            if (tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta' || tz === 'IST') return 'IST';
+            if (-date.getTimezoneOffset() === 330) return 'IST';
+            const parts = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(date);
+            const tzPart = parts.find(p => p.type === 'timeZoneName');
+            let label = tzPart ? tzPart.value : (tz || '');
+            if (label === 'GMT+5:30' || label === 'GMT+05:30' || label === 'UTC+5:30' || label === 'UTC+05:30') return 'IST';
+            return label;
+        } catch (e) {
+            return 'IST';
+        }
+    }
+
+    const railTime = document.querySelector('[data-event-rail-time]');
+    if (railTime && railTime.dataset.utc) {
+        try {
+            const utcDate = new Date(railTime.dataset.utc);
+            if (!isNaN(utcDate.getTime())) {
+                const tzLabel = getFriendlyTzLabel(utcDate);
+                const timeFormatted = utcDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                railTime.innerHTML = timeFormatted + ' ' + tzLabel;
+            }
+        } catch(e) {}
+    }
+    const railDate = document.querySelector('[data-event-rail-date]');
+    if (railDate && railDate.dataset.utc) {
+        try {
+            const utcDate = new Date(railDate.dataset.utc);
+            if (!isNaN(utcDate.getTime())) {
+                const userDateFormatted = utcDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+                railDate.textContent = userDateFormatted;
+            }
+        } catch(e) {}
+    }
 });
 </script>
+
+@if(!empty($webinar->language) && $webinar->language !== 'en')
+<!-- Hidden Background Google Translate Element -->
+<div id="google_translate_element" style="display:none!important;" aria-hidden="true"></div>
+<style>
+.goog-te-banner-frame.skiptranslate,
+.goog-te-banner-frame,
+#goog-gt-tt,
+.goog-te-balloon-frame,
+.skiptranslate > iframe {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+}
+body { top: 0px !important; position: static !important; }
+.goog-text-highlight { background-color: transparent !important; border: none !important; box-shadow: none !important; }
+</style>
+<script>
+(function() {
+    const targetLang = @json($webinar->language);
+    const googleCodeMap = { 'kok': 'gom', 'mni': 'mni-Mtei', 'zh': 'zh-CN' };
+    const gCode = googleCodeMap[targetLang] || targetLang;
+    const cookieVal = '/en/' + gCode;
+    const currentCookie = (document.cookie.match(/(?:^|;\s*)googtrans=([^;]*)/) || [])[1] || '';
+    if (currentCookie !== cookieVal) {
+        document.cookie = "googtrans=" + cookieVal + "; path=/;";
+        document.cookie = "googtrans=" + cookieVal + "; path=/; domain=" + window.location.hostname + ";";
+    }
+    window.googleTranslateElementInit = function() {
+        if (window.google && window.google.translate) {
+            new window.google.translate.TranslateElement({
+                pageLanguage: 'en',
+                autoDisplay: false,
+                layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE
+            }, 'google_translate_element');
+        }
+    };
+    if (!document.getElementById('google-translate-script')) {
+        const s = document.createElement('script');
+        s.id = 'google-translate-script';
+        s.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+        document.head.appendChild(s);
+    }
+})();
+</script>
+@endif
 @endsection
 
 @section('auth-modals')

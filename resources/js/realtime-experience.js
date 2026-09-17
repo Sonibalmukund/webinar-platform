@@ -19,6 +19,15 @@ document.addEventListener('DOMContentLoaded', () => {
         shell.hidden = !state.enabled;
         shell.style.display = state.enabled ? '' : 'none';
         shell.dataset.attendancePercent = state.attendance_percent;
+        const qGrid = shell.closest('.quick-grid');
+        if (qGrid) {
+            const hasResources = Boolean(qGrid.querySelector('a[href="#session-resources"]'));
+            if (!state.enabled && !hasResources) {
+                qGrid.classList.add('single-action');
+            } else {
+                qGrid.classList.remove('single-action');
+            }
+        }
         target.innerHTML = state.eligible
             ? `<a href="${shell.dataset.certificateUrl}" class="btn btn-gradient w-100 d-inline-flex align-items-center justify-content-center gap-2 py-2 fw-bold text-white"><i class="bi bi-award-fill"></i>Download certificate</a>`
             : `<div class="quick-disabled"><i class="bi bi-lock-fill"></i>Certificate unlocks at ${state.minimum}% watch time${state.poll_required ? ' + one poll response' : ''} (currently ${state.attendance_percent}%)</div>`;
@@ -224,6 +233,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         statePill.innerHTML = `<i></i>${event.state.status.toUpperCase()}`;
                     }
                     notify(`Webinar status changed to ${event.state.status}.`);
+                    if (['scheduled', 'draft'].includes(event.state.status)) {
+                        const slug = attendee?.dataset?.webinarSlug || window.location.pathname.split('/')[1];
+                        if (slug) {
+                            setTimeout(() => {
+                                window.location.href = '/' + slug;
+                            }, 1000);
+                        }
+                    }
                 }
                 if (event.change === 'poll') {
                     if (event.state?.status === 'active') {

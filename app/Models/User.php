@@ -88,6 +88,15 @@ class User extends Authenticatable
         return $this->webinarPermissions()->where('slug', $permission)->exists();
     }
 
+    public function hasAnyPermission(array $permissions): bool
+    {
+        if ($this->hasRole('super-admin')) {
+            return true;
+        }
+
+        return $this->webinarPermissions()->whereIn('slug', $permissions)->exists();
+    }
+
     public function hasAssignedWebinar(Webinar|int $webinar): bool
     {
         if ($this->hasRole('super-admin')) {
@@ -141,5 +150,17 @@ class User extends Authenticatable
         $webinarId = $webinar instanceof Webinar ? $webinar->id : $webinar;
 
         return $this->webinarPermissions()->wherePivot('webinar_id', $webinarId)->where('slug', $permission)->exists();
+    }
+
+    public function accessibleWebinarIds(): \Illuminate\Support\Collection
+    {
+        if ($this->hasRole('super-admin')) {
+            return Webinar::pluck('id');
+        }
+
+        return $this->assignedWebinars()->pluck('webinars.id')
+            ->merge(Webinar::where('created_by', $this->id)->pluck('id'))
+            ->unique()
+            ->values();
     }
 }

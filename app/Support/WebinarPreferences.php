@@ -45,8 +45,27 @@ final class WebinarPreferences
 
     public static function timezones(): array
     {
+        $aliases = [
+            'Asia/Manila' => 'Asia/Manila (Philippines)',
+            'Asia/Kolkata' => 'Asia/Kolkata (India / IST)',
+            'Asia/Dubai' => 'Asia/Dubai (UAE)',
+            'Asia/Singapore' => 'Asia/Singapore (Singapore)',
+            'Asia/Kathmandu' => 'Asia/Kathmandu (Nepal)',
+            'Asia/Dhaka' => 'Asia/Dhaka (Bangladesh)',
+            'Asia/Colombo' => 'Asia/Colombo (Sri Lanka)',
+            'Asia/Karachi' => 'Asia/Karachi (Pakistan)',
+            'Asia/Bangkok' => 'Asia/Bangkok (Thailand / Vietnam)',
+            'Asia/Jakarta' => 'Asia/Jakarta (Indonesia)',
+            'Asia/Tokyo' => 'Asia/Tokyo (Japan)',
+            'Europe/London' => 'Europe/London (UK / GMT)',
+            'America/New_York' => 'America/New_York (US Eastern)',
+            'America/Chicago' => 'America/Chicago (US Central)',
+            'America/Los_Angeles' => 'America/Los_Angeles (US Pacific)',
+            'Australia/Sydney' => 'Australia/Sydney (Australia)',
+        ];
+
         return collect(timezone_identifiers_list())
-            ->mapWithKeys(fn (string $timezone) => [$timezone => str_replace('_', ' ', $timezone)])
+            ->mapWithKeys(fn (string $timezone) => [$timezone => $aliases[$timezone] ?? str_replace('_', ' ', $timezone)])
             ->all();
     }
 

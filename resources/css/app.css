@@ -300,7 +300,7 @@ html,body{max-width:100%;overflow-x:hidden}
 .event-dashboard .event-meta > span { min-width:124px; background:#ffffff04; padding:9px 12px; }
 .event-dashboard .event-side {
     position:static; align-self:stretch; min-width:0; height:100%;
-    border:0; border-left:1px solid #ffffff14; border-radius:0; overflow:hidden;
+    border:0; border-left:1px solid #ffffff14; border-radius:0; overflow-y:auto; overflow-x:hidden;
     box-shadow:0 10px 30px #0002; background:#101a2c;
 }
 .event-side-heading { display:flex; align-items:center; justify-content:space-between; padding:18px 16px 15px; border-bottom:1px solid #ffffff0e; }
@@ -313,7 +313,7 @@ html,body{max-width:100%;overflow-x:hidden}
 .event-dashboard .module-tabs button span { font-size:.64rem; }
 .event-dashboard .module-panel { height:auto; min-height:0; padding:16px; background:none; }
 .event-dashboard .module-panel[data-module-panel=chat].active { display:flex; flex-direction:column; }
-.event-dashboard .module-scroll { flex:1; min-height:0; max-height:none; padding-right:4px; overscroll-behavior:contain; }
+.event-dashboard .module-scroll { flex:1; min-height:0; max-height:none; padding-right:4px; overscroll-behavior:auto; }
 .event-dashboard .module-composer { position:static; flex-shrink:0; padding-top:14px; background:none; }
 .event-dashboard .chat-message { gap:8px; margin-bottom:16px; }
 .event-dashboard .chat-message > span { flex-shrink:0; width:28px; height:28px; border-radius:9px; background:#7660b5; font-size:.6rem; }

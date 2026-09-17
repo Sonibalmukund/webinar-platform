@@ -52,13 +52,10 @@ Route::middleware(['auth', 'role:learner'])->group(function () {
     Route::post('/webinars/{webinar:slug}/register', [WebinarRegistrationController::class, 'store'])->name('webinars.register');
     Route::view('/live-webinar', 'pages.user.live')->name('webinars.live');
 
-    Route::redirect('/recordings', '/dashboard')->name('recordings.index');
-    Route::redirect('/certificates', '/dashboard')->name('certificates.index');
-    Route::redirect('/bookmarks', '/dashboard')->name('bookmarks.index');
-    Route::redirect('/my-webinars', '/dashboard')->name('webinars.mine');
-    Route::view('/past-webinars', 'pages.shared.resource', ['title' => 'Past Webinars', 'type' => 'webinars']);
-    Route::view('/upcoming-webinars', 'pages.shared.resource', ['title' => 'Upcoming Webinars', 'type' => 'webinars']);
-    Route::view('/feedback', 'pages.shared.resource', ['title' => 'Share Feedback', 'type' => 'form']);
+    Route::get('/recordings', [DashboardController::class, 'recordings'])->name('recordings.index');
+    Route::get('/certificates', [DashboardController::class, 'certificates'])->name('certificates.index');
+    Route::get('/bookmarks', [DashboardController::class, 'bookmarks'])->name('bookmarks.index');
+    Route::get('/my-webinars', [DashboardController::class, 'myWebinars'])->name('webinars.mine');
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
     Route::redirect('/profile', '/dashboard')->name('profile.show');

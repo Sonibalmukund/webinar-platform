@@ -10,6 +10,8 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
+use App\Support\DynamicFieldsHelper;
+
 class AttendanceController extends Controller
 {
     private function query(int $webinarId = 0, string $search = '')
@@ -29,7 +31,7 @@ class AttendanceController extends Controller
 
     private function assignedIds(Request $request)
     {
-        return $request->user()->hasRole('sub-admin') ? $request->user()->assignedWebinars()->pluck('webinars.id') : null;
+        return $request->user()->hasRole('sub-admin') ? $request->user()->accessibleWebinarIds() : null;
     }
 
     public function index(Request $request): View
@@ -44,9 +46,12 @@ class AttendanceController extends Controller
 
             return $row;
         });
+
+        $dynamicColumns = DynamicFieldsHelper::attach($rows, $webinarId ? [$webinarId] : null);
+
         $webinars = Webinar::when($assignedIds, fn ($query) => $query->whereIn('id', $assignedIds))->orderBy('title')->get();
 
-        return view('pages.admin.attendance', compact('rows', 'webinars', 'webinarId', 'search'));
+        return view('pages.admin.attendance', compact('rows', 'webinars', 'webinarId', 'search', 'dynamicColumns'));
     }
 
     public function export(Request $request)
@@ -55,18 +60,26 @@ class AttendanceController extends Controller
         $search = trim((string) $request->input('search'));
         $rows = $this->query($request->integer('webinar_id'), $search)->when($assignedIds, fn ($query) => $query->whereIn('webinar_attendees.webinar_id', $assignedIds))->get();
 
-        return response()->streamDownload(function () use ($rows) {
+        $dynamicColumns = DynamicFieldsHelper::attach($rows, $request->integer('webinar_id') ? [$request->integer('webinar_id')] : null);
+
+        return response()->streamDownload(function () use ($rows, $dynamicColumns) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['User', 'Email', 'Mobile', 'Webinar', 'Joined', 'Left', 'Watch seconds', 'Last seen']);
+            $header = array_merge(['User', 'Email', 'Mobile', 'Webinar'], $dynamicColumns, ['Joined', 'Left', 'Watch seconds', 'Last seen']);
+            fputcsv($out, $header);
             foreach ($rows as $row) {
                 $timezone = $row->webinar_timezone ?: config('app.timezone');
-                fputcsv($out, [
-                    $row->user_name, $row->email, $row->mobile, $row->webinar_title,
+                $dynamicValues = [];
+                foreach ($dynamicColumns as $col) {
+                    $dynamicValues[] = $row->dynamic_fields[$col] ?? '';
+                }
+                fputcsv($out, array_merge([
+                    $row->user_name, $row->email, $row->mobile, $row->webinar_title
+                ], $dynamicValues, [
                     ($row->joined_at ?: $row->created_at) ? Carbon::parse($row->joined_at ?: $row->created_at)->timezone($timezone)->format('Y-m-d H:i:s T') : null,
                     $row->left_at ? Carbon::parse($row->left_at)->timezone($timezone)->format('Y-m-d H:i:s T') : null,
                     $row->watch_seconds,
                     $row->last_seen_at ? Carbon::parse($row->last_seen_at)->timezone($timezone)->format('Y-m-d H:i:s T') : null,
-                ]);
+                ]));
             }
             fclose($out);
         }, 'attendance-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv']);

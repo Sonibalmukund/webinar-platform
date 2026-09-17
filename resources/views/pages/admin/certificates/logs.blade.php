@@ -14,13 +14,17 @@
 
 <x-admin-webinar-filter :webinars="$webinars" :selected="$webinarId" :search="$search" placeholder="Search attendee name, email, webinar, or IP..." />
 
+@php($dynamicCols = $dynamicColumns ?? ($logs->dynamic_columns ?? []))
 <div class="panel-card table-responsive">
     <table class="premium-table">
         <thead>
             <tr>
                 <th>Index</th>
                 <th>Attendee</th>
+                <th>Email</th>
+                <th>Mobile</th>
                 <th>Webinar</th>
+                @foreach($dynamicCols as $col)<th>{{ $col }}</th>@endforeach
                 <th>IP Address</th>
                 <th>Downloaded At</th>
             </tr>
@@ -30,12 +34,20 @@
                 <tr>
                     <td>{{ $logs->firstItem() + $loop->index }}</td>
                     <td>
-                        <strong>{{ $log->user_name }}</strong><br>
-                        <small class="text-muted">{{ $log->user_email }}</small>
+                        <strong>{{ $log->user_name }}</strong>
+                    </td>
+                    <td>
+                        {{ $log->user_email }}
+                    </td>
+                    <td>
+                        {{ $log->user_mobile ?: '—' }}
                     </td>
                     <td>
                         <strong>{{ $log->webinar_title }}</strong>
                     </td>
+                    @foreach($dynamicCols as $col)
+                        <td>{{ $log->dynamic_fields[$col] ?? '—' }}</td>
+                    @endforeach
                     <td>
                         <span class="badge bg-light text-dark border">{{ $log->ip_address ?: 'Unknown' }}</span>
                     </td>
@@ -48,7 +60,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="5" class="text-center py-5 text-muted">
+                    <td colspan="{{ 7 + count($dynamicCols) }}" class="text-center py-5 text-muted">
                         <i class="bi bi-journal-x fs-1 d-block mb-2 text-secondary"></i>
                         No certificate download records found.
                     </td>

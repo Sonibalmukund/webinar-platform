@@ -211,6 +211,10 @@
     box-shadow: 0 0 0 4px rgba(238, 31, 45, .12), 0 12px 28px rgba(185, 21, 34, .1);
     transform: translateY(-1px);
 }
+.schedule-picker-shell.is-invalid {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 4px rgba(220, 53, 69, .15) !important;
+}
 .schedule-picker-icon {
     align-self: stretch;
     display: grid;
@@ -568,10 +572,24 @@ span.flatpickr-weekday { color: #9f1239 !important; background: #fff1f2 !importa
     </div>
 </div>
 
-<form method="POST" enctype="multipart/form-data" id="webinarForm" action="{{ $webinar->exists ? route('admin.webinars.update', $webinar) : route('admin.webinars.store') }}" novalidate>
+<form method="POST" enctype="multipart/form-data" id="webinarForm" action="{{ $webinar->exists ? route('admin.webinars.update', $webinar) : route('admin.webinars.store') }}" novalidate data-no-validation>
     @csrf
     @if($webinar->exists)
         @method('PUT')
+    @endif
+
+    @if($errors->any())
+        <div class="alert alert-danger shadow-sm border-0 rounded-4 mb-4 p-3 d-flex align-items-start gap-3" role="alert">
+            <i class="bi bi-exclamation-triangle-fill fs-4 text-danger flex-shrink-0 mt-1"></i>
+            <div class="flex-grow-1">
+                <h5 class="alert-heading fw-bold mb-1 fs-6">Please resolve the following errors:</h5>
+                <ul class="mb-0 ps-3 small">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        </div>
     @endif
     @php
         $experience = (array) old('experience', data_get($webinar->settings, 'experience', []));
@@ -596,7 +614,8 @@ span.flatpickr-weekday { color: #9f1239 !important; background: #fff1f2 !importa
                         <span>Webinar Title</span>
                         <span class="req">*</span>
                     </label>
-                    <input class="form-control form-control-lg" id="webinarTitle" name="title" value="{{ old('title', $webinar->title) }}" placeholder="e.g. Future of Digital Healthcare 2026">
+                    <input class="form-control @error('title') is-invalid @enderror" id="webinarTitle" name="title" value="{{ old('title', $webinar->title) }}" placeholder="e.g. Strategic Global Leadership Summit 2026" required>
+                    @error('title')<div class="wizard-field-error"><i class="bi bi-exclamation-circle-fill"></i> {{ $message }}</div>@enderror
                 </div>
 
                 <div class="form-field full">
@@ -605,8 +624,8 @@ span.flatpickr-weekday { color: #9f1239 !important; background: #fff1f2 !importa
                         <span class="req">*</span>
                     </label>
                     <div class="input-group">
-                        <span class="input-group-text bg-light text-muted font-monospace">/webinars/</span>
-                        <input class="form-control font-monospace" id="webinarSlug" name="slug" value="{{ old('slug', $webinar->slug) }}" placeholder="auto-generated-from-title">
+                        <span class="input-group-text">/webinars/</span>
+                        <input class="form-control @error('slug') is-invalid @enderror" id="webinarSlug" name="slug" value="{{ old('slug', $webinar->slug) }}" placeholder="slug-auto-generates">
                     </div>
                     <small class="text-muted">Title type karte hi slug automatically generate hoga. Aap ise manually bhi edit kar sakte hain.</small>
                 </div>
@@ -614,9 +633,8 @@ span.flatpickr-weekday { color: #9f1239 !important; background: #fff1f2 !importa
                 <div class="form-field full">
                     <label class="form-label-custom" for="brandLogoFile">
                         <span>Client / Webinar Logo</span>
-                        @if(empty($experience['logo_url']))<span class="req">*</span>@endif
                     </label>
-                    <input class="form-control @error('brand_logo_file') is-invalid @enderror" type="file" id="brandLogoFile" name="brand_logo_file" accept="image/png,image/jpeg,image/webp,image/svg+xml" @required(empty($experience['logo_url']))>
+                    <input class="form-control @error('brand_logo_file') is-invalid @enderror" type="file" id="brandLogoFile" name="brand_logo_file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
                     @error('brand_logo_file')<div class="wizard-field-error"><i class="bi bi-exclamation-circle-fill"></i> {{ $message }}</div>@enderror
                     <small class="text-muted">This client-specific logo is shown on the webinar landing page and attendee room. PNG, JPG, SVG or WebP, up to 5 MB.</small>
                     @if(!empty($experience['logo_url']))
@@ -1695,21 +1713,27 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear existing custom errors in this step
         currentPane.querySelectorAll('.wizard-field-error').forEach(el => el.remove());
         currentPane.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        currentPane.querySelectorAll('.schedule-picker-shell').forEach(el => el.classList.remove('is-invalid'));
 
         const markInvalid = (input, message) => {
             isValid = false;
             const visibleInput = input._flatpickr?.altInput || input;
             visibleInput.classList.add('is-invalid');
+            const shell = visibleInput.closest('.schedule-picker-shell');
+            if (shell) shell.classList.add('is-invalid');
             const err = document.createElement('div');
             err.className = 'wizard-field-error text-danger small mt-1 fw-bold';
             err.innerHTML = `<i class="bi bi-exclamation-circle-fill me-1"></i> ${message}`;
-            const targetParent = visibleInput.closest('.schedule-picker-shell, .input-group') || visibleInput;
+            const targetParent = shell || visibleInput.closest('.input-group') || visibleInput;
             targetParent.parentNode.insertBefore(err, targetParent.nextSibling);
 
-            input.addEventListener('input', () => {
+            const clearErr = () => {
                 visibleInput.classList.remove('is-invalid');
+                if (shell) shell.classList.remove('is-invalid');
                 err.remove();
-            }, { once: true });
+            };
+            input.addEventListener('input', clearErr, { once: true });
+            input.addEventListener('change', clearErr, { once: true });
         };
 
         if (stepKey === '1') {
@@ -1795,6 +1819,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // Dynamic step updates when toggling Polls or Certificate
     togglePolls?.addEventListener('change', () => renderStep(null, false));
     toggleCert?.addEventListener('change', () => renderStep(null, false));
+
+    // Form submit listener: validate all active steps before submitting
+    const form = document.getElementById('webinarForm');
+    form?.addEventListener('submit', (e) => {
+        const activeSteps = getActiveSteps();
+        for (const step of activeSteps) {
+            if (!validateStep(step.key)) {
+                e.preventDefault();
+                e.stopPropagation();
+                renderStep(step.key, false);
+                const firstInvalid = document.querySelector(`.wizard-step-pane[data-step-pane="${step.key}"] .is-invalid`);
+                if (firstInvalid) {
+                    firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    firstInvalid.focus();
+                }
+                return false;
+            }
+        }
+    });
+
+    @if($errors->any())
+        const firstErrField = document.querySelector('.wizard-step-pane .is-invalid');
+        if (firstErrField) {
+            const parentPane = firstErrField.closest('.wizard-step-pane');
+            if (parentPane && parentPane.dataset.stepPane) {
+                renderStep(parentPane.dataset.stepPane, true);
+                firstErrField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    @endif
 
     // Poll options builder logic
     const pollList = document.getElementById('wizardPollAnswersList');
@@ -2001,36 +2055,59 @@ document.addEventListener('DOMContentLoaded', () => {
     const startsInput = document.querySelector('#webinarStartsAt');
     const endsInput = document.querySelector('#webinarEndsAt');
 
-    function checkDateOrder() {
+    function formatDatetimeLocal(d) {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function checkDateOrder(isStartsChange = false) {
         if (!startsInput || !endsInput) return;
         if (startsInput.value) {
             endsInput.min = startsInput.value;
+            const startDate = new Date(startsInput.value);
+            if (isStartsChange && (!endsInput.value || new Date(endsInput.value) <= startDate)) {
+                const autoEnd = new Date(startDate.getTime() + 60 * 60 * 1000);
+                endsInput.value = formatDatetimeLocal(autoEnd);
+                if (endsInput._flatpickr) {
+                    endsInput._flatpickr.setDate(autoEnd, false);
+                }
+            }
         }
-        let err = endsInput.parentElement.querySelector('.wizard-field-error');
+        const endsShell = endsInput.closest('.schedule-picker-shell') || endsInput;
+        const visibleEnds = endsInput._flatpickr?.altInput || endsInput;
+        const formField = endsInput.closest('.form-field') || endsShell.parentNode;
+        let err = formField.querySelector('.wizard-field-error-date');
+
         if (startsInput.value && endsInput.value) {
             const startDate = new Date(startsInput.value);
             const endDate = new Date(endsInput.value);
             if (endDate <= startDate) {
                 endsInput.classList.add('is-invalid');
+                visibleEnds.classList.add('is-invalid');
+                endsShell.classList.add('is-invalid');
                 if (!err) {
                     err = document.createElement('div');
-                    err.className = 'wizard-field-error text-danger small mt-1 fw-bold';
-                    endsInput.parentNode.insertBefore(err, endsInput.nextSibling);
+                    err.className = 'wizard-field-error wizard-field-error-date text-danger small mt-1 fw-bold';
+                    endsShell.parentNode.insertBefore(err, endsShell.nextSibling);
                 }
                 err.innerHTML = '<i class="bi bi-exclamation-circle-fill me-1"></i> End date and time must be after the start date and time.';
             } else {
                 endsInput.classList.remove('is-invalid');
+                visibleEnds.classList.remove('is-invalid');
+                endsShell.classList.remove('is-invalid');
                 if (err) err.remove();
             }
         } else {
             endsInput.classList.remove('is-invalid');
+            visibleEnds.classList.remove('is-invalid');
+            endsShell.classList.remove('is-invalid');
             if (err) err.remove();
         }
     }
 
-    startsInput?.addEventListener('change', checkDateOrder);
-    endsInput?.addEventListener('change', checkDateOrder);
-    endsInput?.addEventListener('input', checkDateOrder);
+    startsInput?.addEventListener('change', () => checkDateOrder(true));
+    endsInput?.addEventListener('change', () => checkDateOrder(false));
+    endsInput?.addEventListener('input', () => checkDateOrder(false));
 
     const timezoneInput = document.querySelector('#webinarTimezone');
     const schedulePreview = document.querySelector('#scheduleTimezonePreview');

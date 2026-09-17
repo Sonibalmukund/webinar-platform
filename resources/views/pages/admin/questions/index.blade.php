@@ -3,13 +3,18 @@
 @section('content')
 <div class="page-heading"><div><span class="eyebrow">AUDIENCE QUESTIONS</span><h1>Q&A</h1><p>Questions from webinars where Q&A is enabled.</p></div></div>
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+@php($dynamicCols = $dynamicColumns ?? ($questions->dynamic_columns ?? []))
 <section class="panel-card table-responsive">
     <table class="premium-table">
-        <thead><tr><th>Attendee</th><th>Question / Answer</th><th>Webinar</th><th>Received</th><th>Status</th></tr></thead>
+        <thead><tr><th>Attendee</th><th>Email</th><th>Mobile</th><th>Webinar</th>@foreach($dynamicCols as $col)<th>{{ $col }}</th>@endforeach<th>Question / Answer</th><th>Received</th><th>Status</th></tr></thead>
         <tbody>
         @forelse($questions as $question)
             <tr>
-                <td><strong>{{ $question->is_anonymous ? 'Anonymous' : ($question->user_name ?: 'Guest') }}</strong><br><small>{{ $question->is_anonymous ? '' : $question->user_email }}</small></td>
+                <td><strong>{{ $question->is_anonymous ? 'Anonymous' : ($question->user_name ?: 'Guest') }}</strong></td>
+                <td>{{ $question->is_anonymous ? '—' : ($question->user_email ?: '—') }}</td>
+                <td>{{ $question->is_anonymous ? '—' : ($question->user_mobile ?: '—') }}</td>
+                <td>{{ $question->webinar_title }}</td>
+                @foreach($dynamicCols as $col)<td>{{ $question->dynamic_fields[$col] ?? '—' }}</td>@endforeach
                 <td style="min-width:340px">
                     <p class="mb-2">{{ $question->question }}</p>
                     <form class="d-flex gap-2" method="POST" action="{{ route('admin.questions.answer', $question->id) }}">
@@ -18,7 +23,6 @@
                         <button class="btn btn-sm btn-gradient align-self-end"><i class="bi bi-send"></i> {{ $question->official_answer ? 'Update' : 'Answer' }}</button>
                     </form>
                 </td>
-                <td>{{ $question->webinar_title }}</td>
                 <td>{{ Carbon\Carbon::parse($question->created_at)->diffForHumans() }}</td>
                 <td>
                     <form method="POST" action="{{ route('admin.questions.update', $question->id) }}">
@@ -32,7 +36,7 @@
                 </td>
             </tr>
         @empty
-            <tr><td colspan="5" class="text-center text-muted py-5">No questions received.</td></tr>
+            <tr><td colspan="{{ 7 + count($dynamicCols) }}" class="text-center text-muted py-5">No questions received.</td></tr>
         @endforelse
         </tbody>
     </table>

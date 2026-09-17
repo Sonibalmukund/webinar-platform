@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Events\WebinarQuestionUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Webinar;
+use App\Support\DynamicFieldsHelper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,9 +16,11 @@ class QuestionController extends Controller
     public function index(Request $request): View
     {
         $ids = Webinar::where('qa_enabled', true)->when($request->user()->hasRole('sub-admin'), fn ($q) => $q->whereIn('id', $request->user()->assignedWebinars()->pluck('webinars.id')))->pluck('id');
-        $questions = DB::table('questions')->join('webinars', 'webinars.id', '=', 'questions.webinar_id')->leftJoin('users', 'users.id', '=', 'questions.user_id')->whereIn('questions.webinar_id', $ids)->select('questions.*', 'webinars.title as webinar_title', 'users.name as user_name', 'users.email as user_email')->selectSub(fn ($query) => $query->from('question_answers')->select('answer')->whereColumn('question_answers.question_id', 'questions.id')->where('is_official', true)->latest('question_answers.created_at')->limit(1), 'official_answer')->latest('questions.created_at')->paginate(20);
+        $questions = DB::table('questions')->join('webinars', 'webinars.id', '=', 'questions.webinar_id')->leftJoin('users', 'users.id', '=', 'questions.user_id')->whereIn('questions.webinar_id', $ids)->select('questions.*', 'webinars.title as webinar_title', 'users.name as user_name', 'users.email as user_email', 'users.mobile as user_mobile')->selectSub(fn ($query) => $query->from('question_answers')->select('answer')->whereColumn('question_answers.question_id', 'questions.id')->where('is_official', true)->latest('question_answers.created_at')->limit(1), 'official_answer')->latest('questions.created_at')->paginate(20);
 
-        return view('pages.admin.questions.index', compact('questions'));
+        $dynamicColumns = DynamicFieldsHelper::attach($questions);
+
+        return view('pages.admin.questions.index', compact('questions', 'dynamicColumns'));
     }
 
     public function update(Request $request, int $question): RedirectResponse

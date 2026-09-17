@@ -81,9 +81,11 @@ class WebinarRegistrationController extends Controller
             $opensAt = $webinar->opensAt()?->timezone($webinar->timezone)->format('M d, Y · g:i A');
 
             return redirect()->route('webinars.show', $webinar)
-                ->with('registration_status', 'Your registration is confirmed. The room opens at '.($opensAt ?: 'the scheduled access time').' ('.$webinar->timezone.').')
+                ->with('registration_status', 'Registration confirmed.')
                 ->with('room_opens_at', $opensAt)
-                ->with('room_timezone', $webinar->timezone);
+                ->with('room_opens_at_utc', $webinar->opensAt()?->toIso8601String())
+                ->with('room_timezone', $webinar->timezone)
+                ->with('auth_redirect', route('webinars.dashboard', $webinar));
         }
 
         return redirect()->route('webinars.dashboard', $webinar)->with('registration_status', 'Your registration is confirmed. You can enter the webinar now.');

@@ -51,8 +51,7 @@ class AuthenticationTest extends TestCase
             'password' => 'SecurePass123', 'password_confirmation' => 'SecurePass123',
             'country_id' => $country->id, 'state_id' => $state->id, 'city_id' => $city->id,
             'custom' => $requiredField ? [$requiredField->id => $requiredField->options()->value('value')] : [],
-        ])->assertRedirect(route('webinars.index'))
-            ->assertSessionHas('auth_redirect', route('dashboard'));
+        ])->assertRedirect(route('dashboard'));
 
         $this->assertDatabaseHas('users', ['name' => 'New Learner', 'email' => 'new.learner@example.com']);
         $this->assertDatabaseHas('role_user', ['user_id' => User::where('email', 'new.learner@example.com')->value('id')]);
@@ -84,8 +83,7 @@ class AuthenticationTest extends TestCase
         $this->post('/register', [
             'name' => 'Default Location', 'email' => 'default.location@example.com', 'password' => 'SecurePass123', 'password_confirmation' => 'SecurePass123',
             'custom' => $field ? [$field->id => $field->options()->value('value')] : [],
-        ])->assertRedirect(route('webinars.index'))
-            ->assertSessionHas('auth_redirect', route('dashboard'));
+        ])->assertRedirect(route('dashboard'));
         $this->assertDatabaseHas('users', ['email' => 'default.location@example.com', 'country_id' => $india->id, 'state_id' => $gujarat->id]);
     }
 
@@ -96,9 +94,7 @@ class AuthenticationTest extends TestCase
         $user->roles()->sync([$role->id]);
 
         $this->actingAs($user)->get('/profile')
-            ->assertOk()
-            ->assertSee('Real Profile Name')
-            ->assertSee('profile@example.com');
+            ->assertRedirect(route('dashboard'));
 
         $this->actingAs($user)->put('/profile', [
             'name' => 'Updated Profile Name',
@@ -141,8 +137,7 @@ class AuthenticationTest extends TestCase
         $user = User::updateOrCreate(['email' => 'mobile.login@example.com'], ['name' => 'Mobile Learner', 'mobile' => '+919876543210', 'password' => 'Webinar@123']);
         $user->roles()->sync([$role->id]);
         $this->post('/login', ['login' => $user->email, 'password' => 'Webinar@123'])
-            ->assertRedirect(route('webinars.index'))
-            ->assertSessionHas('auth_redirect', route('dashboard'));
+            ->assertRedirect(route('dashboard'));
     }
 
     public function test_webinar_landing_page_always_shows_guest_login_button(): void

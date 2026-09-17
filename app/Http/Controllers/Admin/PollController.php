@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Poll;
 use App\Models\PollResponse;
 use App\Models\Webinar;
+use App\Support\DynamicFieldsHelper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -19,7 +20,7 @@ class PollController extends Controller
         $webinarId = $request->integer('webinar_id');
         $search = trim((string) $request->input('search'));
         $polls = Poll::with(['webinar', 'options'])->withCount(['options', 'options as votes_count' => fn ($query) => $query->join('poll_responses', 'poll_responses.poll_option_id', '=', 'poll_options.id')])
-            ->when($request->user()->hasRole('sub-admin'), fn ($query) => $query->whereIn('webinar_id', $request->user()->assignedWebinars()->pluck('webinars.id')))
+            ->when($request->user()->hasRole('sub-admin'), fn ($query) => $query->whereIn('webinar_id', $request->user()->accessibleWebinarIds()))
             ->when($webinarId, fn ($query) => $query->where('webinar_id', $webinarId))
             ->when($search !== '', fn ($query) => $query->where('question', 'like', "%{$search}%"))
             ->latest()->paginate(15)->withQueryString();
@@ -45,7 +46,7 @@ class PollController extends Controller
         $webinarId = $request->integer('webinar_id');
         $search = trim((string) $request->input('search'));
         $assignedWebinarIds = $request->user()->hasRole('sub-admin')
-            ? $request->user()->assignedWebinars()->pluck('webinars.id')
+            ? $request->user()->accessibleWebinarIds()
             : null;
 
         $logs = PollResponse::query()
@@ -78,11 +79,14 @@ class PollController extends Controller
             ->paginate(25)
             ->withQueryString();
 
+        $dynamicColumns = DynamicFieldsHelper::attach($logs, $webinarId ? [$webinarId] : null);
+
         return view('pages.admin.polls.logs', [
             'logs' => $logs,
             'webinars' => $this->webinars($request),
             'selectedWebinarId' => $webinarId,
             'search' => $search,
+            'dynamicColumns' => $dynamicColumns,
         ]);
     }
 
@@ -227,7 +231,7 @@ class PollController extends Controller
 
     private function webinars(Request $request)
     {
-        return Webinar::query()->when($request->user()->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $request->user()->assignedWebinars()->pluck('webinars.id')))->orderBy('title')->get(['id', 'title']);
+        return Webinar::query()->when($request->user()->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $request->user()->accessibleWebinarIds()))->orderBy('title')->get(['id', 'title']);
     }
 
     private function broadcastPoll(Poll $poll): void

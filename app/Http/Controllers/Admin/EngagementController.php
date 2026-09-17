@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Webinar;
+use App\Support\DynamicFieldsHelper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -29,10 +30,12 @@ class EngagementController extends Controller
         $items = DB::table($type)->join('webinars', 'webinars.id', '=', $type.'.webinar_id')->leftJoin('users', 'users.id', '=', $type.'.user_id')
             ->whereIn($type.'.webinar_id', $webinars->pluck('id'))
             ->when($webinarId, fn ($query) => $query->where($type.'.webinar_id', $webinarId))
-            ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query->where($type.'.'.$column, 'like', '%'.$search.'%')->orWhere('users.name', 'like', '%'.$search.'%')->orWhere('users.email', 'like', '%'.$search.'%')))
-            ->select($type.'.*', 'webinars.title as webinar_title', 'users.name as user_name', 'users.email as user_email')->latest($type.'.created_at')->paginate(20)->withQueryString();
+            ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query->where($type.'.'.$column, 'like', '%'.$search.'%')->orWhere('users.name', 'like', '%'.$search.'%')->orWhere('users.email', 'like', '%'.$search.'%')->orWhere('users.mobile', 'like', '%'.$search.'%')))
+            ->select($type.'.*', 'webinars.title as webinar_title', 'users.name as user_name', 'users.email as user_email', 'users.mobile as user_mobile')->latest($type.'.created_at')->paginate(20)->withQueryString();
 
-        return view('pages.admin.engagement.'.$type.'-list', compact('items', 'webinars', 'webinarId', 'search'));
+        $dynamicColumns = DynamicFieldsHelper::attach($items, $webinarId ? [$webinarId] : null);
+
+        return view('pages.admin.engagement.'.$type.'-list', compact('items', 'webinars', 'webinarId', 'search', 'dynamicColumns'));
     }
 
     private function webinars(string $flag)
@@ -65,7 +68,7 @@ class EngagementController extends Controller
 
     private function showView(Webinar $webinar, string $type): View
     {
-        $items = DB::table($type)->leftJoin('users', 'users.id', '=', $type.'.user_id')->where($type.'.webinar_id', $webinar->id)->select($type.'.*', 'users.name as user_name', 'users.email as user_email')->latest($type.'.created_at')->get();
+        $items = DB::table($type)->leftJoin('users', 'users.id', '=', $type.'.user_id')->where($type.'.webinar_id', $webinar->id)->select($type.'.*', 'users.name as user_name', 'users.email as user_email', 'users.mobile as user_mobile')->latest($type.'.created_at')->get();
 
         return view('pages.admin.engagement.show', compact('webinar', 'items', 'type'));
     }

@@ -22,7 +22,10 @@ document.addEventListener('DOMContentLoaded', () => {
             altFormat: 'd M Y · h:i K',
             dateFormat: 'Y-m-d\\TH:i',
             disableMobile: true,
-            onChange: () => input.dispatchEvent(new Event('input', { bubbles: true })),
+            onChange: () => {
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            },
         });
         input._flatpickr = picker;
     });
@@ -30,7 +33,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const startsAt = document.querySelector('#webinarStartsAt');
     const endsAt = document.querySelector('#webinarEndsAt');
     startsAt?._flatpickr?.config.onChange.push((dates) => {
-        endsAt?._flatpickr?.set('minDate', dates[0] || null);
+        const start = dates[0];
+        if (!start) return;
+        endsAt?._flatpickr?.set('minDate', start);
+        const currentEnd = endsAt?._flatpickr?.selectedDates[0];
+        if (!currentEnd || currentEnd <= start) {
+            const autoEnd = new Date(start.getTime() + 60 * 60 * 1000);
+            endsAt?._flatpickr?.setDate(autoEnd, true);
+        }
     });
     if (startsAt?.value) endsAt?._flatpickr?.set('minDate', startsAt.value);
 });

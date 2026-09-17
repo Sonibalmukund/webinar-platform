@@ -311,6 +311,21 @@ class WebinarController extends Controller
             'price' => 0,
             'language' => $request->input('language', $webinar?->language ?: 'en'),
         ]);
+        if ($request->filled('starts_at')) {
+            if (blank($request->input('ends_at'))) {
+                $request->merge([
+                    'ends_at' => Carbon::parse($request->input('starts_at'))->addHour()->format('Y-m-d\TH:i'),
+                ]);
+            } else {
+                $s = Carbon::parse($request->input('starts_at'));
+                $e = Carbon::parse($request->input('ends_at'));
+                if ($e->lessThanOrEqualTo($s)) {
+                    $request->merge([
+                        'ends_at' => $s->copy()->addHour()->format('Y-m-d\TH:i'),
+                    ]);
+                }
+            }
+        }
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:180', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('webinars', 'slug')->ignore($webinar?->id)],
@@ -362,7 +377,7 @@ class WebinarController extends Controller
         $experience = $request->validate([
             'room_layout' => ['nullable', 'in:theater,presentation'],
             'brand_primary' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'], 'brand_secondary' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
-            'brand_logo_file' => [Rule::requiredIf(blank($existingLogo)), 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:5120'],
+            'brand_logo_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:5120'],
             'waiting_message' => ['nullable', 'string', 'max:500'], 'waiting_media_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'], 'post_message' => ['nullable', 'string', 'max:500'], 'registration_success_title' => ['nullable', 'string', 'max:120'], 'registration_success_message' => ['nullable', 'string', 'max:500'],
             'video_chapters' => ['nullable', 'string', 'max:5000'], 'certificate_min_attendance' => ['nullable', 'integer', 'min:0', 'max:100'], 'certificate_require_poll' => ['nullable', 'boolean'],
         ]);

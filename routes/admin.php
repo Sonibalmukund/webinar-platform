@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\AttendanceController;
 use App\Http\Controllers\Admin\CertificateController;
 use App\Http\Controllers\Admin\ChatController;
@@ -36,7 +35,6 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::get('/admin/users', [RegistrationController::class, 'users'])->name('admin.users');
     Route::get('/admin/attendance', [AttendanceController::class, 'index'])->name('admin.attendance');
     Route::get('/admin/attendance/export', [AttendanceController::class, 'export'])->name('admin.attendance.export');
-    Route::get('/admin/activity-logs', [ActivityLogController::class, 'index'])->name('admin.activity-logs');
     Route::get('/admin/registrations', [RegistrationController::class, 'index'])->name('admin.registrations');
     Route::get('/admin/registrations/{registration}', [RegistrationController::class, 'show'])->name('admin.registrations.show');
     Route::delete('/admin/registrations/{registration}', [RegistrationController::class, 'destroy'])->name('admin.registrations.destroy');
@@ -86,8 +84,6 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::get('/admin/certificates/{webinar}/edit', [CertificateController::class, 'edit'])->name('admin.certificates.edit');
     Route::put('/admin/certificates/{webinar}', [CertificateController::class, 'update'])->name('admin.certificates.update');
     Route::patch('/admin/certificates/{webinar}/visibility', [CertificateController::class, 'visibility'])->name('admin.certificates.visibility');
-    Route::get('/admin/certificate-queue', [CertificateController::class, 'queue'])->name('admin.certificates.queue');
-    Route::patch('/admin/certificate-queue/{certificate}', [CertificateController::class, 'decision'])->name('admin.certificates.decision');
     Route::get('/admin/certificates/logs', [CertificateController::class, 'logs'])->name('admin.certificates.logs');
     Route::get('/admin/permissions', [PermissionController::class, 'index'])->name('admin.permissions.index');
     Route::get('/admin/permissions/create', [PermissionController::class, 'create'])->name('admin.permissions.create');
@@ -121,7 +117,6 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::delete('/admin/general-settings/brands/{brand}', [GeneralSettingsController::class, 'destroyBrand'])->name('admin.general.brands.destroy');
     Route::delete('/admin/general-settings/brands', [GeneralSettingsController::class, 'bulkDeleteBrands'])->name('admin.general.brands.bulk-destroy');
     Route::patch('/admin/general-settings/brands/{brand}/status', [GeneralSettingsController::class, 'toggleBrand'])->name('admin.general.brands.toggle');
-    Route::view('/admin/users/1', 'pages.admin.resource', ['title' => 'User Details', 'type' => 'detail']);
     Route::get('/admin/sub-admins', [SubAdminController::class, 'index'])->name('admin.subadmins.index');
     Route::get('/admin/sub-admins/create', [SubAdminController::class, 'create'])->name('admin.subadmins.create');
     Route::post('/admin/sub-admins', [SubAdminController::class, 'store'])->name('admin.subadmins.store');
@@ -145,8 +140,6 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::get('/admin/notifications', [NotificationController::class, 'index'])->name('admin.notifications.index');
     Route::get('/admin/notifications/create', [NotificationController::class, 'create'])->name('admin.notifications.create');
     Route::post('/admin/notifications', [NotificationController::class, 'store'])->name('admin.notifications.store');
-    Route::view('/admin/cms', 'pages.admin.resource', ['title' => 'CMS Dashboard', 'type' => 'cms']);
-    Route::view('/admin/cms/homepage', 'pages.admin.resource', ['title' => 'Homepage CMS', 'type' => 'cms-form']);
     Route::redirect('/admin/settings', '/admin/profile');
 });
 

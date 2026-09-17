@@ -12,6 +12,7 @@ use App\Models\SignupFieldAnswer;
 use App\Models\State;
 use App\Models\User;
 use App\Models\Webinar;
+use App\Support\AuditTrail;
 use App\Support\FrontendAuth;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -122,30 +123,28 @@ class AuthController extends Controller
                     ->onlyInput('login', '_auth_modal', 'return_to', 'webinar_id');
             }
             $request->session()->put('frontend_event_slug', $dashboardWebinar->slug);
-            $destination = $dashboardWebinar->canEnter()
-                ? route('webinars.dashboard', $dashboardWebinar)
-                : route('webinars.show', $dashboardWebinar);
+            $destination = route('webinars.dashboard', $dashboardWebinar);
             $request->session()->forget('url.intended');
         }
         if ($portal === 'user' && ! $dashboardWebinar && $destination && preg_match('#^/(?:webinars/)?([A-Za-z0-9-]+)$#', $destination, $matches)) {
             $registeredWebinar = Webinar::where('slug', $matches[1])->whereHas('registrations', fn ($query) => $query->where('user_id', $user->id))->first();
             if ($registeredWebinar) {
                 $destination = route('webinars.dashboard', $registeredWebinar);
+                $dashboardWebinar = $registeredWebinar;
             }
         }
         if ($destination) {
-            if ($dashboardWebinar && ! $dashboardWebinar->canEnter()) {
-                $opensAt = $dashboardWebinar->opensAt()?->timezone($dashboardWebinar->timezone)->format('M d, Y · g:i A');
+            $response = redirect(FrontendAuth::landing($request))
+                ->with('auth_status', 'Login successfully.')
+                ->with('auth_redirect', $destination);
 
-                return redirect(FrontendAuth::landing($request))
-                    ->with('auth_status', 'Login successful. The room opens at '.($opensAt ?: 'the scheduled access time').' ('.$dashboardWebinar->timezone.').')
-                    ->with('room_opens_at', $opensAt)
+            if ($dashboardWebinar && ! $dashboardWebinar->canEnter()) {
+                $response->with('room_opens_at', $dashboardWebinar->opensAt()?->timezone($dashboardWebinar->timezone)->format('M d, Y · g:i A'))
+                    ->with('room_opens_at_utc', $dashboardWebinar->opensAt()?->toIso8601String())
                     ->with('room_timezone', $dashboardWebinar->timezone);
             }
 
-            return redirect(FrontendAuth::landing($request))
-                ->with('auth_status', 'Login successfully.')
-                ->with('auth_redirect', $destination);
+            return $response;
         }
 
         if ($portal === 'admin') {
@@ -165,8 +164,8 @@ class AuthController extends Controller
             : (preg_match('/^[A-Za-z0-9-]+$/', $returnSlug) ? Webinar::with('registrationForm.fields.options')->where('slug', $returnSlug)->first() : null);
         $registrationFields = $webinar?->registrationForm?->fields?->where('is_enabled', true) ?? collect();
 
-        // 1. Webinar-specific registration with dynamic fields
-        if ($webinar && $registrationFields->isNotEmpty()) {
+        // 1. Webinar-specific registration (with or without dynamic fields)
+        if ($webinar) {
             $submittedFields = $request->input('fields', []);
             foreach ($registrationFields as $field) {
                 if (!isset($submittedFields[$field->id]) || $submittedFields[$field->id] === '' || $submittedFields[$field->id] === null) {
@@ -192,35 +191,54 @@ class AuthController extends Controller
 
             $rules = [];
             $attributes = [];
-            foreach ($registrationFields as $field) {
-                $rule = [];
-                $lowerLabel = strtolower(trim($field->label));
-                $isMobile = in_array($lowerLabel, ['mobile', 'mobile number', 'phone', 'phone number'], true) || str_starts_with($field->field_key, 'mobile');
-                if ($isMobile && !isset($submittedFields[$field->id]) && !$request->has('mobile') && ($settings['registration_mobile_required'] ?? '0') !== '1') {
-                    $rule[] = 'nullable';
-                } else {
-                    $rule[] = $field->is_required ? 'required' : 'nullable';
+            if ($registrationFields->isEmpty()) {
+                $rules['name'] = ['required', 'string', 'max:255'];
+                if ($request->filled('email') || ! $request->filled('mobile')) {
+                    $rules['email'] = ['required', 'email', 'max:255'];
                 }
-                $isEmail = in_array($lowerLabel, ['email', 'email address'], true) || str_starts_with($field->field_key, 'email');
-                if ($field->field_type === 'password' || in_array($lowerLabel, ['password'], true)) {
-                    $rule[] = 'string';
-                    $rule[] = 'min:6';
-                } elseif ($field->field_type === 'checkbox') {
-                    $rule[] = 'array';
-                } elseif ($field->field_type === 'country') {
-                    $rule[] = 'exists:countries,id';
-                } elseif ($field->field_type === 'state') {
-                    $rule[] = 'exists:states,id';
-                } elseif ($field->field_type === 'city') {
-                    $rule[] = 'exists:cities,id';
-                } elseif ($isEmail) {
-                    $rule[] = 'email';
-                } else {
-                    $rule[] = 'string';
-                    $rule[] = 'max:255';
+                if ($request->filled('mobile')) {
+                    $rules['mobile'] = ['required', 'string', 'max:30'];
                 }
-                $rules['fields.'.$field->id] = $rule;
-                $attributes['fields.'.$field->id] = $field->label;
+                if ($request->filled('country_id')) {
+                    $rules['country_id'] = ['nullable', 'exists:countries,id'];
+                }
+                if ($request->filled('state_id')) {
+                    $rules['state_id'] = ['nullable', 'exists:states,id'];
+                }
+                if ($request->filled('city_id')) {
+                    $rules['city_id'] = ['nullable', 'exists:cities,id'];
+                }
+            } else {
+                foreach ($registrationFields as $field) {
+                    $rule = [];
+                    $lowerLabel = strtolower(trim($field->label));
+                    $isMobile = in_array($lowerLabel, ['mobile', 'mobile number', 'phone', 'phone number'], true) || str_starts_with($field->field_key, 'mobile');
+                    if ($isMobile && !isset($submittedFields[$field->id]) && !$request->has('mobile') && ($settings['registration_mobile_required'] ?? '0') !== '1') {
+                        $rule[] = 'nullable';
+                    } else {
+                        $rule[] = $field->is_required ? 'required' : 'nullable';
+                    }
+                    $isEmail = in_array($lowerLabel, ['email', 'email address'], true) || str_starts_with($field->field_key, 'email');
+                    if ($field->field_type === 'password' || in_array($lowerLabel, ['password'], true)) {
+                        $rule[] = 'string';
+                        $rule[] = 'min:6';
+                    } elseif ($field->field_type === 'checkbox') {
+                        $rule[] = 'array';
+                    } elseif ($field->field_type === 'country') {
+                        $rule[] = 'exists:countries,id';
+                    } elseif ($field->field_type === 'state') {
+                        $rule[] = 'exists:states,id';
+                    } elseif ($field->field_type === 'city') {
+                        $rule[] = 'exists:cities,id';
+                    } elseif ($isEmail) {
+                        $rule[] = 'email';
+                    } else {
+                        $rule[] = 'string';
+                        $rule[] = 'max:255';
+                    }
+                    $rules['fields.'.$field->id] = $rule;
+                    $attributes['fields.'.$field->id] = $field->label;
+                }
             }
 
             $this->validateFrontend($request, $rules, 'register', $attributes);
@@ -271,10 +289,10 @@ class AuthController extends Controller
             }
 
             $user = null;
-            if ($email) {
+            $hasExplicitEmail = $email && ! str_ends_with($email, '@internal.local');
+            if ($hasExplicitEmail) {
                 $user = User::where('email', $email)->first();
-            }
-            if (!$user && $mobile) {
+            } elseif ($mobile) {
                 $user = User::where('mobile', $mobile)->first();
             }
 
@@ -304,6 +322,44 @@ class AuthController extends Controller
             }
 
             $existingRegistration = Registration::where(['webinar_id' => $webinar->id, 'user_id' => $user->id])->first();
+            if (! $user->wasRecentlyCreated && $existingRegistration && in_array($existingRegistration->status, ['approved', 'waitlisted'], true)) {
+                foreach ($registrationFields as $field) {
+                    $val = $submittedFields[$field->id] ?? null;
+                    if ($val !== null && $val !== '') {
+                        RegistrationAnswer::updateOrCreate(
+                            ['registration_id' => $existingRegistration->id, 'registration_field_id' => $field->id],
+                            ['value' => is_array($val) ? json_encode($val) : $val]
+                        );
+                    }
+                }
+
+                AuditTrail::record('registration.created', $existingRegistration, "User {$user->name} ({$user->email}) confirmed registration for webinar {$webinar->title}.", ['registration_id' => $existingRegistration->id, 'webinar_id' => $webinar->id, 'user_id' => $user->id, 'status' => $existingRegistration->status]);
+
+                Auth::login($user);
+                $request->session()->regenerate();
+                $request->session()->put('frontend_event_slug', $webinar->slug);
+                $request->session()->forget('url.intended');
+
+                $canEnter = $existingRegistration->status !== 'waitlisted' && $webinar->canEnter();
+                $opensAt = $webinar->opensAt()?->timezone($webinar->timezone)->format('M d, Y · g:i A');
+                $opensAtUtc = $webinar->opensAt()?->toIso8601String();
+
+                $statusMsg = $existingRegistration->status === 'waitlisted'
+                    ? 'The webinar is full. You are on the waitlist.'
+                    : ($canEnter
+                        ? 'Registration confirmed. You can enter the webinar now.'
+                        : 'You are already registered for this webinar.');
+
+                $response = redirect()->route('webinars.show', $webinar)
+                    ->with('registration_status', $statusMsg)
+                    ->with('room_opens_at', $canEnter ? null : $opensAt)
+                    ->with('room_opens_at_utc', $canEnter ? null : $opensAtUtc)
+                    ->with('room_timezone', $canEnter ? null : $webinar->timezone);
+
+                return $existingRegistration->status === 'waitlisted'
+                    ? $response
+                    : $response->with('auth_redirect', route('webinars.dashboard', $webinar));
+            }
             $admittedCount = $webinar->registrations()->admitted()->count();
             $status = $existingRegistration && ! in_array($existingRegistration->status, ['waitlisted', 'cancelled', 'rejected'], true)
                 ? 'approved'
@@ -329,6 +385,8 @@ class AuthController extends Controller
                 }
             }
 
+            AuditTrail::record('registration.created', $registration, "User {$user->name} ({$user->email}) registered for webinar {$webinar->title}.", ['registration_id' => $registration->id, 'webinar_id' => $webinar->id, 'user_id' => $user->id, 'status' => $status]);
+
             Auth::login($user);
             $request->session()->regenerate();
             $request->session()->put('frontend_event_slug', $webinar->slug);
@@ -336,16 +394,18 @@ class AuthController extends Controller
 
             $canEnter = $status !== 'waitlisted' && $webinar->canEnter();
             $opensAt = $webinar->opensAt()?->timezone($webinar->timezone)->format('M d, Y · g:i A');
+            $opensAtUtc = $webinar->opensAt()?->toIso8601String();
             $response = redirect()->route('webinars.show', $webinar)
                 ->with('registration_status', $status === 'waitlisted'
                     ? 'The webinar is full. You have been added to the waitlist.'
                     : ($canEnter
                         ? 'Registration successful. You can enter the webinar now.'
-                        : 'Registration successful. The room opens at '.($opensAt ?: 'the scheduled access time').' ('.$webinar->timezone.').'))
+                        : 'Registration successful.'))
                 ->with('room_opens_at', $canEnter ? null : $opensAt)
+                ->with('room_opens_at_utc', $canEnter ? null : $opensAtUtc)
                 ->with('room_timezone', $canEnter ? null : $webinar->timezone);
 
-            return ! $canEnter
+            return $status === 'waitlisted'
                 ? $response
                 : $response->with('auth_redirect', route('webinars.dashboard', $webinar));
         }
@@ -425,7 +485,14 @@ class AuthController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
-        $staffDestination = $request->user()?->isAdmin() ? '/admin/login' : null;
+        $user = $request->user();
+        if ($user) {
+            DB::table('webinar_attendees')
+                ->where('user_id', $user->id)
+                ->whereNull('left_at')
+                ->update(['left_at' => now()]);
+        }
+        $staffDestination = $user?->isAdmin() ? '/admin/login' : null;
         $destination = null;
         if ($request->filled('return_to') || $request->filled('webinar_id')) {
             $destination = FrontendAuth::landing($request);

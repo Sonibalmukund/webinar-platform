@@ -16,13 +16,33 @@ html, body.event-dashboard-body{overflow-x:hidden!important;max-width:100vw}
  body.event-dashboard-body{height:100dvh;overflow-y:hidden;overflow-x:hidden!important}
  .event-dashboard{height:100dvh;min-height:0;overflow-y:hidden;overflow-x:hidden!important}
  .event-dashboard .event-layout{height:calc(100dvh - 80px);min-height:0;grid-template-columns:minmax(0,2fr) minmax(380px,1fr)}
- .event-dashboard .event-main{height:100%;overflow-y:auto;overflow-x:hidden!important;overscroll-behavior:contain;scrollbar-gutter:auto}
- .event-dashboard .event-side{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden!important;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#34415b transparent}
+ .event-dashboard .event-main{height:100%;overflow-y:auto;overflow-x:hidden!important;overscroll-behavior:auto;scrollbar-gutter:auto}
+ .event-dashboard .event-side{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden!important;overscroll-behavior:auto;scrollbar-width:thin;scrollbar-color:#34415b transparent}
  .event-dashboard .event-side-heading,.event-dashboard .module-tabs,.event-dashboard .side-summary{flex-shrink:0}
  .event-dashboard .module-panel.active{display:block;flex:none;min-height:360px;height:auto;overflow-y:visible;overflow-x:hidden!important;padding:22px 20px}
  .event-dashboard .module-panel[data-module-panel=chat].active{display:flex;height:460px;min-height:360px}
- .event-dashboard .module-scroll{flex:1;min-height:0;max-height:none;overflow-y:auto;overflow-x:hidden!important}
+ .event-dashboard .module-panel[data-module-panel=comments].active{display:flex;flex-direction:column;min-height:460px;height:auto}
+ .event-dashboard .module-panel[data-module-panel=comments] .private-comment-form{display:flex;flex-direction:column;flex:1;gap:12px}
+ .event-dashboard .module-panel[data-module-panel=comments] .comment-input-shell{flex:1;display:flex;flex-direction:column}
+ .event-dashboard .module-panel[data-module-panel=comments] .comment-input-shell textarea{flex:1;min-height:230px}
+ .event-dashboard .module-panel[data-module-panel=feedback].active{display:flex;flex-direction:column;min-height:460px;height:auto}
+ .event-dashboard .module-panel[data-module-panel=feedback] textarea{flex:1;min-height:180px}
+ .event-dashboard .module-scroll{flex:1;min-height:0;max-height:none;overflow-y:auto;overflow-x:hidden!important;overscroll-behavior:auto}
  .event-dashboard .event-footer{display:none}
+}
+@media(min-width:992px) and (max-height:820px), (min-width:992px) and (max-width:1199px){
+ body.event-dashboard-body{min-height:100vh;height:auto;overflow-y:auto;overflow-x:hidden!important}
+ .event-dashboard{min-height:100vh;height:auto;overflow-x:hidden!important}
+ .event-dashboard .event-layout{min-height:calc(100vh - 80px);grid-template-columns:minmax(0,2fr) minmax(360px,390px)}
+ .event-dashboard .event-main{height:auto;overflow-y:visible;overflow-x:hidden!important}
+ .event-dashboard .event-side{min-height:0;max-height:calc(100vh - 80px);position:sticky;top:80px;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:auto}
+ .event-dashboard .module-panel.active{padding:14px}
+ .event-dashboard .module-panel[data-module-panel=chat].active{height:auto;min-height:0}
+ .event-dashboard .module-scroll{flex:none;height:240px;max-height:270px;overflow-y:auto;overscroll-behavior:auto}
+ .event-dashboard .module-panel[data-module-panel=comments].active{min-height:0;height:auto}
+ .event-dashboard .module-panel[data-module-panel=comments] .comment-input-shell textarea{min-height:150px}
+ .event-dashboard .module-panel[data-module-panel=feedback].active{min-height:0;height:auto}
+ .event-dashboard .module-panel[data-module-panel=feedback] textarea{min-height:120px}
 }
 .event-dashboard .poll-heading{flex-wrap:wrap;gap:8px}
 .event-dashboard .poll-question{font-size:1rem;line-height:1.55;margin-bottom:8px}
@@ -39,6 +59,11 @@ html, body.event-dashboard-body{overflow-x:hidden!important;max-width:100vw}
 .event-dashboard .side-summary h3{font-size:.9rem;color:#f1f5f9}
 .event-dashboard .quick-grid{gap:12px;overflow:visible}
 .event-dashboard .quick-grid>a,.event-dashboard .quick-grid>button,.event-dashboard .quick-grid>.quick-disabled{min-height:86px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:14px 10px;font-size:.78rem;border-radius:12px}
+.event-dashboard .quick-grid.single-action{grid-template-columns:1fr!important}
+.event-dashboard .quick-grid.single-action .raise-hand-action{grid-column:1/-1!important;min-height:52px!important;flex-direction:row!important;align-items:center!important;justify-content:center!important;gap:10px!important;padding:12px 18px!important;font-size:.85rem!important}
+.event-dashboard .quick-grid.single-action .raise-hand-action i,.event-dashboard .quick-grid.single-action .raise-hand-action .raised-hand-icon{margin-bottom:0!important}
+.event-dashboard .quick-grid:has(.cert-card-shell[hidden]:only-child) .raise-hand-action,
+.event-dashboard .quick-grid:has(.cert-card-shell[style*="display:none"]:only-of-type) .raise-hand-action{grid-column:1/-1!important;min-height:52px!important;flex-direction:row!important;align-items:center!important;justify-content:center!important;gap:10px!important;padding:12px 18px!important;font-size:.85rem!important}
 .event-dashboard .participant-list{max-height:240px;overflow-y:auto;overflow-x:hidden!important;scrollbar-width:thin;padding-right:4px}
 .event-dashboard .participant-list .d-flex{min-width:0;width:100%;overflow:hidden}
 .event-dashboard .participant-list strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

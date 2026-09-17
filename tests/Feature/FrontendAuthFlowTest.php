@@ -20,7 +20,7 @@ class FrontendAuthFlowTest extends TestCase
     {
         $owner = User::factory()->create();
 
-        return Webinar::create(['created_by' => $owner->id, 'slug' => 'popup-flow-event', 'title' => 'Popup Flow Event', 'status' => 'scheduled']);
+        return Webinar::create(['created_by' => $owner->id, 'slug' => 'popup-flow-event', 'title' => 'Popup Flow Event', 'status' => 'live']);
     }
 
     private function learner(): User
@@ -77,7 +77,7 @@ class FrontendAuthFlowTest extends TestCase
             'created_by' => $first->created_by,
             'slug' => 'second-popup-flow-event',
             'title' => 'Second Popup Flow Event',
-            'status' => 'scheduled',
+            'status' => 'live',
         ]);
         $user = $this->learner();
         foreach ([$first, $second] as $webinar) {
@@ -202,4 +202,79 @@ class FrontendAuthFlowTest extends TestCase
         $this->assertDatabaseHas('registrations', ['webinar_id' => $webinar->id, 'email' => 'popup-registration@example.test', 'status' => 'approved']);
         $this->post('/logout', ['return_to' => '/'.$webinar->slug])->assertRedirect('/'.$webinar->slug);
     }
+
+    public function test_existing_attendee_registration_and_login_show_dynamic_room_open_modal(): void
+    {
+        $owner = User::factory()->create();
+        $webinar = Webinar::create([
+            'created_by' => $owner->id,
+            'slug' => 'future-closed-event',
+            'title' => 'Future Closed Event',
+            'status' => 'scheduled',
+            'timezone' => 'Pacific/Wake',
+            'starts_at' => now()->addDays(2),
+            'ends_at' => now()->addDays(2)->addHours(2),
+            'early_entry_minutes' => 30,
+        ]);
+
+        $country = Country::firstOrCreate(['iso2' => 'IN'], ['name' => 'India', 'is_active' => true]);
+        $state = State::firstOrCreate(['name' => 'Gujarat'], ['country_id' => $country->id, 'is_active' => true]);
+        $city = City::firstOrCreate(['name' => 'Ahmedabad'], ['state_id' => $state->id, 'is_active' => true]);
+
+        // 1. First-time registration for future closed event
+        $this->post('/register', [
+            'webinar_id' => $webinar->id,
+            'return_to' => '/'.$webinar->slug,
+            'name' => 'Future Attendee',
+            'email' => 'future-attendee@example.test',
+            'country_id' => $country->id,
+            'state_id' => $state->id,
+            'city_id' => $city->id,
+        ])->assertRedirect(route('webinars.show', $webinar))
+            ->assertSessionHas('registration_status', 'Registration successful.')
+            ->assertSessionHas('room_opens_at')
+            ->assertSessionHas('room_opens_at_utc')
+            ->assertSessionHas('room_timezone', 'Pacific/Wake');
+
+        $this->assertAuthenticated();
+
+        // 2. Logging out
+        $this->post('/logout', ['return_to' => '/'.$webinar->slug]);
+        $this->assertGuest();
+
+        // 3. Submitting registration again with same email does NOT block, but logs in and shows dynamic modal
+        $this->post('/register', [
+            'webinar_id' => $webinar->id,
+            'return_to' => '/'.$webinar->slug,
+            'name' => 'Future Attendee',
+            'email' => 'future-attendee@example.test',
+            'country_id' => $country->id,
+            'state_id' => $state->id,
+            'city_id' => $city->id,
+        ])->assertRedirect(route('webinars.show', $webinar))
+            ->assertSessionHas('registration_status', 'You are already registered for this webinar.')
+            ->assertSessionHas('room_opens_at')
+            ->assertSessionHas('room_opens_at_utc')
+            ->assertSessionHas('room_timezone', 'Pacific/Wake');
+
+        $this->assertAuthenticated();
+
+        // 4. Logging out
+        $this->post('/logout', ['return_to' => '/'.$webinar->slug]);
+        $this->assertGuest();
+
+        // 5. Logging in for future closed event passes dynamic room opens data
+        $this->post('/login', [
+            'return_to' => '/'.$webinar->slug,
+            'webinar_id' => $webinar->id,
+            'login' => 'future-attendee@example.test',
+        ])->assertRedirect(route('webinars.show', $webinar))
+            ->assertSessionHas('auth_status', 'Login successfully.')
+            ->assertSessionHas('room_opens_at')
+            ->assertSessionHas('room_opens_at_utc')
+            ->assertSessionHas('room_timezone', 'Pacific/Wake');
+
+        $this->assertAuthenticated();
+    }
 }
+

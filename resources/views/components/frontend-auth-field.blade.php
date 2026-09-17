@@ -2,16 +2,22 @@
 $fieldId = 'auth-'.$prefix.'-'.$field->id;
 $fieldName = $prefix.'['.$field->id.']';
 $fieldValue = old($prefix.'.'.$field->id);
+$lowerLabel = strtolower(trim($field->label));
+$isName = in_array($lowerLabel, ['name', 'full name', 'your name']) || str_starts_with($field->field_key, 'name') || str_starts_with($field->field_key, 'full_name');
+$isEmail = $field->field_type === 'email' || in_array($lowerLabel, ['email', 'email address']) || str_starts_with($field->field_key, 'email');
+$isMobile = in_array($field->field_type, ['mobile', 'phone', 'tel']) || in_array($lowerLabel, ['mobile', 'mobile number', 'phone', 'phone number']) || str_starts_with($field->field_key, 'mobile') || str_starts_with($field->field_key, 'phone');
+$isNumber = $field->field_type === 'number';
+
 if ($fieldValue === null && auth()->check()) {
-    $lowerLabel = strtolower(trim($field->label));
-    if (in_array($lowerLabel, ['name', 'full name', 'your name']) || str_starts_with($field->field_key, 'name') || str_starts_with($field->field_key, 'full_name')) {
+    if ($isName) {
         $fieldValue = auth()->user()->name;
-    } elseif (in_array($lowerLabel, ['email', 'email address']) || str_starts_with($field->field_key, 'email')) {
+    } elseif ($isEmail) {
         $fieldValue = auth()->user()->email;
-    } elseif (in_array($lowerLabel, ['mobile', 'mobile number', 'phone', 'phone number']) || str_starts_with($field->field_key, 'mobile') || str_starts_with($field->field_key, 'phone')) {
+    } elseif ($isMobile) {
         $fieldValue = auth()->user()->mobile;
     }
 }
+$inputType = $isEmail ? 'email' : ($isNumber ? 'number' : ($isMobile ? 'tel' : 'text'));
 @endphp
 <div class="col-12">
     <label class="form-label" for="{{ $fieldId }}">{{ $field->label }} @if($field->is_required)<span class="text-danger">*</span>@endif</label>
@@ -45,7 +51,7 @@ if ($fieldValue === null && auth()->check()) {
             </button>
         </div>
     @else
-        <input id="{{ $fieldId }}" class="form-control" name="{{ $fieldName }}" value="{{ $fieldValue }}" placeholder="{{ $field->placeholder }}" @required($field->is_required)>
+        <input id="{{ $fieldId }}" type="{{ $inputType }}" class="form-control" name="{{ $fieldName }}" value="{{ $fieldValue }}" placeholder="{{ $field->placeholder ?: 'Enter '.$field->label }}" @required($field->is_required) @if($isEmail) data-rule-email="true" @endif>
     @endif
     @if($field->help_text)<small class="text-muted">{{ $field->help_text }}</small>@endif
 </div>

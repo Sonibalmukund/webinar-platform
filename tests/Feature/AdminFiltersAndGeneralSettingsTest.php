@@ -75,7 +75,10 @@ class AdminFiltersAndGeneralSettingsTest extends TestCase
 
         $this->actingAs($admin)
             ->get('/admin/registrations?status=approved')
-            ->assertRedirect('/admin/users?status=approved');
+            ->assertOk()
+            ->assertSee('Registrations')
+            ->assertSee('Search attendees by name, email, phone...')
+            ->assertSee('Filter');
     }
 
     public function test_admin_attendance_and_polls_filters(): void

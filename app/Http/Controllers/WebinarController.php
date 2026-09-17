@@ -35,6 +35,9 @@ class WebinarController extends Controller
 
     public function show(Webinar $webinar): View
     {
+        if (! empty($webinar->language)) {
+            app()->setLocale($webinar->language);
+        }
         $webinar->syncLifecycleStatus();
         $canPreview = auth()->check() && (auth()->user()->hasRole('super-admin') || auth()->user()->hasRole('sub-admin'));
         abort_if($webinar->status === 'draft' && ! $canPreview, 404);
@@ -75,6 +78,9 @@ class WebinarController extends Controller
 
     public function dashboard(Request $request, Webinar $webinar): View
     {
+        if (! empty($webinar->language)) {
+            app()->setLocale($webinar->language);
+        }
         $webinar->syncLifecycleStatus();
         abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->admitted()->exists(), 403, 'Register for this webinar before opening its dashboard.');
         abort_unless($webinar->canEnter(), 403, $webinar->opensAt()

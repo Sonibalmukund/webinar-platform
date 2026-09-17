@@ -39,7 +39,7 @@ final class AdminSidebarHelper
             ], 'settings.view', true, 'Administration'),
         ];
 
-        return array_values(array_filter($items, fn (array $item) => $user?->hasRole('super-admin') || (! $item['super_admin_only'] && ($item['permission'] === '' || $user?->hasPermission($item['permission']) || ($item['permission'] === 'users.view' && $user?->hasPermission('registrations.view'))))));
+        return array_values(array_filter($items, fn (array $item) => $user?->hasRole('super-admin') || (! $item['super_admin_only'] && ($item['permission'] === '' || $user?->hasPermission($item['permission']) || ($item['permission'] === 'users.view' && $user?->hasPermission('registrations.view')) || ($item['permission'] === 'registrations.view' && ($user?->hasPermission('registrations.view') || $user?->hasPermission('attendance.view') || $user?->hasPermission('users.view')))))));
     }
 
     private static function item(string $title, string $icon, string $route, string $permission, bool $superAdminOnly = false, string $section = 'Management'): array
@@ -49,8 +49,11 @@ final class AdminSidebarHelper
         if ($route === '/admin/certificates' && Str::startsWith($path, '/admin/certificates/logs')) {
             $active = false;
         }
+        if ($route === '/admin/registrations') {
+            $active = Str::startsWith($path, '/admin/registrations');
+        }
         if ($route === '/admin/users') {
-            $active = $active || Str::startsWith($path, '/admin/registrations');
+            $active = $path === '/admin/users';
         }
         if ($route === '/admin/dynamic-fields') {
             $active = $active || Str::startsWith($path, '/admin/registration-settings/') || Str::startsWith($path, '/admin/webinar-registration-fields/');

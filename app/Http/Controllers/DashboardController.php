@@ -88,7 +88,7 @@ class DashboardController extends Controller
     public function admin(Request $request): View
     {
         $subadmin = $request->user()->hasRole('sub-admin');
-        $webinarIds = $subadmin ? $request->user()->assignedWebinars()->pluck('webinars.id') : null;
+        $webinarIds = $subadmin ? $request->user()->accessibleWebinarIds() : null;
         $webinars = Webinar::withCount(['registrations', 'polls'])->when($subadmin, fn ($query) => $query->whereIn('id', $webinarIds))->latest()->get();
         $registrations = Registration::with(['user', 'webinar'])->when($subadmin, fn ($query) => $query->whereIn('webinar_id', $webinarIds))->latest('registered_at')->get();
         $attendance = DB::table('webinar_attendees')->when($subadmin, fn ($query) => $query->whereIn('webinar_id', $webinarIds))->get();
@@ -108,7 +108,7 @@ class DashboardController extends Controller
         return view('pages.admin.dashboard', [
             'webinars' => $webinars, 'subadmin' => $subadmin, 'totalRegistrations' => $registrations->count(), 'registeredUsers' => $subadmin ? $registrations->pluck('user_id')->unique()->count() : User::whereHas('roles', fn ($q) => $q->where('slug', 'learner'))->count(),
             'todayRegistrations' => $registrations->filter(fn ($row) => ($row->registered_at ?? $row->created_at)?->isToday())->count(),
-            'totalAttendees' => $attendance->count(), 'liveNow' => $attendance->filter(fn ($row) => $row->last_seen_at && Carbon::parse($row->last_seen_at)->greaterThan(now()->subMinutes(5)))->count(),
+            'totalAttendees' => $attendance->count(), 'liveNow' => $attendance->filter(fn ($row) => is_null($row->left_at) && $row->last_seen_at && Carbon::parse($row->last_seen_at)->greaterThanOrEqualTo(now()->subSeconds(75)))->count(),
             'pollsCount' => $subadmin ? Poll::whereIn('webinar_id', $webinarIds)->count() : Poll::count(), 'pollVoters' => $pollResponses->pluck('user_id')->unique()->count(), 'votesCount' => $pollResponses->count(),
             'chatMessages' => DB::table('chat_messages')->when($subadmin, fn ($query) => $query->whereIn('webinar_id', $webinarIds))->count(), 'commentsCount' => DB::table('comments')->when($subadmin, fn ($query) => $query->whereIn('webinar_id', $webinarIds))->count(),
             'watchSeconds' => (int) $attendance->sum('watch_seconds'), 'recentRegistrations' => $registrations->take(6), 'chart' => $chart, 'maxChart' => $maxChart, 'eventPerformance' => $eventPerformance,
