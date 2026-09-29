@@ -62,7 +62,7 @@ class PermissionController extends Controller
         $subAdmins = User::whereHas('roles', fn ($query) => $query->where('slug', 'sub-admin'))
             ->withCount('assignedWebinars')->orderBy('name')->get();
 
-        return view('pages.admin.permissions.form', compact('subAdmins', 'permissions', 'assigned') + [
+        return view('pages.admin.permissions.add_edit', compact('subAdmins', 'permissions', 'assigned') + [
             'selectedUserId' => $selectedUser?->id,
         ]);
     }

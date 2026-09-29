@@ -1,7 +1,48 @@
 @extends('layouts.portal')
-@section('title','Role Permissions')
+@section('title', 'Role Permissions')
 @section('content')
-<div class="page-heading"><div><span class="eyebrow">SUPER ADMIN</span><h1>Role permissions</h1><p>Choose which modules each sub-admin can use across their assigned webinars.</p></div><a class="btn btn-gradient" href="{{ route('admin.permissions.create') }}"><i class="bi bi-plus"></i> Assign permissions</a></div>
-@if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
-<div class="panel-card table-responsive"><table class="premium-table"><thead><tr><th>Sub admin</th><th>Email</th><th>Mobile</th><th>Assigned webinars</th><th>Module permissions</th><th>Actions</th></tr></thead><tbody>@forelse($subAdmins as $user)<tr><td><strong>{{ $user->name }}</strong></td><td>{{ $user->email }}</td><td>{{ $user->mobile ?: '—' }}</td><td>{{ $user->assigned_webinars_count }}</td><td>{{ $permissionCounts[$user->id] ?? 0 }} permissions</td><td><div class="d-flex gap-1"><a class="btn btn-sm btn-light" href="{{ route('admin.permissions.edit',$user) }}">Edit</a><form method="POST" action="{{ route('admin.permissions.destroy',$user) }}" onsubmit="return confirm('Remove all role permissions for this sub admin?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Remove</button></form></div></td></tr>@empty<tr><td colspan="6" class="text-center py-5 text-muted">No sub admins added yet.</td></tr>@endforelse</tbody></table></div>
+    <div class="page-heading">
+        <div>
+            <h1>Roles / Permissions</h1>
+        </div><a class="btn btn-gradient" href="{{ route('admin.permissions.create') }}"><i class="bi bi-plus"></i> Add Role
+            Permission</a>
+    </div>
+    @if (session('status'))
+        <div class="alert alert-success">{{ session('status') }}</div>
+    @endif
+    <div class="panel-card table-responsive">
+        <table class="premium-table">
+            <thead>
+                <tr>
+                    <th>Sub admin</th>
+                    <th>Email</th>
+                    <th>Mobile</th>
+                    <th>Assigned webinars</th>
+                    <th>Module permissions</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($subAdmins as $user)
+                    <tr>
+                        <td><strong>{{ $user->name }}</strong></td>
+                        <td>{{ $user->email }}</td>
+                        <td>{{ $user->mobile ?: '—' }}</td>
+                        <td>{{ $user->assigned_webinars_count }}</td>
+                        <td>{{ $permissionCounts[$user->id] ?? 0 }} permissions</td>
+                        <td>
+                            <div class="d-flex gap-1"><a class="btn btn-sm btn-light"
+                                    href="{{ route('admin.permissions.edit', $user) }}">Edit</a>
+                                <form method="POST" action="{{ route('admin.permissions.destroy', $user) }}"
+                                    onsubmit="return confirm('Remove all role permissions for this sub admin?')">@csrf
+                                    @method('DELETE')<button class="btn btn-sm btn-outline-danger">Remove</button></form>
+                            </div>
+                        </td>
+                </tr>@empty<tr>
+                        <td colspan="6" class="text-center py-5 text-muted">No sub admins added yet.</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
 @endsection

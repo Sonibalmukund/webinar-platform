@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Webinar;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class SessionResourcesTest extends TestCase
@@ -37,6 +38,7 @@ class SessionResourcesTest extends TestCase
         DB::table('webinar_resources')->where('webinar_id', $webinar->id)->delete();
         $this->get(route('webinars.dashboard', $webinar))->assertOk()->assertDontSee('SESSION KIT')->assertDontSee('Resources (0)');
     }
+
     public function test_uploaded_resource_download_is_scoped_to_registered_webinar(): void
     {
         $admin = $this->user('super-admin');
@@ -44,7 +46,7 @@ class SessionResourcesTest extends TestCase
         $webinar = Webinar::create(['created_by' => $admin->id, 'title' => 'Downloads', 'slug' => 'download-'.uniqid(), 'status' => 'live']);
         Registration::create(['webinar_id' => $webinar->id, 'user_id' => $learner->id, 'email' => $learner->email, 'status' => 'approved']);
         $directory = public_path('uploads/resources');
-        \Illuminate\Support\Facades\File::ensureDirectoryExists($directory);
+        File::ensureDirectoryExists($directory);
         $name = 'test-'.uniqid().'.pdf';
         file_put_contents($directory.'/'.$name, '%PDF-1.4 test resource');
         try {
@@ -58,5 +60,4 @@ class SessionResourcesTest extends TestCase
             unlink($directory.'/'.$name);
         }
     }
-
 }

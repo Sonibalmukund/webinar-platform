@@ -32,7 +32,7 @@ class ProfilePreferencesAndEarlyAccessTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin.profile'))
             ->assertOk()
-            ->assertSee('class="active" href="'.route('admin.profile', [], false).'"', false)
+            ->assertSee('href="'.route('admin.profile', [], false).'">Profile</a>', false)
             ->assertSee('Change password');
 
         $this->put(route('admin.password.update'), [
@@ -55,7 +55,19 @@ class ProfilePreferencesAndEarlyAccessTest extends TestCase
             ->assertSee('Marathi (मराठी)')
             ->assertSee('id="webinarTimezone"', false)
             ->assertSee('Asia/Kolkata')
-            ->assertSee('id="scheduleTimezonePreview"', false);
+            ->assertSee('id="scheduleTimezonePreview"', false)
+            ->assertSee('data-min-date=', false)
+            ->assertSee('type="time" name="agenda[0][starts_at]"', false)
+            ->assertSee('id="webinarSlug"', false)
+            ->assertSee('Brand, Banners & Speakers', false)
+            ->assertSee('name="branding_assets_present"', false)
+            ->assertSee('id="brandActiveHex"', false)
+            ->assertSee('data-field-options hidden', false)
+            ->assertSee('name="agenda_notes"', false)
+            ->assertSee('const nextAgendaTime = row =>', false)
+            ->assertDontSee('<span class="input-group-text">/webinars/</span>', false)
+            ->assertSee('Start date and time are required for a scheduled or live webinar.')
+            ->assertDontSee('Scheduled or Live webinar ke liye');
     }
 
     public function test_webinar_builder_uses_requested_iframe_layout_and_file_only_images(): void
@@ -68,6 +80,7 @@ class ProfilePreferencesAndEarlyAccessTest extends TestCase
             ->assertSee('id="brandSvField"', false)
             ->assertSee('id="brandHueSlider"', false)
             ->assertSee('id="themeColorPickerModal"', false)
+            ->assertSee('id="applyThemeColor"', false)
             ->assertSee('data-color-open="primary"', false)
             ->assertSee('id="experiencePreviewFrame"', false)
             ->assertSee('Resource Links')
@@ -83,15 +96,32 @@ class ProfilePreferencesAndEarlyAccessTest extends TestCase
             ->assertSee('Client / Webinar Logo')
             ->assertSee('Video URL, ID, or iframe code is required for the selected player.')
             ->assertSee('name="waiting_media_file"', false)
+            ->assertSee('id="bannerBuilderRows"', false)
+            ->assertSee('data-banner-preview', false)
+            ->assertSee('data-banner-file-label', false)
+            ->assertSee('data-banner-url-label', false)
+            ->assertSee('data-waiting-preview', false)
+            ->assertSee('<span>Background Preview</span>', false)
+            ->assertSee('id="mediaPreviewModal"', false)
+            ->assertSee('data-logo-preview', false)
+            ->assertSee('data-speaker-preview', false)
+            ->assertDontSee('data-banner-row draggable="true"', false)
+            ->assertSee('id="wizardCompletionBar"', false)
+            ->assertSee('name="brand_display_style"', false)
+            ->assertDontSee('Logo Strip')
+            ->assertSee('<span>Banner Preview</span>', false)
+            ->assertSee('media-config-grid', false)
+            ->assertSee('media-preview-canvas', false)
+            ->assertSee('Add another banner')
             ->assertDontSee('name="brand_logo_url"', false)
             ->assertDontSee('name="waiting_media_url"', false)
             ->assertSee('name="certificate_min_attendance"', false)
             ->assertSee('name="qa_enabled"', false)
             ->assertSee('data-webinar-datetime-picker', false)
             ->assertSee('Waiting Room Background Image')
-            ->assertSee('Show immediately after attendee answers')
-            ->assertSee('Show after the webinar finishes')
-            ->assertSee("Don't show the correct answer", false);
+            ->assertSee('Immediately after answering')
+            ->assertSee('After webinar finishes')
+            ->assertSee('Never show');
 
         $this->actingAs($admin)->get(route('admin.general.banners.create'))
             ->assertOk()->assertSee('Choose banner image')->assertDontSee('Image URL');
@@ -153,13 +183,26 @@ class ProfilePreferencesAndEarlyAccessTest extends TestCase
         ]);
 
         $this->actingAs($admin)->get(route('admin.webinars.live', $webinar))
-            ->assertOk()->assertSee('Certificate Minimum Watch Time (%)');
+            ->assertOk()->assertSee('Certificate Minimum Watch Time (%)')->assertSee('Early Room Access (minutes)')
+            ->assertSee('Participants')->assertSee('Preview Landing Page')->assertSee('Preview Live Room')
+            ->assertDontSee('Preview Registration Form')->assertDontSee('Preview Login Form');
+
+        $this->get(route('admin.webinars.preview-room', $webinar))
+            ->assertOk()->assertSee('Staff preview mode');
+        $this->assertDatabaseMissing('webinar_attendees', ['webinar_id' => $webinar->id, 'user_id' => $admin->id]);
 
         $this->put(route('admin.webinars.controls', $webinar), [
-            'status' => 'live', 'certificate_min_attendance' => 65,
+            'status' => 'live', 'certificate_min_attendance' => 65, 'early_entry_minutes' => 20,
+            'participants_enabled' => '1',
         ])->assertRedirect(route('admin.webinars.index'));
 
         $this->assertSame(65, (int) data_get($webinar->fresh()->settings, 'experience.certificate_min_attendance'));
+        $this->assertSame(20, (int) $webinar->fresh()->early_entry_minutes);
+        $this->assertTrue((bool) data_get($webinar->fresh()->settings, 'experience.participants_enabled'));
+
+        $this->get(route('webinars.show', $webinar))
+            ->assertOk()->assertSee('Login Form')->assertSee('Registration Form')
+            ->assertSee('Live participants')->assertSee('data-landing-online', false);
     }
 
     public function test_conditional_visibility_is_removed_and_legacy_fields_always_render(): void
@@ -198,6 +241,25 @@ class ProfilePreferencesAndEarlyAccessTest extends TestCase
             'timezone' => 'America/New_York',
             'starts_at' => '2026-09-20T10:00',
             'ends_at' => '2026-09-20T11:30',
+            'agenda_notes' => "Welcome and introductions\nLive questions at the end.",
+            'agenda_present' => '1',
+            'agenda' => [
+                ['starts_at' => '09:00', 'title' => 'Opening session', 'duration_minutes' => 30],
+                ['starts_at' => '09:30', 'title' => 'Keynote', 'duration_minutes' => 45],
+            ],
+            'branding_assets_present' => '1',
+            'brand_display_style' => 'monochrome',
+            'banners' => [
+                ['title' => 'New York image banner', 'media_type' => 'image', 'media_url' => ''],
+                ['title' => 'New York video banner', 'media_type' => 'video', 'media_url' => 'https://example.com/banner.mp4'],
+            ],
+            'banner_media' => [0 => UploadedFile::fake()->image('event-banner.jpg')],
+            'brands' => [
+                ['name' => 'New York Health Partner', 'website_url' => 'https://partner.example.com', 'is_active' => '1'],
+            ],
+            'brand_logos' => [0 => UploadedFile::fake()->image('partner-logo.png')],
+            'new_speaker_name' => 'Maya Speaker',
+            'new_speaker_headline' => 'Keynote Speaker',
             'early_entry_minutes' => 15,
             'registration_type' => 'free',
             'brand_logo_file' => UploadedFile::fake()->image('client-logo.png'),
@@ -207,7 +269,22 @@ class ProfilePreferencesAndEarlyAccessTest extends TestCase
         $this->assertSame('es', $webinar->language);
         $this->assertSame('America/New_York', $webinar->timezone);
         $this->assertSame(15, (int) $webinar->early_entry_minutes);
+        $this->assertSame('monochrome', data_get($webinar->settings, 'experience.brand_display_style'));
         $this->assertSame('2026-09-20 14:00', $webinar->starts_at->utc()->format('Y-m-d H:i'));
+        $this->assertSame("Welcome and introductions\nLive questions at the end.", data_get($webinar->settings, 'experience.agenda_notes'));
+        $this->assertDatabaseHas('webinar_agenda_items', ['webinar_id' => $webinar->id, 'title' => 'Keynote', 'starts_at' => '09:30', 'duration_minutes' => 45]);
+        $this->assertDatabaseHas('banners', ['webinar_id' => $webinar->id, 'title' => 'New York image banner', 'media_type' => 'image']);
+        $this->assertDatabaseHas('banners', ['webinar_id' => $webinar->id, 'title' => 'New York video banner', 'media_type' => 'video']);
+        $this->assertDatabaseHas('brands', ['webinar_id' => $webinar->id, 'name' => 'New York Health Partner', 'website_url' => 'https://partner.example.com', 'is_active' => true]);
+        $this->assertDatabaseHas('speakers', ['name' => 'Maya Speaker', 'headline' => 'Keynote Speaker']);
+        $this->assertSame(['Maya Speaker'], $webinar->speakers()->pluck('name')->all());
+        $this->get(route('webinars.show', $webinar))->assertOk()
+            ->assertSee('Session Agenda')
+            ->assertSee('Welcome and introductions')
+            ->assertSee('Opening session')
+            ->assertSee('New York Health Partner')
+            ->assertSee('brand-style-monochrome', false)
+            ->assertSee('9:30 AM');
     }
 
     public function test_scheduled_webinar_requires_dates_and_ist_attendance_starts_at_entered_local_time(): void
@@ -229,6 +306,17 @@ class ProfilePreferencesAndEarlyAccessTest extends TestCase
             'brand_logo_file' => UploadedFile::fake()->image('client-logo.png'),
         ])
             ->assertSessionHasErrors(['starts_at', 'ends_at']);
+
+        $this->post(route('admin.webinars.store'), $base + [
+            'starts_at' => '2026-09-20T11:00',
+            'brand_logo_file' => UploadedFile::fake()->image('client-logo.png'),
+        ])->assertSessionHasErrors(['ends_at']);
+
+        $this->post(route('admin.webinars.store'), $base + [
+            'starts_at' => '2026-09-20T11:00',
+            'ends_at' => '2026-09-20T10:00',
+            'brand_logo_file' => UploadedFile::fake()->image('client-logo.png'),
+        ])->assertSessionHasErrors(['ends_at']);
 
         $this->post(route('admin.webinars.store'), $base + [
             'starts_at' => '2026-09-20T11:00',

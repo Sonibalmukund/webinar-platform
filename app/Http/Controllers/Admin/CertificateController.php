@@ -6,14 +6,11 @@ use App\Events\WebinarRoomUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\CertificateTemplate;
 use App\Models\Webinar;
-use App\Support\AuditTrail;
-use App\Support\WebinarExperience;
-use App\Support\WebinarCertificateTemplate;
 use App\Support\DynamicFieldsHelper;
+use App\Support\WebinarCertificateTemplate;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -58,7 +55,7 @@ class CertificateController extends Controller
     {
         $templateId = data_get($webinar->settings, 'certificate_template_id');
 
-        return view('pages.admin.certificates.form', [
+        return view('pages.admin.certificates.add_edit', [
             'webinar' => $webinar,
             'template' => $templateId ? CertificateTemplate::find($templateId) : null,
         ]);
@@ -121,6 +118,10 @@ class CertificateController extends Controller
             $path = $file->storeAs('certificates', $name, 'public');
             $signaturePath = '/storage/'.$path;
         }
+        $positions = array_replace_recursive(
+            data_get($existingDesign, 'positions', []),
+            $data['positions'],
+        );
         $values = [
             'name' => $data['name'], 'orientation' => $data['orientation'],
             'design' => [
@@ -128,7 +129,7 @@ class CertificateController extends Controller
                 'template_image' => $imagePath,
                 'font_file' => $fontPath, 'font_family' => $fontPath ? 'CustomCertificateFont' : 'Manrope',
                 'signature_image' => $signaturePath,
-                'positions' => $data['positions'],
+                'positions' => $positions,
                 'visible_elements' => $request->has('visible_elements')
                     ? collect(WebinarCertificateTemplate::ELEMENT_VISIBILITY_DEFAULTS)
                         ->mapWithKeys(fn ($default, $key) => [$key => $request->boolean('visible_elements.'.$key)])

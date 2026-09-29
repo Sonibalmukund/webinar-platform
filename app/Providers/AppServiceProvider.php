@@ -2,16 +2,10 @@
 
 namespace App\Providers;
 
-use App\Models\Banner;
-use App\Models\Brand;
 use App\Models\City;
 use App\Models\Country;
-use App\Models\Poll;
-use App\Models\RegistrationField;
 use App\Models\SignupField;
-use App\Models\Speaker;
 use App\Models\State;
-use App\Support\AuditTrail;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;

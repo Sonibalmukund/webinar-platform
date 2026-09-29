@@ -2,21 +2,26 @@
 
 namespace Tests\Feature;
 
-use App\Events\UserNotificationCreated;
 use App\Events\WebinarAttendanceUpdated;
-use App\Events\WebinarQuestionUpdated;
+use App\Events\WebinarChatMessageVoted;
+use App\Events\WebinarPollUpdated;
 use App\Events\WebinarRoomUpdated;
-use App\Models\Permission;
+use App\Mail\CommunicationMail;
 use App\Models\CertificateTemplate;
+use App\Models\Permission;
 use App\Models\Poll;
 use App\Models\Registration;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Webinar;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class RealtimeExperienceTest extends TestCase
@@ -104,7 +109,7 @@ class RealtimeExperienceTest extends TestCase
 
     public function test_poll_results_are_hidden_until_learner_answers_and_selection_survives_reload(): void
     {
-        Event::fake([\App\Events\WebinarPollUpdated::class]);
+        Event::fake([WebinarPollUpdated::class]);
         $admin = $this->user('super-admin');
         $learner = $this->user('learner');
         $webinar = $this->webinar($admin);
@@ -124,7 +129,7 @@ class RealtimeExperienceTest extends TestCase
 
     public function test_poll_survives_broadcast_failure_and_retry_returns_saved_answer(): void
     {
-        Event::listen(\App\Events\WebinarPollUpdated::class, fn () => throw new \RuntimeException('Reverb unavailable'));
+        Event::listen(WebinarPollUpdated::class, fn () => throw new \RuntimeException('Reverb unavailable'));
         $admin = $this->user('super-admin');
         $learner = $this->user('learner');
         $webinar = $this->webinar($admin);
@@ -137,7 +142,7 @@ class RealtimeExperienceTest extends TestCase
         $this->postJson(route('webinars.polls.vote', [$webinar, $poll]), ['option_id' => $two->id])->assertOk()->assertJsonPath('selected_option_id', $one->id);
         $this->getJson(route('webinars.polls.results', [$webinar, $poll]))->assertOk()->assertJsonPath('options.0.count', 1)->assertJsonPath('options.1.count', 0);
         $this->assertSame(1, DB::table('poll_responses')->where('poll_id', $poll->id)->count());
-        Event::forget(\App\Events\WebinarPollUpdated::class);
+        Event::forget(WebinarPollUpdated::class);
     }
 
     public function test_certificate_download_requires_configured_watch_percentage(): void
@@ -185,9 +190,10 @@ class RealtimeExperienceTest extends TestCase
             ->assertDontSee('<th>Status</th>', false);
     }
 
-    public function test_admin_notification_is_saved_and_broadcast_to_each_learner(): void
+    public function test_admin_reminder_email_is_sent_now_to_registered_attendees(): void
     {
-        Event::fake([UserNotificationCreated::class]);
+        Mail::fake();
+        Storage::fake('public');
         $admin = $this->user('super-admin');
         $one = $this->user('learner');
         $two = $this->user('learner');
@@ -195,11 +201,116 @@ class RealtimeExperienceTest extends TestCase
         foreach ([$one, $two] as $learner) {
             Registration::create(['webinar_id' => $webinar->id, 'user_id' => $learner->id, 'email' => $learner->email, 'status' => 'approved']);
         }
-        $before = DB::table('user_notifications')->count();
-        $this->actingAs($admin)->post(route('admin.notifications.store'), ['subject' => 'Starting now', 'message' => 'Please join the room.', 'audience' => 'webinar', 'webinar_id' => $webinar->id])->assertRedirect(route('admin.notifications.index'));
-        $this->assertSame($before + 2, DB::table('user_notifications')->count());
-        Event::assertDispatched(UserNotificationCreated::class, 2);
-        $this->actingAs($one)->get(route('notifications.index'))->assertOk()->assertSee('Starting now');
+        $this->actingAs($admin)->post(route('admin.notifications.store'), ['delivery_mode' => 'reminder_now', 'channel' => 'email', 'subject' => 'Starting now', 'message' => '<p>Please <strong>join</strong> the room.</p>', 'audience' => 'webinar', 'webinar_id' => $webinar->id, 'attachment' => UploadedFile::fake()->image('reminder.png')])->assertRedirect(route('admin.notifications.index'));
+        Mail::assertSent(CommunicationMail::class, fn ($mail) => count($mail->attachments()) === 1);
+        $this->assertDatabaseHas('notification_campaigns', ['subject' => 'Starting now', 'delivery_mode' => 'reminder_now', 'status' => 'sent', 'sent_count' => 2]);
+        $campaignId = DB::table('notification_campaigns')->where('subject', 'Starting now')->value('id');
+        $this->assertSame(2, DB::table('notification_delivery_logs')->where('campaign_id', $campaignId)->where('status', 'sent')->count());
+        $this->get(route('admin.notifications.email-logs', ['webinar_id' => $webinar->id]))->assertOk()->assertSee($one->email)->assertSee($two->email)->assertSee('SENT')
+            ->assertSee('name="webinar_id"', false)
+            ->assertSee('Export CSV')
+            ->assertSee('href="'.route('admin.notifications.email-logs', [], false).'">Email Logs</a>', false);
+        $export = $this->get(route('admin.notifications.email-logs.export', ['webinar_id' => $webinar->id]))->assertOk();
+        $export->assertDownload();
+        $this->assertStringContainsString($one->email, $export->streamedContent());
+        $path = DB::table('notification_campaigns')->where('subject', 'Starting now')->value('attachment_path');
+        Storage::disk('public')->assertExists($path);
+    }
+
+    public function test_notification_message_rejects_visually_empty_rich_text(): void
+    {
+        $admin = $this->user('super-admin');
+
+        $this->actingAs($admin)->post(route('admin.notifications.store'), [
+            'delivery_mode' => 'save_template',
+            'channel' => 'email',
+            'audience' => 'all_registrations',
+            'subject' => 'Empty rich text',
+            'message' => '<p>&nbsp;</p>',
+        ])->assertSessionHasErrors('message');
+
+        $this->assertDatabaseMissing('notification_campaigns', ['subject' => 'Empty rich text']);
+    }
+
+    public function test_whatsapp_reminder_creates_a_prefilled_recipient_queue_without_scheduler(): void
+    {
+        $admin = $this->user('super-admin');
+        $learner = $this->user('learner');
+        $learner->update(['mobile' => '+91 98765 43210']);
+        $webinar = $this->webinar($admin);
+        $webinar->update(['timezone' => 'Asia/Kolkata']);
+        Registration::create(['webinar_id' => $webinar->id, 'user_id' => $learner->id, 'email' => $learner->email, 'status' => 'approved']);
+
+        $response = $this->actingAs($admin)->post(route('admin.notifications.store'), [
+            'delivery_mode' => 'reminder_now',
+            'channel' => 'whatsapp',
+            'subject' => '{webinar} starts soon',
+            'message' => '<p>Hello {name}, join on {date}.</p>',
+            'audience' => 'webinar',
+            'webinar_id' => $webinar->id,
+        ]);
+
+        $campaign = DB::table('notification_campaigns')->where('subject', '{webinar} starts soon')->first();
+        $response->assertRedirect(route('admin.notifications.whatsapp', $campaign->id));
+        $this->assertSame('ready', $campaign->status);
+        $this->get(route('admin.notifications.whatsapp', $campaign->id))->assertOk()->assertSee('919876543210')->assertSee('Hello', false);
+    }
+
+    public function test_admin_can_save_a_communication_draft_without_sending_and_template_picker_is_hidden(): void
+    {
+        Mail::fake();
+        $admin = $this->user('super-admin');
+
+        $this->actingAs($admin)->post(route('admin.notifications.store'), [
+            'delivery_mode' => 'save_template',
+            'channel' => 'email',
+            'audience' => 'all_registrations',
+            'subject' => 'Reusable reminder',
+            'message' => '<p>Hello {name}, this is a reusable template.</p>',
+        ])->assertRedirect(route('admin.notifications.index'));
+
+        $templateId = DB::table('notification_campaigns')->where('subject', 'Reusable reminder')->value('id');
+        $this->assertDatabaseHas('notification_campaigns', ['id' => $templateId, 'delivery_mode' => 'save_template', 'status' => 'template', 'sent_count' => 0]);
+        Mail::assertNothingSent();
+        $this->get(route('admin.notifications.create'))->assertOk()->assertDontSee('Use an existing template');
+    }
+
+    public function test_registration_email_and_utm_source_tracking_work_together(): void
+    {
+        Mail::fake();
+        $admin = $this->user('super-admin');
+        $learner = $this->user('learner');
+        $webinar = $this->webinar($admin);
+        $webinar->registrationForm()->create(['title' => 'Registration', 'is_active' => true, 'require_login' => true]);
+
+        $this->actingAs($admin)->post(route('admin.notifications.store'), [
+            'delivery_mode' => 'after_registration_email',
+            'subject' => 'Welcome to {webinar}',
+            'message' => 'Hello {name}, your registration is confirmed for {date}.',
+            'webinar_id' => $webinar->id,
+        ])->assertRedirect(route('admin.notifications.index'));
+
+        $this->actingAs($learner)->get(route('webinars.show', [
+            'webinar' => $webinar,
+            'utm_source' => 'linkedin',
+            'utm_medium' => 'social',
+            'utm_campaign' => 'leadership-launch',
+        ]))->assertOk();
+        $this->post(route('webinars.register', $webinar))->assertRedirect();
+
+        $this->assertDatabaseHas('registrations', [
+            'webinar_id' => $webinar->id,
+            'user_id' => $learner->id,
+            'source' => 'linkedin',
+            'utm_source' => 'linkedin',
+            'utm_medium' => 'social',
+            'utm_campaign' => 'leadership-launch',
+        ]);
+        Mail::assertSent(CommunicationMail::class, fn ($mail) => $mail->hasTo($learner->email) && $mail->mailSubject === 'Welcome to '.$webinar->title);
+        $campaignId = DB::table('notification_campaigns')->where('subject', 'Welcome to {webinar}')->value('id');
+        $this->assertDatabaseHas('notification_delivery_logs', ['campaign_id' => $campaignId, 'recipient' => $learner->email, 'status' => 'sent']);
+        $this->actingAs($admin)->get(route('admin.reports.index', ['webinar_id' => $webinar->id]))
+            ->assertOk()->assertSee('Registration sources')->assertSee('Linkedin')->assertSee('leadership-launch');
     }
 
     public function test_sub_admin_can_open_only_assigned_webinar_chat(): void
@@ -214,12 +325,13 @@ class RealtimeExperienceTest extends TestCase
             $sub->webinarPermissions()->attach($permission->id, ['webinar_id' => $assigned->id, 'assigned_by' => $admin->id]);
         }
         $this->actingAs($sub)->get(route('admin.dashboard'))->assertOk()
-            ->assertSee('ASSIGNED EVENTS')
+            ->assertSee('<h1>Dashboard</h1>', false)
+            ->assertDontSee('ASSIGNED EVENTS')
             ->assertSee('Profile')
             ->assertDontSee('<div class="sidebar-section-title">Administration</div>', false);
         $this->actingAs($sub)->get(route('admin.chats.show', $assigned))->assertOk()
             ->assertSee('data-chat-history="'.route('admin.chats.show', $assigned).'"', false);
-        $this->get(route('admin.chats.show',$other))->assertForbidden();
+        $this->get(route('admin.chats.show', $other))->assertForbidden();
     }
 
     public function test_learner_can_fetch_active_poll_partial_dynamically(): void
@@ -250,8 +362,7 @@ class RealtimeExperienceTest extends TestCase
             'feedback_enabled' => 1,
         ])->assertRedirect();
 
-        Event::assertDispatched(WebinarRoomUpdated::class, fn ($event) =>
-            $event->webinarId === $webinar->id &&
+        Event::assertDispatched(WebinarRoomUpdated::class, fn ($event) => $event->webinarId === $webinar->id &&
             $event->change === 'controls' &&
             $event->state['chat_enabled'] === true &&
             $event->state['polls_enabled'] === true &&
@@ -261,8 +372,7 @@ class RealtimeExperienceTest extends TestCase
         );
 
         $this->patch(route('admin.certificates.visibility', $webinar), ['enabled' => 1])->assertRedirect();
-        Event::assertDispatched(WebinarRoomUpdated::class, fn ($event) =>
-            $event->change === 'controls' &&
+        Event::assertDispatched(WebinarRoomUpdated::class, fn ($event) => $event->change === 'controls' &&
             $event->state['certificate_enabled'] === true
         );
     }
@@ -275,6 +385,15 @@ class RealtimeExperienceTest extends TestCase
         $webinar = $this->webinar($admin);
         Registration::create(['webinar_id' => $webinar->id, 'user_id' => $learner->id, 'email' => $learner->email, 'status' => 'approved']);
 
+        $this->actingAs($admin)->get(route('admin.webinars.live', $webinar))->assertOk()
+            ->assertSee('data-announcement-message', false)
+            ->assertSee('data-announcement-count', false);
+
+        $this->actingAs($admin)->putJson(route('admin.webinars.announcement', $webinar), [
+            'message' => str_repeat('x', 51),
+            'enabled' => 1,
+        ])->assertUnprocessable()->assertJsonValidationErrors('message');
+
         $res = $this->actingAs($admin)->putJson(route('admin.webinars.announcement', $webinar), [
             'message' => 'Exclusive 50% discount on next course!',
             'button_text' => 'Get Discount',
@@ -285,8 +404,7 @@ class RealtimeExperienceTest extends TestCase
         $res->assertJsonPath('pinned_announcement.enabled', true);
         $res->assertJsonPath('pinned_announcement.message', 'Exclusive 50% discount on next course!');
 
-        Event::assertDispatched(WebinarRoomUpdated::class, fn ($e) =>
-            $e->webinarId === $webinar->id &&
+        Event::assertDispatched(WebinarRoomUpdated::class, fn ($e) => $e->webinarId === $webinar->id &&
             $e->change === 'announcement' &&
             $e->state['pinned_announcement']['enabled'] === true
         );
@@ -299,7 +417,7 @@ class RealtimeExperienceTest extends TestCase
 
     public function test_learner_can_upvote_live_chat_messages_in_realtime(): void
     {
-        Event::fake([\App\Events\WebinarChatMessageVoted::class]);
+        Event::fake([WebinarChatMessageVoted::class]);
         $admin = $this->user('super-admin');
         $learner = $this->user('learner');
         $webinar = $this->webinar($admin);
@@ -319,8 +437,7 @@ class RealtimeExperienceTest extends TestCase
         $this->assertTrue($voteRes->json('voted'));
         $this->assertSame(1, $voteRes->json('votes_count'));
 
-        Event::assertDispatched(\App\Events\WebinarChatMessageVoted::class, fn ($e) =>
-            $e->webinarId === $webinar->id && $e->messageId === $messageId && $e->votesCount === 1
+        Event::assertDispatched(WebinarChatMessageVoted::class, fn ($e) => $e->webinarId === $webinar->id && $e->messageId === $messageId && $e->votesCount === 1
         );
 
         // Toggle upvote off
@@ -349,7 +466,7 @@ class RealtimeExperienceTest extends TestCase
         DB::table('certificates')->insert([
             'webinar_id' => $webinar->id,
             'user_id' => $learner->id,
-            'credential_id' => (string) \Illuminate\Support\Str::uuid(),
+            'credential_id' => (string) Str::uuid(),
             'status' => 'approved',
             'issued_at' => now(),
             'created_at' => now(),
@@ -373,7 +490,7 @@ class RealtimeExperienceTest extends TestCase
 
     public function test_multiple_choice_poll_saves_all_selected_options_in_one_submission(): void
     {
-        Event::fake([\App\Events\WebinarPollUpdated::class]);
+        Event::fake([WebinarPollUpdated::class]);
         $admin = $this->user('super-admin');
         $learner = $this->user('learner');
         $webinar = $this->webinar($admin);
@@ -504,7 +621,7 @@ class RealtimeExperienceTest extends TestCase
         }
 
         $this->actingAs($admin)->get(route('admin.polls.logs'))->assertOk()
-            ->assertSee('Poll voter logs')
+            ->assertSee('Poll Logs')
             ->assertSee($learner->email)
             ->assertSee('VirtualPortal answer')
             ->assertDontSee('View results')
@@ -639,19 +756,19 @@ class RealtimeExperienceTest extends TestCase
         Registration::create(['webinar_id' => $other->id, 'email' => 'private-report@example.com', 'status' => 'approved']);
 
         $this->actingAs($sub)->get(route('admin.webinars.index'))->assertOk()
-            ->assertDontSee('Create webinar')->assertDontSee('Edit webinar')->assertDontSee('Clone as draft')->assertDontSee('>Delete<', false);
+            ->assertDontSee('Add Webinar')->assertDontSee('Edit Webinar')->assertDontSee('Clone as draft')->assertDontSee('>Delete<', false);
         $this->get(route('admin.webinars.create'))->assertForbidden();
         $this->get(route('admin.webinars.edit', $assigned))->assertForbidden();
         $this->get(route('admin.polls.index'))->assertOk()
-            ->assertDontSee('Add poll')->assertDontSee('>Edit<', false)->assertDontSee('Duplicate')->assertDontSee('>Delete<', false);
+            ->assertDontSee('Add Poll')->assertDontSee('>Edit<', false)->assertDontSee('Duplicate')->assertDontSee('>Delete<', false);
         $this->get(route('admin.polls.edit', Poll::where('webinar_id', $assigned->id)->firstOrFail()))->assertForbidden();
         $this->get(route('admin.certificates.index'))->assertOk()
-            ->assertDontSee('Add certificate')->assertDontSee('Add template')->assertDontSee('Edit template');
-        $this->get(route('admin.speakers.index'))->assertOk()->assertDontSee('Add speaker');
-        $this->get(route('admin.notifications.index'))->assertOk()->assertDontSee('Create notification');
+            ->assertDontSee('Add Certificate')->assertDontSee('Add template')->assertDontSee('Edit template');
+        $this->get(route('admin.speakers.index'))->assertOk()->assertDontSee('Add Speaker');
+        $this->get(route('admin.notifications.index'))->assertOk()->assertDontSee('Add Notification');
 
         $this->get(route('admin.reports.index'))->assertOk()
-            ->assertSee('Assigned Events report')
+            ->assertSee('<h1>Reports</h1>', false)
             ->assertSee('Assigned report event')
             ->assertDontSee('Private platform event')
             ->assertDontSee('private-report@example.com');

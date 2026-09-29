@@ -3,20 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Events\WebinarChatMessageSent;
+use App\Events\WebinarChatMessageVoted;
 use App\Events\WebinarPollUpdated;
 use App\Events\WebinarQuestionUpdated;
 use App\Models\Banner;
 use App\Models\Brand;
-use App\Models\City;
 use App\Models\CertificateTemplate;
+use App\Models\City;
 use App\Models\Country;
 use App\Models\Poll;
 use App\Models\SignupField;
 use App\Models\State;
 use App\Models\Webinar;
 use App\Support\AuditTrail;
-use App\Support\WebinarExperience;
+use App\Support\RegistrationAttribution;
 use App\Support\WebinarCertificateTemplate;
+use App\Support\WebinarExperience;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,16 +27,18 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class WebinarController extends Controller
 {
     public function index(): View
     {
-        return view('pages.user.webinars', ['webinars' => Webinar::with('creator')->whereNot('status', 'draft')->whereNotNull('published_at')->orderBy('starts_at')->paginate(12)]);
+        return view('pages.user.public_webinar_list', ['webinars' => Webinar::with('creator')->whereNot('status', 'draft')->whereNotNull('published_at')->orderBy('starts_at')->paginate(12)]);
     }
 
     public function show(Webinar $webinar): View
     {
+        RegistrationAttribution::capture(request(), $webinar);
         if (! empty($webinar->language)) {
             app()->setLocale($webinar->language);
         }
@@ -47,7 +51,7 @@ class WebinarController extends Controller
         $webinar = $webinar->load(['registrationForm.fields.options', 'speakers', 'creator'])->loadCount('registrations');
         $loginField = $webinar->registrationForm?->fields->first(fn ($field) => $field->is_enabled && $field->login_enabled);
         $banners = Banner::where('webinar_id', $webinar->id)->where('is_active', true)->where(fn ($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', now()))->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>=', now()))->orderBy('display_order')->get();
-        $brands = Brand::where('webinar_id', $webinar->id)->where('is_active', true)->get();
+        $brands = Brand::where('webinar_id', $webinar->id)->where('is_active', true)->orderBy('display_order')->orderBy('name')->get();
         $agenda = DB::table('webinar_agenda_items')->where('webinar_id', $webinar->id)->orderBy('display_order')->get();
         $resources = DB::table('webinar_resources')->where('webinar_id', $webinar->id)->where('is_public', true)->orderBy('display_order')->get();
         $agenda->each(function ($item) use ($webinar) {
@@ -56,8 +60,12 @@ class WebinarController extends Controller
         $authSettings = DB::table('settings')->where('group', 'registration')->pluck('value', 'key');
         $defaultCountryId = (int) ($authSettings['registration_default_country_id'] ?? 0);
         $defaultStateId = (int) ($authSettings['registration_default_state_id'] ?? 0);
+        $participantsEnabled = (bool) data_get($webinar->settings, 'experience.participants_enabled', false);
+        $liveViewers = $participantsEnabled
+            ? DB::table('webinar_attendees')->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', now()->subSeconds(75))->count()
+            : 0;
 
-        return view('pages.user.webinar-show', [
+        return view('pages.user.public_webinar_landing', [
             'webinar' => $webinar,
             'banners' => $banners,
             'brands' => $brands,
@@ -73,6 +81,8 @@ class WebinarController extends Controller
             'cities' => City::where('state_id', $defaultStateId)->where('is_active', true)->orderBy('name')->get(),
             'signupFields' => SignupField::with(['options' => fn ($q) => $q->where('is_enabled', true)])->where('is_enabled', true)->orderBy('display_order')->get(),
             'isStaffPreview' => $canPreview,
+            'participantsEnabled' => $participantsEnabled,
+            'liveViewers' => $liveViewers,
         ]);
     }
 
@@ -82,14 +92,18 @@ class WebinarController extends Controller
             app()->setLocale($webinar->language);
         }
         $webinar->syncLifecycleStatus();
-        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->admitted()->exists(), 403, 'Register for this webinar before opening its dashboard.');
-        abort_unless($webinar->canEnter(), 403, $webinar->opensAt()
-            ? 'The webinar room opens at '.$webinar->opensAt()->timezone($webinar->timezone)->format('M d, Y · g:i A').' ('.$webinar->timezone.').'
-            : 'The webinar room is not open yet.');
-        $request->session()->put('frontend_event_slug', $webinar->slug);
+        $isStaffPreview = ($request->routeIs('admin.webinars.preview-room') || $request->boolean('staff_preview'))
+            && ($request->user()->hasRole('super-admin') || $request->user()->hasRole('sub-admin'));
+        if (! $isStaffPreview) {
+            abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->admitted()->exists(), 403, 'Register for this webinar before opening its dashboard.');
+            abort_unless($webinar->canEnter(), 403, $webinar->opensAt()
+                ? 'The webinar room opens at '.$webinar->opensAt()->timezone($webinar->timezone)->format('M d, Y · g:i A').' ('.$webinar->timezone.').'
+                : 'The webinar room is not open yet.');
+            $request->session()->put('frontend_event_slug', $webinar->slug);
+        }
         $webinar->load(['speakers'])->loadCount('registrations');
         $banners = Banner::where('webinar_id', $webinar->id)->where('is_active', true)->orderBy('display_order')->get();
-        $brands = Brand::where('webinar_id', $webinar->id)->where('is_active', true)->get();
+        $brands = Brand::where('webinar_id', $webinar->id)->where('is_active', true)->orderBy('display_order')->orderBy('name')->get();
         $agenda = DB::table('webinar_agenda_items')->where('webinar_id', $webinar->id)->orderBy('display_order')->get();
         $resources = DB::table('webinar_resources')->where('webinar_id', $webinar->id)->where('is_public', true)->orderBy('display_order')->get();
         $agenda->each(function ($item) use ($webinar) {
@@ -113,7 +127,7 @@ class WebinarController extends Controller
             ->latest('chat_messages.sent_at')->limit(50)->get();
         $feedback = $webinar->feedback_enabled ? DB::table('feedback')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->latest()->first() : null;
         $now = now();
-        $attendanceStarted = $webinar->attendanceHasStarted();
+        $attendanceStarted = ! $isStaffPreview && $webinar->attendanceHasStarted();
         $existingAttendee = DB::table('webinar_attendees')->where(['webinar_id' => $webinar->id, 'user_id' => $request->user()->id])->first();
         $shouldResetHand = ! $existingAttendee || $existingAttendee->left_at !== null || ! $existingAttendee->last_seen_at || Carbon::parse($existingAttendee->last_seen_at)->lt($now->copy()->subMinutes(10));
 
@@ -192,7 +206,7 @@ class WebinarController extends Controller
             ->pluck('question_id')
             ->toArray();
 
-        return view('pages.user.webinar-dashboard', compact('webinar', 'banners', 'brands', 'agenda', 'resources', 'activePoll', 'chatMessages', 'feedback', 'pollResponse', 'metrics', 'certificate', 'liveViewers', 'raisedHand', 'participants', 'questions', 'userVotes'));
+        return view('pages.user.attendee_live_room', compact('webinar', 'banners', 'brands', 'agenda', 'resources', 'activePoll', 'chatMessages', 'feedback', 'pollResponse', 'metrics', 'certificate', 'liveViewers', 'raisedHand', 'participants', 'questions', 'userVotes', 'isStaffPreview'));
     }
 
     public function chatMessages(Request $request, Webinar $webinar): JsonResponse
@@ -249,7 +263,7 @@ class WebinarController extends Controller
         $votesCount = (int) DB::table('chat_message_votes')->where('chat_message_id', $messageId)->count();
 
         try {
-            broadcast(new \App\Events\WebinarChatMessageVoted($webinar->id, $messageId, $votesCount, $userId));
+            broadcast(new WebinarChatMessageVoted($webinar->id, $messageId, $votesCount, $userId));
         } catch (\Throwable $e) {
             report($e);
         }
@@ -270,7 +284,7 @@ class WebinarController extends Controller
             'reply_to_id' => ['nullable', 'integer', 'exists:chat_messages,id'],
         ]);
         $sentAt = now();
-        $replyToId = !empty($data['reply_to_id']) ? (int) $data['reply_to_id'] : null;
+        $replyToId = ! empty($data['reply_to_id']) ? (int) $data['reply_to_id'] : null;
         $parentMessage = null;
         if ($replyToId) {
             $parentMessage = DB::table('chat_messages')
@@ -280,7 +294,7 @@ class WebinarController extends Controller
                 ->whereNull('chat_messages.deleted_at')
                 ->select(['chat_messages.message', 'users.name as user_name'])
                 ->first();
-            if (!$parentMessage) {
+            if (! $parentMessage) {
                 $replyToId = null;
             }
         }
@@ -363,6 +377,7 @@ class WebinarController extends Controller
             if ($request->expectsJson()) {
                 return $this->pollResults($request, $webinar, $poll);
             }
+
             return back()->with('dashboard_status', 'You have already answered this poll.')->with('dashboard_toast_tone', 'warning');
         }
         $selected = $poll->options()->whereKey($selectedIds)->get();
@@ -427,7 +442,7 @@ class WebinarController extends Controller
             ? DB::table('poll_responses')->where('poll_id', $activePoll->id)->where('user_id', $request->user()->id)->pluck('poll_option_id')
             : collect();
 
-        return view('pages.user.partials.dashboard-poll', compact('webinar', 'activePoll', 'pollResponse'));
+        return view('pages.user.partials.live_room_poll', compact('webinar', 'activePoll', 'pollResponse'));
     }
 
     public function questions(Request $request, Webinar $webinar): JsonResponse
@@ -607,7 +622,7 @@ class WebinarController extends Controller
         return response($pdf, 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'attachment; filename="'.Str::slug($webinar->title).'-certificate.pdf"']);
     }
 
-    public function downloadResource(Request $request, Webinar $webinar, int $resource): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function downloadResource(Request $request, Webinar $webinar, int $resource): BinaryFileResponse
     {
         $this->authorizeRegistration($request, $webinar);
         $item = DB::table('webinar_resources')->where('webinar_id', $webinar->id)->where('id', $resource)->where('is_public', true)->where('type', 'file')->first();
@@ -655,30 +670,30 @@ class WebinarController extends Controller
         $stream .= "0.12 0.08 0.22 rg\n";
 
         $defaults = [
-            'headline' => ['x' => 50, 'y' => 15, 'width' => 70, 'scale' => 100],
-            'recipient' => ['x' => 50, 'y' => 44, 'scale' => 100],
-            'webinar' => ['x' => 50, 'y' => 61, 'scale' => 100],
-            'date' => ['x' => 20, 'y' => 84, 'scale' => 100],
-            'signature' => ['x' => 80, 'y' => 76, 'width' => 22, 'scale' => 100],
-            'signatory' => ['x' => 80, 'y' => 86, 'scale' => 100],
+            'headline' => ['x' => 50, 'y' => 15, 'width' => 70, 'scale' => 100, 'bold' => 1],
+            'recipient' => ['x' => 50, 'y' => 44, 'scale' => 100, 'bold' => 1],
+            'webinar' => ['x' => 50, 'y' => 61, 'scale' => 100, 'bold' => 0],
+            'date' => ['x' => 20, 'y' => 84, 'scale' => 100, 'bold' => 0],
+            'signature' => ['x' => 80, 'y' => 76, 'width' => 22, 'scale' => 100, 'bold' => 0],
+            'signatory' => ['x' => 80, 'y' => 86, 'scale' => 100, 'bold' => 0],
         ];
         $positions = array_replace_recursive($defaults, data_get($design, 'positions', []));
         $visible = WebinarCertificateTemplate::visibleElements($design);
         $lines = [];
         if ($visible['headline']) {
-            $lines[] = ['/F2', 18, $positions['headline']['x'], $positions['headline']['y'], data_get($design, 'headline', 'CERTIFICATE OF COMPLETION'), $positions['headline']['scale']];
+            $lines[] = [! empty($positions['headline']['bold']) ? '/F2' : '/F1', 18, $positions['headline']['x'], $positions['headline']['y'], data_get($design, 'headline', 'CERTIFICATE OF COMPLETION'), $positions['headline']['scale']];
         }
         if ($visible['recipient']) {
-            $lines[] = ['/F2', 27, $positions['recipient']['x'], $positions['recipient']['y'], $name, $positions['recipient']['scale']];
+            $lines[] = [! empty($positions['recipient']['bold']) ? '/F2' : '/F1', 27, $positions['recipient']['x'], $positions['recipient']['y'], $name, $positions['recipient']['scale']];
         }
         if ($visible['webinar']) {
-            $lines[] = ['/F2', 18, $positions['webinar']['x'], $positions['webinar']['y'], $title, $positions['webinar']['scale']];
+            $lines[] = [! empty($positions['webinar']['bold']) ? '/F2' : '/F1', 18, $positions['webinar']['x'], $positions['webinar']['y'], $title, $positions['webinar']['scale']];
         }
         if ($visible['date']) {
-            $lines[] = ['/F1', 10, $positions['date']['x'], $positions['date']['y'], Carbon::parse($issuedAt)->format('F j, Y'), $positions['date']['scale']];
+            $lines[] = [! empty($positions['date']['bold']) ? '/F2' : '/F1', 10, $positions['date']['x'], $positions['date']['y'], Carbon::parse($issuedAt)->format('F j, Y'), $positions['date']['scale']];
         }
         if ($visible['signatory'] && filled(data_get($design, 'signatory'))) {
-            $lines[] = ['/F1', 10, $positions['signatory']['x'], $positions['signatory']['y'], data_get($design, 'signatory'), $positions['signatory']['scale']];
+            $lines[] = [! empty($positions['signatory']['bold']) ? '/F2' : '/F1', 10, $positions['signatory']['x'], $positions['signatory']['y'], data_get($design, 'signatory'), $positions['signatory']['scale']];
         }
 
         $signature = $visible['signature']
@@ -697,7 +712,7 @@ class WebinarController extends Controller
             $size = round($baseSize * ((float) $scale / 100), 2);
             $x = ($pageWidth * ((float) $xPercent / 100)) - (strlen($text) * $size * 0.25);
             $y = $pageHeight * (1 - ((float) $yPercent / 100));
-            $stream .= "BT {$font} {$size} Tf ".round(max(10, $x), 2).' '.round(max(10, $y), 2)." Td (".$escape($text).") Tj ET\n";
+            $stream .= "BT {$font} {$size} Tf ".round(max(10, $x), 2).' '.round(max(10, $y), 2).' Td ('.$escape($text).") Tj ET\n";
         }
 
         $nextObjectId = 7;

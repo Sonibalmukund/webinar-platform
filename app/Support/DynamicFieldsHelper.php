@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use Illuminate\Pagination\AbstractPaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -12,14 +13,14 @@ class DynamicFieldsHelper
      */
     public static function isStandardField(?string $key, ?string $label): bool
     {
-        $normalize = fn ($str) => strtolower(trim(str_replace(['_', '-', ' ', '.', ':', '/'], '', (string)$str)));
+        $normalize = fn ($str) => strtolower(trim(str_replace(['_', '-', ' ', '.', ':', '/'], '', (string) $str)));
         $normKey = $normalize($key);
         $normLabel = $normalize($label);
 
         $standard = [
             'name', 'fullname', 'firstname', 'lastname', 'username',
             'email', 'emailaddress',
-            'mobile', 'mobilenumber', 'phone', 'phonenumber', 'contact', 'contactnumber'
+            'mobile', 'mobilenumber', 'phone', 'phonenumber', 'contact', 'contactnumber',
         ];
 
         return in_array($normKey, $standard, true) || in_array($normLabel, $standard, true);
@@ -33,7 +34,7 @@ class DynamicFieldsHelper
      */
     public static function attach(iterable $rows, ?iterable $scopedWebinarIds = null): array
     {
-        $collection = $rows instanceof \Illuminate\Pagination\AbstractPaginator
+        $collection = $rows instanceof AbstractPaginator
             ? $rows->getCollection()
             : ($rows instanceof Collection ? $rows : collect($rows));
 
@@ -47,18 +48,18 @@ class DynamicFieldsHelper
 
         $webinarIds = [];
         foreach ($collection as $row) {
-            if (!is_object($row)) {
+            if (! is_object($row)) {
                 continue;
             }
             if (isset($row->webinar_id) && $row->webinar_id) {
                 $webinarIds[] = (int) $row->webinar_id;
-            } elseif (isset($row->registrations) && $row->registrations instanceof \Illuminate\Support\Collection) {
+            } elseif (isset($row->registrations) && $row->registrations instanceof Collection) {
                 foreach ($row->registrations as $reg) {
                     if (isset($reg->webinar_id) && $reg->webinar_id) {
                         $webinarIds[] = (int) $reg->webinar_id;
                     }
                 }
-            } elseif (isset($row->user) && isset($row->user->registrations) && $row->user->registrations instanceof \Illuminate\Support\Collection) {
+            } elseif (isset($row->user) && isset($row->user->registrations) && $row->user->registrations instanceof Collection) {
                 foreach ($row->user->registrations as $reg) {
                     if (isset($reg->webinar_id) && $reg->webinar_id) {
                         $webinarIds[] = (int) $reg->webinar_id;
@@ -72,10 +73,10 @@ class DynamicFieldsHelper
         $currentUser = auth()->user();
         if ($currentUser && method_exists($currentUser, 'hasRole') && $currentUser->hasRole('sub-admin')) {
             $accessible = $currentUser->accessibleWebinarIds();
-            $accessible = ($accessible instanceof \Illuminate\Support\Collection)
+            $accessible = ($accessible instanceof Collection)
                 ? $accessible->map(fn ($id) => (int) $id)->all()
                 : array_map('intval', (array) $accessible);
-            if (!empty($webinarIds)) {
+            if (! empty($webinarIds)) {
                 $webinarIds = array_values(array_intersect($webinarIds, $accessible));
             } else {
                 $webinarIds = $accessible;
@@ -86,13 +87,14 @@ class DynamicFieldsHelper
                         $row->dynamic_fields = [];
                     }
                 }
+
                 return [];
             }
         }
 
         if ($scopedWebinarIds !== null) {
-            $scopedArr = collect($scopedWebinarIds)->map(fn ($id) => (int)$id)->all();
-            if (!empty($webinarIds)) {
+            $scopedArr = collect($scopedWebinarIds)->map(fn ($id) => (int) $id)->all();
+            if (! empty($webinarIds)) {
                 $webinarIds = array_values(array_intersect($webinarIds, $scopedArr));
             } else {
                 $webinarIds = $scopedArr;
@@ -116,7 +118,7 @@ class DynamicFieldsHelper
                 'ra.value',
             ]);
 
-        if (!empty($webinarIds)) {
+        if (! empty($webinarIds)) {
             $regQuery->whereIn('r.webinar_id', $webinarIds);
         }
 
@@ -148,11 +150,11 @@ class DynamicFieldsHelper
             if (self::isStandardField($ans->field_key, $ans->label)) {
                 continue;
             }
-            $val = trim((string)$ans->value);
+            $val = trim((string) $ans->value);
             if (is_numeric($val)) {
-                $num = (int)$val;
-                $k = strtolower(trim(str_replace(['_', '-'], '', (string)$ans->field_key)));
-                $l = strtolower(trim(str_replace(['_', '-'], '', (string)$ans->label)));
+                $num = (int) $val;
+                $k = strtolower(trim(str_replace(['_', '-'], '', (string) $ans->field_key)));
+                $l = strtolower(trim(str_replace(['_', '-'], '', (string) $ans->label)));
                 if ($k === 'city' || $l === 'city') {
                     $cityIds[] = $num;
                 } elseif ($k === 'state' || $l === 'state') {
@@ -163,9 +165,9 @@ class DynamicFieldsHelper
             }
         }
 
-        $cityMap = !empty($cityIds) ? DB::table('cities')->whereIn('id', array_unique($cityIds))->pluck('name', 'id')->all() : [];
-        $stateMap = !empty($stateIds) ? DB::table('states')->whereIn('id', array_unique($stateIds))->pluck('name', 'id')->all() : [];
-        $countryMap = !empty($countryIds) ? DB::table('countries')->whereIn('id', array_unique($countryIds))->pluck('name', 'id')->all() : [];
+        $cityMap = ! empty($cityIds) ? DB::table('cities')->whereIn('id', array_unique($cityIds))->pluck('name', 'id')->all() : [];
+        $stateMap = ! empty($stateIds) ? DB::table('states')->whereIn('id', array_unique($stateIds))->pluck('name', 'id')->all() : [];
+        $countryMap = ! empty($countryIds) ? DB::table('countries')->whereIn('id', array_unique($countryIds))->pluck('name', 'id')->all() : [];
 
         // Helper to format/resolve value
         $formatValue = function ($val, $fieldKey, $label) use ($cityMap, $stateMap, $countryMap) {
@@ -177,9 +179,9 @@ class DynamicFieldsHelper
             }
 
             if (is_numeric($val)) {
-                $num = (int)$val;
-                $k = strtolower(trim(str_replace(['_', '-'], '', (string)$fieldKey)));
-                $l = strtolower(trim(str_replace(['_', '-'], '', (string)$label)));
+                $num = (int) $val;
+                $k = strtolower(trim(str_replace(['_', '-'], '', (string) $fieldKey)));
+                $l = strtolower(trim(str_replace(['_', '-'], '', (string) $label)));
                 if (isset($cityMap[$num]) && ($k === 'city' || $l === 'city')) {
                     $val = $cityMap[$num];
                 } elseif (isset($stateMap[$num]) && ($k === 'state' || $l === 'state')) {
@@ -193,14 +195,14 @@ class DynamicFieldsHelper
         };
 
         // Group by user_id and webinar_id
-        $regGrouped = $regAnswers->groupBy(fn ($item) => $item->user_id . '_' . $item->webinar_id);
+        $regGrouped = $regAnswers->groupBy(fn ($item) => $item->user_id.'_'.$item->webinar_id);
         $userRegFallback = $regAnswers->groupBy('user_id');
         $signupGrouped = $signupAnswers->groupBy('user_id');
 
         $dynamicColumns = [];
 
         foreach ($collection as $row) {
-            if (!is_object($row)) {
+            if (! is_object($row)) {
                 continue;
             }
 
@@ -212,19 +214,19 @@ class DynamicFieldsHelper
             // Add webinar specific registration answers
             $rowWebinarIds = [];
             if ($wId) {
-                $rowWebinarIds[] = (int)$wId;
-            } elseif (isset($row->registrations) && $row->registrations instanceof \Illuminate\Support\Collection) {
-                $rowWebinarIds = $row->registrations->pluck('webinar_id')->map(fn($id)=>(int)$id)->all();
-            } elseif (isset($row->user) && isset($row->user->registrations) && $row->user->registrations instanceof \Illuminate\Support\Collection) {
-                $rowWebinarIds = $row->user->registrations->pluck('webinar_id')->map(fn($id)=>(int)$id)->all();
+                $rowWebinarIds[] = (int) $wId;
+            } elseif (isset($row->registrations) && $row->registrations instanceof Collection) {
+                $rowWebinarIds = $row->registrations->pluck('webinar_id')->map(fn ($id) => (int) $id)->all();
+            } elseif (isset($row->user) && isset($row->user->registrations) && $row->user->registrations instanceof Collection) {
+                $rowWebinarIds = $row->user->registrations->pluck('webinar_id')->map(fn ($id) => (int) $id)->all();
             }
 
-            $key = $uId . '_' . $wId;
+            $key = $uId.'_'.$wId;
             if ($wId && isset($regGrouped[$key])) {
                 $items = $regGrouped[$key];
             } else {
                 $items = ($userRegFallback->get($uId) ?? collect());
-                if (!empty($rowWebinarIds)) {
+                if (! empty($rowWebinarIds)) {
                     $items = $items->whereIn('webinar_id', $rowWebinarIds);
                 }
             }
@@ -236,7 +238,7 @@ class DynamicFieldsHelper
                 $val = $formatValue($ans->value, $ans->field_key, $ans->label);
                 if ($val !== null && $val !== '') {
                     $fields[$ans->label] = $val;
-                    if (!in_array($ans->label, $dynamicColumns, true)) {
+                    if (! in_array($ans->label, $dynamicColumns, true)) {
                         $dynamicColumns[] = $ans->label;
                     }
                 }
@@ -248,11 +250,11 @@ class DynamicFieldsHelper
                     if (self::isStandardField($ans->field_key, $ans->label)) {
                         continue; // Do not duplicate Name, Email, Mobile
                     }
-                    if (!isset($fields[$ans->label])) {
+                    if (! isset($fields[$ans->label])) {
                         $val = $formatValue($ans->value, $ans->field_key, $ans->label);
                         if ($val !== null && $val !== '') {
                             $fields[$ans->label] = $val;
-                            if (!in_array($ans->label, $dynamicColumns, true)) {
+                            if (! in_array($ans->label, $dynamicColumns, true)) {
                                 $dynamicColumns[] = $ans->label;
                             }
                         }
@@ -263,7 +265,7 @@ class DynamicFieldsHelper
             $row->dynamic_fields = $fields;
         }
 
-        if ($rows instanceof \Illuminate\Pagination\AbstractPaginator || $rows instanceof Collection) {
+        if ($rows instanceof AbstractPaginator || $rows instanceof Collection) {
             $rows->dynamic_columns = $dynamicColumns;
         }
 

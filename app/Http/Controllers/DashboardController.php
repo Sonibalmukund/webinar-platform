@@ -4,10 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Poll;
 use App\Models\Registration;
-use App\Models\User;
 use App\Models\Webinar;
 use App\Support\WebinarExperience;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -15,46 +13,35 @@ use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function learner(Request $request): View|RedirectResponse
+    public function attendee(Request $request): View
     {
-        $registrations = Registration::with('webinar')->where('user_id', $request->user()->id)->admitted()->latest('registered_at')->get();
-        if ($webinar = $registrations->first(fn ($registration) => $registration->webinar?->canEnter())?->webinar) {
-            return redirect()->route('webinars.dashboard', $webinar);
-        }
+        $registrations = Registration::with('webinar.creator')->where('user_id', $request->user()->id)->admitted()->latest('registered_at')->get();
         $scheduledWebinars = $registrations
             ->filter(fn ($registration) => $registration->webinar?->starts_at && ($registration->webinar->status === 'live' || ($registration->webinar->status === 'scheduled' && $registration->webinar->starts_at->isFuture())))
             ->sortBy(fn ($registration) => $registration->webinar->starts_at)
             ->values();
-
-        return view('pages.user.dashboard', [
-            'registrations' => $registrations,
-            'scheduledWebinars' => $scheduledWebinars,
-            'upcoming' => $scheduledWebinars->first()?->webinar,
-        ]);
-    }
-
-    public function myWebinars(Request $request): View
-    {
-        $registrations = Registration::with(['webinar.creator'])
-            ->where('user_id', $request->user()->id)
-            ->latest('registered_at')
-            ->get()
-            ->filter(fn ($registration) => $registration->webinar)
-            ->values();
-
         $attendance = DB::table('webinar_attendees')
             ->where('user_id', $request->user()->id)
             ->whereIn('webinar_id', $registrations->pluck('webinar_id'))
             ->get()
             ->keyBy('webinar_id');
+        $experienceRows = $registrations
+            ->filter(fn ($registration) => $registration->webinar)
+            ->mapWithKeys(fn ($registration) => [
+                $registration->webinar_id => [
+                    'registration' => $registration,
+                    'webinar' => $registration->webinar,
+                    'attendance' => $attendance->get($registration->webinar_id),
+                    'metrics' => WebinarExperience::metrics($registration->webinar, $request->user()->id),
+                ],
+            ]);
 
-        $rows = $registrations->map(function ($registration) use ($request, $attendance) {
-            $metrics = WebinarExperience::metrics($registration->webinar, $request->user()->id);
-
-            return ['registration' => $registration, 'webinar' => $registration->webinar, 'attendance' => $attendance->get($registration->webinar_id), 'metrics' => $metrics];
-        });
-
-        return view('pages.user.my-webinars', compact('rows'));
+        return view('pages.user.attendee_dashboard', [
+            'registrations' => $registrations,
+            'scheduledWebinars' => $scheduledWebinars,
+            'upcoming' => $scheduledWebinars->first()?->webinar,
+            'experienceRows' => $experienceRows,
+        ]);
     }
 
     public function recordings(Request $request): View
@@ -65,7 +52,7 @@ class DashboardController extends Controller
             ->whereNotIn('registrations.status', ['waitlisted', 'cancelled', 'rejected'])->where('webinars.status', 'completed')->where('webinar_recordings.status', 'published')->whereNotNull('webinar_recordings.published_at')
             ->select('webinar_recordings.*', 'webinars.title as webinar_title', 'webinars.slug as webinar_slug')->latest('webinar_recordings.published_at')->get();
 
-        return view('pages.user.library', ['type' => 'recordings', 'items' => $recordings]);
+        return view('pages.user.attendee_library', ['type' => 'recordings', 'items' => $recordings]);
     }
 
     public function bookmarks(Request $request): View
@@ -73,7 +60,7 @@ class DashboardController extends Controller
         $bookmarks = DB::table('webinar_bookmarks')->join('webinars', 'webinars.id', '=', 'webinar_bookmarks.webinar_id')
             ->where('webinar_bookmarks.user_id', $request->user()->id)->select('webinars.*', 'webinar_bookmarks.created_at as bookmarked_at')->latest('webinar_bookmarks.created_at')->get();
 
-        return view('pages.user.library', ['type' => 'bookmarks', 'items' => $bookmarks]);
+        return view('pages.user.attendee_library', ['type' => 'bookmarks', 'items' => $bookmarks]);
     }
 
     public function certificates(Request $request): View
@@ -82,7 +69,7 @@ class DashboardController extends Controller
             ->where('certificates.user_id', $request->user()->id)->where('certificates.status', 'approved')->whereNull('certificates.revoked_at')
             ->select('certificates.*', 'webinars.title as webinar_title', 'webinars.slug as webinar_slug')->latest('certificates.issued_at')->get();
 
-        return view('pages.user.library', ['type' => 'certificates', 'items' => $certificates]);
+        return view('pages.user.attendee_library', ['type' => 'certificates', 'items' => $certificates]);
     }
 
     public function admin(Request $request): View
@@ -106,7 +93,7 @@ class DashboardController extends Controller
         });
 
         return view('pages.admin.dashboard', [
-            'webinars' => $webinars, 'subadmin' => $subadmin, 'totalRegistrations' => $registrations->count(), 'registeredUsers' => $subadmin ? $registrations->pluck('user_id')->unique()->count() : User::whereHas('roles', fn ($q) => $q->where('slug', 'learner'))->count(),
+            'webinars' => $webinars, 'subadmin' => $subadmin, 'totalRegistrations' => $registrations->count(), 'registeredUsers' => $registrations->pluck('user_id')->filter()->unique()->count(),
             'todayRegistrations' => $registrations->filter(fn ($row) => ($row->registered_at ?? $row->created_at)?->isToday())->count(),
             'totalAttendees' => $attendance->count(), 'liveNow' => $attendance->filter(fn ($row) => is_null($row->left_at) && $row->last_seen_at && Carbon::parse($row->last_seen_at)->greaterThanOrEqualTo(now()->subSeconds(75)))->count(),
             'pollsCount' => $subadmin ? Poll::whereIn('webinar_id', $webinarIds)->count() : Poll::count(), 'pollVoters' => $pollResponses->pluck('user_id')->unique()->count(), 'votesCount' => $pollResponses->count(),

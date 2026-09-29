@@ -10,7 +10,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -22,7 +21,9 @@ class ChatController extends Controller
         $webinars = Webinar::query()->where('chat_enabled', true)->when($request->user()->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $request->user()->assignedWebinars()->pluck('webinars.id')))->when($search, fn ($query) => $query->where('title', 'like', '%'.$search.'%'))->latest('starts_at')->get();
         $filterWebinars = Webinar::where('chat_enabled', true)->when($request->user()->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $request->user()->assignedWebinars()->pluck('webinars.id')))->orderBy('title')->get(['id', 'title']);
         $webinarId = $request->integer('webinar_id');
-        if ($webinarId) $webinars = $webinars->where('id', $webinarId);
+        if ($webinarId) {
+            $webinars = $webinars->where('id', $webinarId);
+        }
         $stats = DB::table('chat_messages')->whereIn('webinar_id', $webinars->pluck('id'))->whereNull('deleted_at')->selectRaw('webinar_id, COUNT(*) messages_count, COUNT(DISTINCT user_id) participants_count, MAX(sent_at) last_message_at')->groupBy('webinar_id')->get()->keyBy('webinar_id');
 
         $routePrefix = 'admin';
@@ -69,7 +70,7 @@ class ChatController extends Controller
             'attachment' => ['nullable', 'file', 'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,ppt,pptx,txt,zip,mp4,webm,mov,mp3,wav', 'max:20480'],
             'reply_to_id' => ['nullable', 'integer', 'exists:chat_messages,id'],
         ]);
-        $replyToId = !empty($data['reply_to_id']) ? (int) $data['reply_to_id'] : null;
+        $replyToId = ! empty($data['reply_to_id']) ? (int) $data['reply_to_id'] : null;
         $parentMessage = null;
         if ($replyToId) {
             $parentMessage = DB::table('chat_messages')
@@ -79,7 +80,7 @@ class ChatController extends Controller
                 ->whereNull('chat_messages.deleted_at')
                 ->select(['chat_messages.message', 'users.name as user_name'])
                 ->first();
-            if (!$parentMessage) {
+            if (! $parentMessage) {
                 $replyToId = null;
             }
         }

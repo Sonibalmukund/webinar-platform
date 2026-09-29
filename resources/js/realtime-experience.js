@@ -172,6 +172,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (typeof event.state.feedback_enabled !== 'undefined') {
                         window.setDashboardModuleState?.('feedback', Boolean(event.state.feedback_enabled));
                     }
+                    if (typeof event.state.participants_enabled !== 'undefined') {
+                        const enabled = Boolean(event.state.participants_enabled);
+                        document.querySelectorAll('[data-participants-panel]').forEach(panel => {
+                            panel.hidden = !enabled;
+                            panel.style.display = enabled ? '' : 'none';
+                        });
+                        if (typeof event.state.live_viewers !== 'undefined') {
+                            document.querySelectorAll('[data-room-online]').forEach(node => node.textContent = event.state.live_viewers);
+                        }
+                        notify(enabled ? 'Participants are now visible.' : 'Participants have been hidden by the host.');
+                    }
                     if (typeof event.state.certificate_enabled !== 'undefined') {
                         const certLink = document.querySelector('[data-certificate-download]');
                         if (certLink) {
@@ -297,8 +308,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // Seamless Admin Pinned Announcement submit without full page reload
     const adminAnnouncementForm = document.querySelector('[data-admin-announcement-form]');
     if (adminAnnouncementForm) {
+        const announcementMessage = adminAnnouncementForm.querySelector('[data-announcement-message]');
+        const announcementError = adminAnnouncementForm.querySelector('[data-announcement-error]');
+        const announcementCount = adminAnnouncementForm.querySelector('[data-announcement-count]');
+        const validateAnnouncement = () => {
+            const length = Array.from(announcementMessage?.value || '').length;
+            const valid = length <= 50;
+            if (announcementCount) {
+                announcementCount.textContent = `${length} / 50`;
+                announcementCount.classList.toggle('text-danger', !valid);
+                announcementCount.classList.toggle('text-muted', valid);
+            }
+            announcementMessage?.classList.toggle('is-invalid', !valid);
+            if (announcementError) announcementError.hidden = valid;
+            return valid;
+        };
+        announcementMessage?.addEventListener('input', validateAnnouncement);
+        validateAnnouncement();
         adminAnnouncementForm.addEventListener('submit', async e => {
             e.preventDefault();
+            if (!validateAnnouncement()) {
+                announcementMessage?.focus();
+                notify('Announcement message must be 50 characters or fewer.', 'danger');
+                return;
+            }
             const submitBtn = adminAnnouncementForm.querySelector('button');
             if (submitBtn) submitBtn.disabled = true;
             try {
@@ -388,4 +421,3 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('[data-notification-badge]').forEach(badge=>{badge.hidden=false;badge.textContent=String(Number(badge.textContent||0)+1)});
     });
 });
-

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\City;
-use App\Models\Country;
 use App\Models\State;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -12,13 +11,6 @@ use Illuminate\View\View;
 
 class ProfileController extends Controller
 {
-    public function show(Request $request): View
-    {
-        $user = $request->user()->load(['country', 'state', 'city', 'signupAnswers.field']);
-
-        return view('pages.user.profile', ['user' => $user, 'countries' => Country::where('is_active', true)->orderBy('name')->get(), 'states' => State::where('country_id', $user->country_id)->where('is_active', true)->orderBy('name')->get(), 'cities' => City::where('state_id', $user->state_id)->where('is_active', true)->orderBy('name')->get()]);
-    }
-
     public function update(Request $request): RedirectResponse
     {
         $data = $request->validate([

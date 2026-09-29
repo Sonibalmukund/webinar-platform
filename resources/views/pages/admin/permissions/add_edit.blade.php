@@ -1,0 +1,43 @@
+@extends('layouts.portal')
+@section('title', 'Role Permission')
+@section('content')
+    <div class="page-heading">
+        <div>
+            <h1>{{ $selectedUserId ? 'Edit Role Permission' : 'Add Role Permission' }}</h1>
+        </div><a class="btn btn-light" href="{{ route('admin.permissions.index') }}">Back</a>
+    </div>
+    @if ($errors->any())
+        <div class="alert alert-danger">{{ $errors->first() }}</div>
+    @endif
+    <form class="panel-card" method="POST" action="{{ route('admin.permissions.update') }}">@csrf @method('PUT')<div
+            class="permission-selector permission-selector-single"><label>Sub admin<select class="form-select" name="user_id"
+                    required data-permission-user-select>
+                    @foreach ($subAdmins as $user)
+                        <option value="{{ $user->id }}" @selected($selectedUserId == $user->id)
+                            data-permission-url="{{ route('admin.permissions.create', ['user_id' => $user->id]) }}">
+                            {{ $user->name }} · {{ $user->email }} ({{ $user->assigned_webinars_count }} webinars)
+                        </option>
+                    @endforeach
+                </select>
+            </label></div>
+        <div class="panel-title mt-4">
+            <div>
+                <h3>Module permission matrix</h3><small class="text-muted">Select only the modules this sub-admin should be
+                    able to open.</small>
+            </div><button type="button" class="btn btn-sm btn-light" id="toggleAllPermissions">Select all</button>
+        </div>
+        <div class="event-permission-matrix">
+            @foreach ($permissions as $module => $items)
+                <section>
+                    <h4>{{ Str::headline($module) }}</h4>
+                    <div>
+                        @foreach ($items as $permission)
+                            <label><input type="checkbox" name="permissions[]" value="{{ $permission->id }}"
+                                    @checked($assigned->contains($permission->id))><span>{{ $permission->name }}</span></label>
+                        @endforeach
+                    </div>
+                </section>
+            @endforeach
+        </div><button class="btn btn-gradient mt-4">Save role permissions</button>
+    </form>
+@endsection

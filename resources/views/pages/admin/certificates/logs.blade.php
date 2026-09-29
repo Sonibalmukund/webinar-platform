@@ -1,74 +1,80 @@
 @extends('layouts.portal')
-@section('title','Certificate Download Logs')
+@section('title', 'Certificate Download Logs')
 @section('content')
-<div class="page-heading">
-    <div>
-        <span class="eyebrow">AUDIT & COMPLIANCE</span>
-        <h1>Certificate download logs</h1>
-        <p>Real-time audit log of all attendee certificate downloads with IP address and timestamps.</p>
+    <div class="page-heading">
+        <div>
+            <span class="eyebrow">AUDIT & COMPLIANCE</span>
+            <h1>Certificate Logs</h1>
+            <p>Real-time audit log of all attendee certificate downloads with IP address and timestamps.</p>
+        </div>
     </div>
-</div>
 
 
-@if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
+    @if (session('status'))
+        <div class="alert alert-success">{{ session('status') }}</div>
+    @endif
 
-<x-admin-webinar-filter :webinars="$webinars" :selected="$webinarId" :search="$search" placeholder="Search attendee name, email, webinar, or IP..." />
+    <x-admin-webinar-filter :webinars="$webinars" :selected="$webinarId" :search="$search"
+        placeholder="Search attendee name, email, webinar, or IP..." />
 
-@php($dynamicCols = $dynamicColumns ?? ($logs->dynamic_columns ?? []))
-<div class="panel-card table-responsive">
-    <table class="premium-table">
-        <thead>
-            <tr>
-                <th>Index</th>
-                <th>Attendee</th>
-                <th>Email</th>
-                <th>Mobile</th>
-                <th>Webinar</th>
-                @foreach($dynamicCols as $col)<th>{{ $col }}</th>@endforeach
-                <th>IP Address</th>
-                <th>Downloaded At</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($logs as $log)
+    @php($dynamicCols = $dynamicColumns ?? ($logs->dynamic_columns ?? []))
+    <div class="panel-card table-responsive">
+        <table class="premium-table">
+            <thead>
                 <tr>
-                    <td>{{ $logs->firstItem() + $loop->index }}</td>
-                    <td>
-                        <strong>{{ $log->user_name }}</strong>
-                    </td>
-                    <td>
-                        {{ $log->user_email }}
-                    </td>
-                    <td>
-                        {{ $log->user_mobile ?: '—' }}
-                    </td>
-                    <td>
-                        <strong>{{ $log->webinar_title }}</strong>
-                    </td>
-                    @foreach($dynamicCols as $col)
-                        <td>{{ $log->dynamic_fields[$col] ?? '—' }}</td>
+                    <th>Index</th>
+                    <th>Attendee</th>
+                    <th>Email</th>
+                    <th>Mobile</th>
+                    <th>Webinar</th>
+                    @foreach ($dynamicCols as $col)
+                        <th>{{ $col }}</th>
                     @endforeach
-                    <td>
-                        <span class="badge bg-light text-dark border">{{ $log->ip_address ?: 'Unknown' }}</span>
-                    </td>
-                    <td>
-                        <div class="d-flex flex-column">
-                            <span>{{ Carbon\Carbon::parse($log->downloaded_at)->format('d M Y, h:i A') }}</span>
-                            <small class="text-muted">{{ Carbon\Carbon::parse($log->downloaded_at)->diffForHumans() }}</small>
-                        </div>
-                    </td>
+                    <th>IP Address</th>
+                    <th>Downloaded At</th>
                 </tr>
-            @empty
-                <tr>
-                    <td colspan="{{ 7 + count($dynamicCols) }}" class="text-center py-5 text-muted">
-                        <i class="bi bi-journal-x fs-1 d-block mb-2 text-secondary"></i>
-                        No certificate download records found.
-                    </td>
-                </tr>
-            @endforelse
-        </tbody>
-    </table>
-</div>
+            </thead>
+            <tbody>
+                @forelse($logs as $log)
+                    <tr>
+                        <td>{{ $logs->firstItem() + $loop->index }}</td>
+                        <td>
+                            <strong>{{ $log->user_name }}</strong>
+                        </td>
+                        <td>
+                            {{ $log->user_email }}
+                        </td>
+                        <td>
+                            {{ $log->user_mobile ?: '—' }}
+                        </td>
+                        <td>
+                            <strong>{{ $log->webinar_title }}</strong>
+                        </td>
+                        @foreach ($dynamicCols as $col)
+                            <td>{{ $log->dynamic_fields[$col] ?? '—' }}</td>
+                        @endforeach
+                        <td>
+                            <span class="badge bg-light text-dark border">{{ $log->ip_address ?: 'Unknown' }}</span>
+                        </td>
+                        <td>
+                            <div class="d-flex flex-column">
+                                <span>{{ Carbon\Carbon::parse($log->downloaded_at)->format('d M Y, h:i A') }}</span>
+                                <small
+                                    class="text-muted">{{ Carbon\Carbon::parse($log->downloaded_at)->diffForHumans() }}</small>
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="{{ 7 + count($dynamicCols) }}" class="text-center py-5 text-muted">
+                            <i class="bi bi-journal-x fs-1 d-block mb-2 text-secondary"></i>
+                            No certificate download records found.
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
 
-<x-admin-pagination :paginator="$logs" />
+    <x-admin-pagination :paginator="$logs" />
 @endsection

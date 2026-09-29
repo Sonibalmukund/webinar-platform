@@ -4,7 +4,6 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WebinarAttendanceController;
 use App\Http\Controllers\WebinarController;
 use App\Http\Controllers\WebinarRegistrationController;
@@ -28,8 +27,8 @@ Route::get('/csrf-token', fn () => response()->json(['token' => csrf_token()]))-
 Route::get('/webinars', [WebinarController::class, 'index'])->name('webinars.index');
 Route::get('/webinars/{webinar:slug}', fn (Webinar $webinar) => redirect()->route('webinars.show', $webinar, 301));
 
-Route::middleware(['auth', 'role:learner'])->group(function () {
-    Route::get('/dashboard', [DashboardController::class, 'learner'])->name('dashboard');
+Route::middleware(['auth'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'attendee'])->name('dashboard');
     Route::get('/{webinar:slug}/dashboard', [WebinarController::class, 'dashboard'])->where('webinar', '(?!(?:admin|sub-admin)/)[A-Za-z0-9-]+')->name('webinars.dashboard');
     Route::post('/webinars/{webinar:slug}/chat', [WebinarController::class, 'sendChat'])->name('webinars.chat.store');
     Route::get('/webinars/{webinar:slug}/chat', [WebinarController::class, 'chatMessages'])->name('webinars.chat.index');
@@ -50,21 +49,12 @@ Route::middleware(['auth', 'role:learner'])->group(function () {
     Route::post('/webinars/{webinar:slug}/attendance/presence', [WebinarAttendanceController::class, 'presence'])->name('webinars.attendance.presence');
     Route::post('/webinars/{webinar:slug}/attendance/hand', [WebinarAttendanceController::class, 'hand'])->name('webinars.attendance.hand');
     Route::post('/webinars/{webinar:slug}/register', [WebinarRegistrationController::class, 'store'])->name('webinars.register');
-    Route::view('/live-webinar', 'pages.user.live')->name('webinars.live');
-
     Route::get('/recordings', [DashboardController::class, 'recordings'])->name('recordings.index');
     Route::get('/certificates', [DashboardController::class, 'certificates'])->name('certificates.index');
     Route::get('/bookmarks', [DashboardController::class, 'bookmarks'])->name('bookmarks.index');
-    Route::get('/my-webinars', [DashboardController::class, 'myWebinars'])->name('webinars.mine');
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
-    Route::redirect('/profile', '/dashboard')->name('profile.show');
-    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 
-Route::view('/ui/empty', 'pages.shared.state', ['state' => 'empty']);
-Route::view('/ui/loading', 'pages.shared.state', ['state' => 'loading']);
-Route::view('/403', 'pages.shared.state', ['state' => '403']);
-Route::view('/500', 'pages.shared.state', ['state' => '500']);
 Route::get('/{webinar:slug}', [WebinarController::class, 'show'])->name('webinars.show');
 Route::fallback(fn () => response()->view('pages.shared.state', ['state' => '404'], 404));

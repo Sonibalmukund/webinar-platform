@@ -3,11 +3,14 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "format": "blade-formatter --write \"resources/views/**/*.blade.php\" && php vendor/bin/pint",
+        "format:check": "blade-formatter --check-formatted \"resources/views/**/*.blade.php\" && php vendor/bin/pint --test"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
         "axios": "^1.7.4",
+        "blade-formatter": "^1.44.4",
         "concurrently": "^9.0.1",
         "laravel-vite-plugin": "^1.2.0",
         "tailwindcss": "^4.0.0",

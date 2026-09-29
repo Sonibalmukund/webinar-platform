@@ -85,7 +85,7 @@ class RealtimeChatTest extends TestCase
         $webinar = $this->webinar($admin);
         Registration::create(['webinar_id' => $webinar->id, 'user_id' => $learner->id, 'email' => $learner->email, 'status' => 'approved']);
         DB::table('chat_messages')->insert(['webinar_id' => $webinar->id, 'user_id' => $admin->id, 'message' => '', 'attachment_path' => '/uploads/chat/sample.pdf', 'attachment_name' => 'Agenda.pdf', 'sent_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
-        $this->actingAs($learner)->getJson(route('webinars.chat.index', $webinar))->assertOk()->assertJsonPath('messages.0.attachment_name','Agenda.pdf');
+        $this->actingAs($learner)->getJson(route('webinars.chat.index', $webinar))->assertOk()->assertJsonPath('messages.0.attachment_name', 'Agenda.pdf');
     }
 
     public function test_chat_messages_are_ordered_by_upvotes_descending(): void

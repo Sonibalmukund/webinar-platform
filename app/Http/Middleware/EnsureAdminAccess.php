@@ -48,7 +48,7 @@ class EnsureAdminAccess
         }
 
         $module = match (true) {
-            $name === 'admin.polls.logs' => 'poll-logs',
+            str_starts_with($name, 'admin.polls.logs') => 'poll-logs',
             $name === 'admin.certificates.logs' => 'certificate-logs',
             str_contains($name, '.dynamic-fields.') || (str_contains($name, '.registration.') && $name !== 'admin.registration-settings') => 'dynamic-fields',
             in_array($name, ['admin.webinars.live', 'admin.webinars.controls', 'admin.webinars.announcement'], true) => 'live-control',
@@ -78,11 +78,11 @@ class EnsureAdminAccess
             $name === 'admin.webinars.clone' || $name === 'admin.polls.duplicate' => 'create',
             str_starts_with($name, 'admin.chats.') && str_ends_with($name, '.store') => 'manage',
             str_starts_with($name, 'admin.chats.') && str_ends_with($name, '.destroy') => 'moderate',
+            str_ends_with($name, '.export') => 'export',
             $module === 'q-and-a' && ! str_ends_with($name, '.index') && ! str_ends_with($name, '.show') => 'edit',
             str_ends_with($name, '.create') || str_ends_with($name, '.store') => 'create',
             str_ends_with($name, '.edit') || str_ends_with($name, '.update') || str_ends_with($name, '.status') || str_ends_with($name, '.controls') => 'edit',
             str_ends_with($name, '.destroy') || str_contains($name, 'bulk-destroy') => 'delete',
-            str_ends_with($name, '.export') => 'export',
             default => 'view',
         };
 

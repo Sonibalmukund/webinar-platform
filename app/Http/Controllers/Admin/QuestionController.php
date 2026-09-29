@@ -74,4 +74,3 @@ class QuestionController extends Controller
         return back()->with('success', 'Official answer saved successfully.');
     }
 }
-

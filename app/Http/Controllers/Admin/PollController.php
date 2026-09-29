@@ -8,8 +8,11 @@ use App\Models\Poll;
 use App\Models\PollResponse;
 use App\Models\Webinar;
 use App\Support\DynamicFieldsHelper;
+use App\Support\XlsxExport;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -35,7 +38,7 @@ class PollController extends Controller
 
     public function create(Request $request): View
     {
-        return view('pages.admin.polls.form', [
+        return view('pages.admin.polls.add_edit', [
             'poll' => new Poll(['webinar_id' => $request->integer('webinar_id')]),
             'webinars' => $this->webinars($request),
         ]);
@@ -45,11 +48,58 @@ class PollController extends Controller
     {
         $webinarId = $request->integer('webinar_id');
         $search = trim((string) $request->input('search'));
+        $logs = $this->logsQuery($request)
+            ->paginate(25)
+            ->withQueryString();
+
+        $dynamicColumns = DynamicFieldsHelper::attach($logs, $webinarId ? [$webinarId] : null);
+
+        return view('pages.admin.polls.logs', [
+            'logs' => $logs,
+            'webinars' => $this->webinars($request),
+            'selectedWebinarId' => $webinarId,
+            'search' => $search,
+            'dynamicColumns' => $dynamicColumns,
+        ]);
+    }
+
+    public function exportLogs(Request $request)
+    {
+        $webinarId = $request->integer('webinar_id');
+        $logs = $this->logsQuery($request)->get();
+        $dynamicColumns = DynamicFieldsHelper::attach($logs, $webinarId ? [$webinarId] : null);
+        $rows = [array_merge(['Attendee', 'Email', 'Mobile', 'Webinar', 'Poll question', 'Selected answer', 'Result'], $dynamicColumns, ['Submitted'])];
+
+        foreach ($logs as $log) {
+            $dynamicValues = collect($dynamicColumns)->map(fn ($column) => $log->dynamic_fields[$column] ?? '')->all();
+            $result = is_null($log->is_correct) ? 'Poll' : ($log->is_correct ? 'Correct' : 'Incorrect');
+            $rows[] = array_merge([
+                $log->user_name ?? 'Deleted user',
+                $log->user_email,
+                $log->user_mobile,
+                $log->webinar_title,
+                $log->poll_question,
+                $log->option_label,
+                $result,
+            ], $dynamicValues, [Carbon::parse($log->voted_at ?? $log->created_at)]);
+        }
+
+        $path = XlsxExport::create($rows, [7 + count($dynamicColumns)], [], 'Poll Logs');
+
+        return response()->download($path, 'poll-logs-'.now()->format('Y-m-d').'.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    private function logsQuery(Request $request): Builder
+    {
+        $webinarId = $request->integer('webinar_id');
+        $search = trim((string) $request->input('search'));
         $assignedWebinarIds = $request->user()->hasRole('sub-admin')
             ? $request->user()->accessibleWebinarIds()
             : null;
 
-        $logs = PollResponse::query()
+        return PollResponse::query()
             ->join('polls', 'polls.id', '=', 'poll_responses.poll_id')
             ->join('poll_options', 'poll_options.id', '=', 'poll_responses.poll_option_id')
             ->join('webinars', 'webinars.id', '=', 'polls.webinar_id')
@@ -66,28 +116,14 @@ class PollController extends Controller
             ])
             ->when($assignedWebinarIds, fn ($query) => $query->whereIn('polls.webinar_id', $assignedWebinarIds))
             ->when($webinarId, fn ($query) => $query->where('polls.webinar_id', $webinarId))
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($nested) use ($search) {
-                    $nested->where('users.name', 'like', "%{$search}%")
-                        ->orWhere('users.email', 'like', "%{$search}%")
-                        ->orWhere('polls.question', 'like', "%{$search}%")
-                        ->orWhere('poll_options.label', 'like', "%{$search}%")
-                        ->orWhere('webinars.title', 'like', "%{$search}%");
-                });
-            })
-            ->orderByRaw('COALESCE(poll_responses.voted_at, poll_responses.created_at) DESC')
-            ->paginate(25)
-            ->withQueryString();
-
-        $dynamicColumns = DynamicFieldsHelper::attach($logs, $webinarId ? [$webinarId] : null);
-
-        return view('pages.admin.polls.logs', [
-            'logs' => $logs,
-            'webinars' => $this->webinars($request),
-            'selectedWebinarId' => $webinarId,
-            'search' => $search,
-            'dynamicColumns' => $dynamicColumns,
-        ]);
+            ->when($search !== '', fn ($query) => $query->where(function ($nested) use ($search) {
+                $nested->where('users.name', 'like', "%{$search}%")
+                    ->orWhere('users.email', 'like', "%{$search}%")
+                    ->orWhere('polls.question', 'like', "%{$search}%")
+                    ->orWhere('poll_options.label', 'like', "%{$search}%")
+                    ->orWhere('webinars.title', 'like', "%{$search}%");
+            }))
+            ->orderByRaw('COALESCE(poll_responses.voted_at, poll_responses.created_at) DESC');
     }
 
     public function store(Request $request): RedirectResponse
@@ -99,7 +135,7 @@ class PollController extends Controller
 
     public function edit(Poll $poll): View
     {
-        return view('pages.admin.polls.form', [
+        return view('pages.admin.polls.add_edit', [
             'poll' => $poll->load('options'),
             'webinars' => $this->webinars(request()),
         ]);

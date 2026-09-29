@@ -7,7 +7,6 @@ use App\Models\Speaker;
 use App\Models\Webinar;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -46,7 +45,7 @@ class SpeakerController extends Controller
 
     private function form(Speaker $speaker): View
     {
-        return view('pages.admin.general.speaker-form', ['speaker' => $speaker, 'webinars' => Webinar::orderBy('title')->get()]);
+        return view('pages.admin.general.speaker_add_edit', ['speaker' => $speaker, 'webinars' => Webinar::orderBy('title')->get()]);
     }
 
     public function store(Request $request): RedirectResponse

@@ -21,12 +21,12 @@ class AdminAccessSeeder extends Seeder
             'dashboard' => ['view'],
             'webinars' => ['view', 'create', 'edit', 'delete'], 'registrations' => ['view', 'approve', 'export'],
             'dynamic-fields' => ['view', 'create', 'edit', 'delete'],
-            'polls' => ['view', 'create', 'edit', 'delete', 'manage'], 'poll-logs' => ['view'],
+            'polls' => ['view', 'create', 'edit', 'delete', 'manage'], 'poll-logs' => ['view', 'export'],
             'certificates' => ['view', 'create', 'edit', 'hide'], 'certificate-logs' => ['view'],
             'live-control' => ['view', 'manage'], 'reports' => ['view', 'export'],
             'chat' => ['view', 'manage', 'moderate'], 'attendance' => ['view', 'export'], 'notifications' => ['view', 'create'],
-            'q-and-a' => ['view', 'edit'],
-            'speakers' => ['view', 'create', 'edit', 'delete'], 'users' => ['view', 'edit'], 'feedback' => ['view', 'edit'],
+            'q-and-a' => ['view', 'edit', 'export'],
+            'speakers' => ['view', 'create', 'edit', 'delete'], 'users' => ['view', 'edit', 'export'], 'feedback' => ['view', 'edit', 'export'],
             'subadmins' => ['view', 'create', 'edit', 'delete', 'permission'], 'permissions' => ['view', 'edit'], 'settings' => ['view', 'edit'],
         ];
         $ids = [];

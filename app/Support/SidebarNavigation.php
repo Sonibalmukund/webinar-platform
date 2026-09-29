@@ -3,7 +3,6 @@
 namespace App\Support;
 
 use App\Helpers\AdminSidebarHelper;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 final class SidebarNavigation
@@ -14,15 +13,15 @@ final class SidebarNavigation
             return AdminSidebarHelper::menu();
         }
 
-        return self::learner();
+        return self::attendee();
     }
 
     public static function sectionLabel(bool $isAdmin): string
     {
-        return $isAdmin ? 'ADMIN WORKSPACE' : 'LEARNING SPACE';
+        return $isAdmin ? '' : 'LEARNING SPACE';
     }
 
-    private static function learner(): array
+    private static function attendee(): array
     {
         return [
             self::item('Dashboard', 'grid-1x2', '/dashboard', true),

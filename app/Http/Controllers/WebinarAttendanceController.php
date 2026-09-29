@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\WebinarAttendanceUpdated;
+use App\Events\WebinarRoomUpdated;
 use App\Models\Webinar;
 use App\Support\WebinarExperience;
 use Illuminate\Http\JsonResponse;
@@ -105,6 +106,12 @@ class WebinarAttendanceController extends Controller
         $live = DB::table('webinar_attendees')->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', $now->copy()->subSeconds(75))->count();
         try {
             broadcast(new WebinarAttendanceUpdated($webinar->id, $request->user()->id, $live, (int) $row->watch_seconds, $state, $request->user()->name));
+            if (data_get($webinar->settings, 'experience.participants_enabled', false)) {
+                broadcast(new WebinarRoomUpdated($webinar->id, 'attendance', [
+                    'participants_enabled' => true,
+                    'live_viewers' => $live,
+                ]));
+            }
         } catch (\Throwable $e) {
             report($e);
         }

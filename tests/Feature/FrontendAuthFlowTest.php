@@ -9,7 +9,9 @@ use App\Models\Role;
 use App\Models\State;
 use App\Models\User;
 use App\Models\Webinar;
+use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class FrontendAuthFlowTest extends TestCase
@@ -67,7 +69,7 @@ class FrontendAuthFlowTest extends TestCase
 
     public function test_same_browser_session_can_access_multiple_registered_webinars(): void
     {
-        \Illuminate\Support\Facades\DB::table('settings')
+        DB::table('settings')
             ->where('group', 'registration')
             ->where('key', 'registration_password_enabled')
             ->update(['value' => '1']);
@@ -124,7 +126,7 @@ class FrontendAuthFlowTest extends TestCase
 
     public function test_event_without_custom_login_field_still_has_both_popups(): void
     {
-        \Illuminate\Support\Facades\DB::table('settings')->where('key', 'registration_password_enabled')->update(['value' => '0']);
+        DB::table('settings')->where('key', 'registration_password_enabled')->update(['value' => '0']);
         $webinar = $this->webinar();
         $this->get('/'.$webinar->slug)->assertOk()
             ->assertSee('id="micrositeLoginModal"', false)
@@ -183,7 +185,7 @@ class FrontendAuthFlowTest extends TestCase
     {
         $webinar = Webinar::where('slug', 'future-of-digital-healthcare-2026')->first();
         if (! $webinar) {
-            $this->seed(\Database\Seeders\DatabaseSeeder::class);
+            $this->seed(DatabaseSeeder::class);
             $webinar = Webinar::where('slug', 'future-of-digital-healthcare-2026')->firstOrFail();
         }
         $webinar->update(['auto_approve' => false]);
@@ -277,4 +279,3 @@ class FrontendAuthFlowTest extends TestCase
         $this->assertAuthenticated();
     }
 }
-

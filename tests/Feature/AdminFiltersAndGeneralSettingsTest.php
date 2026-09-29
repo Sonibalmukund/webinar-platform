@@ -137,10 +137,37 @@ class AdminFiltersAndGeneralSettingsTest extends TestCase
             ->assertSee('Filter');
     }
 
+    public function test_admin_headings_use_sidebar_names_without_workspace_copy(): void
+    {
+        $admin = $this->getSuperAdmin();
+
+        $this->actingAs($admin)->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('<h1>Dashboard</h1>', false)
+            ->assertDontSee('ADMIN WORKSPACE')
+            ->assertDontSee('GLOBAL OVERVIEW');
+
+        $this->get(route('admin.webinars.index'))
+            ->assertOk()
+            ->assertSee('<h1>Webinars</h1>', false)
+            ->assertSee('Add Webinar')
+            ->assertDontSee('ADMIN WORKSPACE');
+
+        $this->get(route('admin.webinars.create'))
+            ->assertOk()
+            ->assertSee('<h1>Add Webinar</h1>', false)
+            ->assertDontSee('ADMIN WORKSPACE');
+
+        $this->get(route('admin.polls.logs'))
+            ->assertOk()
+            ->assertSee('<h1>Poll Logs</h1>', false)
+            ->assertDontSee('POLL AUDIT');
+    }
+
     public function test_created_banner_and_brand_appear_on_frontend(): void
     {
         $webinar = Webinar::first();
-        if (!$webinar) {
+        if (! $webinar) {
             $admin = $this->getSuperAdmin();
             $webinar = Webinar::create([
                 'title' => 'Test Event 2026',
@@ -169,9 +196,23 @@ class AdminFiltersAndGeneralSettingsTest extends TestCase
             'display_order' => 1,
         ]);
 
-        $this->get('/' . $webinar->slug)
+        foreach (range(2, 9) as $brandNumber) {
+            Brand::create([
+                'webinar_id' => $webinar->id,
+                'name' => 'Partner Brand '.$brandNumber,
+                'logo_path' => 'https://placehold.co/200x80?text=BRAND'.$brandNumber,
+                'is_active' => true,
+            ]);
+        }
+
+        $visibleBrandCount = Brand::where('webinar_id', $webinar->id)->where('is_active', true)->count();
+
+        $this->get('/'.$webinar->slug)
             ->assertOk()
             ->assertSee('Acme Alpha Partner')
+            ->assertSee('data-brand-grid-toggle', false)
+            ->assertSee('Show all '.$visibleBrandCount.' brands')
+            ->assertSee('data-brand-card', false)
             ->assertSee('Spotlight Keynote Banner');
     }
 }

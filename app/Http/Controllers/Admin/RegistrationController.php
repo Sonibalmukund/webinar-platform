@@ -4,10 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Registration;
-use App\Models\Role;
 use App\Models\User;
 use App\Models\Webinar;
 use App\Support\DynamicFieldsHelper;
+use App\Support\XlsxExport;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -54,7 +55,7 @@ class RegistrationController extends Controller
         $databaseRows = $query->latest('registered_at')->latest('id')->paginate(15)->withQueryString();
         $dynamicColumns = DynamicFieldsHelper::attach($databaseRows, $webinarId ? [$webinarId] : null);
 
-        return view('pages.admin.resource', [
+        return view('pages.admin.audience_users_registrations', [
             'title' => 'Registrations',
             'type' => 'registrations',
             'databaseRows' => $databaseRows,
@@ -70,49 +71,76 @@ class RegistrationController extends Controller
         $webinars = Webinar::when($admin->hasRole('sub-admin'), fn ($query) => $query->whereIn('id', $accessibleWebinarIds))
             ->orderBy('title')
             ->get();
-        $search = trim((string) $request->input('search'));
         $webinarId = $request->integer('webinar_id');
-        $status = $request->input('status');
-
-        $query = User::with([
-                'roles',
-                'registrations' => fn ($rq) => $admin->hasRole('sub-admin') ? $rq->whereIn('webinar_id', $accessibleWebinarIds) : $rq,
-                'registrations.webinar'
-            ])
-            ->where(function ($q) {
-                $q->whereHas('roles', fn ($rq) => $rq->where('slug', 'learner'))
-                  ->orWhereHas('registrations')
-                  ->orWhereDoesntHave('roles', fn ($rq) => $rq->whereIn('slug', ['super-admin', 'sub-admin']));
-            })
-            ->when($admin->hasRole('sub-admin'), fn ($query) => $query->whereHas('registrations', fn ($registrations) => $registrations->whereIn('webinar_id', $accessibleWebinarIds)));
-
-        if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('mobile', 'like', "%{$search}%")
-                    ->orWhere('company', 'like', "%{$search}%");
-            });
-        }
-
-        if ($webinarId) {
-            $query->whereHas('registrations', fn ($rq) => $rq->where('webinar_id', $webinarId));
-        }
-
-        if ($status && $status !== 'all') {
-            $query->where('status', $status);
-        }
-
-        $databaseRows = $query->latest('updated_at')->latest('id')->paginate(15)->withQueryString();
+        $databaseRows = $this->usersQuery($request)->paginate(15)->withQueryString();
         $dynamicColumns = DynamicFieldsHelper::attach($databaseRows, $webinarId ? [$webinarId] : null);
 
-        return view('pages.admin.resource', [
+        return view('pages.admin.audience_users_registrations', [
             'title' => 'Users',
             'type' => 'users',
             'databaseRows' => $databaseRows,
             'webinars' => $webinars,
             'dynamicColumns' => $dynamicColumns,
         ]);
+    }
+
+    public function exportUsers(Request $request)
+    {
+        $webinarId = $request->integer('webinar_id');
+        $users = $this->usersQuery($request)->get();
+        $dynamicColumns = DynamicFieldsHelper::attach($users, $webinarId ? [$webinarId] : null);
+        $rows = [array_merge(['User', 'Email', 'Mobile', 'Webinars'], $dynamicColumns, ['Registered', 'Status'])];
+
+        foreach ($users as $user) {
+            $primaryRegistration = $user->registrations->first();
+            $dynamicValues = collect($dynamicColumns)->map(fn ($column) => $user->dynamic_fields[$column] ?? '')->all();
+            $rows[] = array_merge([
+                $user->name,
+                $user->email,
+                $user->mobile,
+                $user->registrations->pluck('webinar.title')->filter()->unique()->implode(', '),
+            ], $dynamicValues, [
+                $primaryRegistration?->registered_at ?? $user->created_at,
+                ucfirst($user->status ?? 'active'),
+            ]);
+        }
+
+        $path = XlsxExport::create($rows, [4 + count($dynamicColumns)], [], 'Users');
+
+        return response()->download($path, 'users-'.now()->format('Y-m-d').'.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    private function usersQuery(Request $request): Builder
+    {
+        $admin = $request->user();
+        $accessibleWebinarIds = $admin->accessibleWebinarIds();
+        $search = trim((string) $request->input('search'));
+        $webinarId = $request->integer('webinar_id');
+        $status = $request->input('status');
+
+        return User::with([
+            'roles',
+            'registrations' => fn ($query) => $admin->hasRole('sub-admin') ? $query->whereIn('webinar_id', $accessibleWebinarIds) : $query,
+            'registrations.webinar',
+        ])
+            ->where(function ($query) {
+                $query->whereHas('roles', fn ($roles) => $roles->where('slug', 'learner'))
+                    ->orWhereHas('registrations')
+                    ->orWhereDoesntHave('roles', fn ($roles) => $roles->whereIn('slug', ['super-admin', 'sub-admin']));
+            })
+            ->when($admin->hasRole('sub-admin'), fn ($query) => $query->whereHas('registrations', fn ($registrations) => $registrations->whereIn('webinar_id', $accessibleWebinarIds)))
+            ->when($search !== '', fn ($query) => $query->where(function ($nested) use ($search) {
+                $nested->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('mobile', 'like', "%{$search}%")
+                    ->orWhere('company', 'like', "%{$search}%");
+            }))
+            ->when($webinarId, fn ($query) => $query->whereHas('registrations', fn ($registrations) => $registrations->where('webinar_id', $webinarId)))
+            ->when($status && $status !== 'all', fn ($query) => $query->where('status', $status))
+            ->latest('updated_at')
+            ->latest('id');
     }
 
     public function show(Registration $registration): View

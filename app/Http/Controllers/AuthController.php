@@ -6,7 +6,6 @@ use App\Models\City;
 use App\Models\Country;
 use App\Models\Registration;
 use App\Models\RegistrationAnswer;
-use App\Models\Role;
 use App\Models\SignupField;
 use App\Models\SignupFieldAnswer;
 use App\Models\State;
@@ -14,6 +13,8 @@ use App\Models\User;
 use App\Models\Webinar;
 use App\Support\AuditTrail;
 use App\Support\FrontendAuth;
+use App\Support\NotificationCampaignService;
+use App\Support\RegistrationAttribution;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -84,7 +85,7 @@ class AuthController extends Controller
         }
         $loginSettings = DB::table('settings')->where('group', 'registration')->pluck('value', 'key');
         $dashboardWebinar = $portal === 'user' ? FrontendAuth::webinar($request) : null;
-        // Learner access is passwordless. Admin authentication remains password protected.
+        // Attendee access is passwordless. Admin authentication remains password protected.
         $passwordEnabled = $portal === 'admin';
 
         $rules = ['login' => ['required', 'string']];
@@ -103,7 +104,7 @@ class AuthController extends Controller
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
         $user = $request->user();
-        $hasPortalRole = $portal === 'admin' ? $user->hasAnyRole(['super-admin', 'sub-admin']) : $user->hasRole('learner');
+        $hasPortalRole = $portal === 'admin' ? $user->hasAnyRole(['super-admin', 'sub-admin']) : ! $user->isAdmin();
         if (! $hasPortalRole) {
             Auth::logout();
 
@@ -154,7 +155,7 @@ class AuthController extends Controller
         return redirect()->route('dashboard')->with('auth_status', 'Login successfully.');
     }
 
-    public function register(Request $request): RedirectResponse
+    public function register(Request $request, NotificationCampaignService $campaigns): RedirectResponse
     {
         $request->merge(['_auth_modal' => 'register']);
         $settings = DB::table('settings')->where('group', 'registration')->pluck('value', 'key');
@@ -168,7 +169,7 @@ class AuthController extends Controller
         if ($webinar) {
             $submittedFields = $request->input('fields', []);
             foreach ($registrationFields as $field) {
-                if (!isset($submittedFields[$field->id]) || $submittedFields[$field->id] === '' || $submittedFields[$field->id] === null) {
+                if (! isset($submittedFields[$field->id]) || $submittedFields[$field->id] === '' || $submittedFields[$field->id] === null) {
                     $lowerLabel = strtolower(trim($field->label));
                     if ($request->filled('name') && (in_array($lowerLabel, ['name', 'full name', 'your name'], true) || str_starts_with($field->field_key, 'name') || str_starts_with($field->field_key, 'full_name'))) {
                         $submittedFields[$field->id] = $request->input('name');
@@ -213,7 +214,7 @@ class AuthController extends Controller
                     $rule = [];
                     $lowerLabel = strtolower(trim($field->label));
                     $isMobile = in_array($lowerLabel, ['mobile', 'mobile number', 'phone', 'phone number'], true) || str_starts_with($field->field_key, 'mobile');
-                    if ($isMobile && !isset($submittedFields[$field->id]) && !$request->has('mobile') && ($settings['registration_mobile_required'] ?? '0') !== '1') {
+                    if ($isMobile && ! isset($submittedFields[$field->id]) && ! $request->has('mobile') && ($settings['registration_mobile_required'] ?? '0') !== '1') {
                         $rule[] = 'nullable';
                     } else {
                         $rule[] = $field->is_required ? 'required' : 'nullable';
@@ -266,14 +267,14 @@ class AuthController extends Controller
                 if ($extractedPassword === null && ($field->field_type === 'password' || in_array($lowerLabel, ['password'], true))) {
                     $extractedPassword = is_string($val) ? trim($val) : null;
                 }
-                if ($field->field_type === 'country' && !empty($val)) {
-                    $countryId = (int)$val;
+                if ($field->field_type === 'country' && ! empty($val)) {
+                    $countryId = (int) $val;
                 }
-                if ($field->field_type === 'state' && !empty($val)) {
-                    $stateId = (int)$val;
+                if ($field->field_type === 'state' && ! empty($val)) {
+                    $stateId = (int) $val;
                 }
-                if ($field->field_type === 'city' && !empty($val)) {
-                    $cityId = (int)$val;
+                if ($field->field_type === 'city' && ! empty($val)) {
+                    $cityId = (int) $val;
                 }
             }
 
@@ -282,9 +283,9 @@ class AuthController extends Controller
             $mobile = $request->filled('mobile') ? $request->string('mobile')->trim()->toString() : $extractedMobile;
             $password = $request->filled('password') ? $request->input('password') : ($extractedPassword ?: Str::random(40));
 
-            if (!$email && $mobile) {
+            if (! $email && $mobile) {
                 $email = 'mobile-'.preg_replace('/\D/', '', $mobile).'-'.Str::lower(Str::random(6)).'@internal.local';
-            } elseif (!$email) {
+            } elseif (! $email) {
                 $email = 'attendee-'.Str::lower(Str::random(8)).'@internal.local';
             }
 
@@ -296,7 +297,7 @@ class AuthController extends Controller
                 $user = User::where('mobile', $mobile)->first();
             }
 
-            if (!$user) {
+            if (! $user) {
                 $user = User::create([
                     'name' => $name,
                     'email' => $email,
@@ -306,8 +307,6 @@ class AuthController extends Controller
                     'state_id' => $stateId,
                     'city_id' => $cityId,
                 ]);
-                $role = Role::firstOrCreate(['slug' => 'learner'], ['name' => 'Learner', 'description' => 'Webinar learner']);
-                $user->roles()->sync([$role->id]);
             } else {
                 $updateData = [];
                 if ($name && $name !== 'Attendee' && (empty($user->name) || $user->name === 'Attendee')) {
@@ -316,7 +315,7 @@ class AuthController extends Controller
                 if ($extractedPassword) {
                     $updateData['password'] = $extractedPassword;
                 }
-                if (!empty($updateData)) {
+                if (! empty($updateData)) {
                     $user->update($updateData);
                 }
             }
@@ -369,10 +368,9 @@ class AuthController extends Controller
                 [
                     'email' => $user->email,
                     'status' => $status,
-                    'source' => 'public-microsite',
                     'registered_at' => now(),
                     'approved_at' => $status === 'approved' ? now() : null,
-                ]
+                ] + RegistrationAttribution::values($request, $webinar, 'public-microsite')
             );
 
             foreach ($registrationFields as $field) {
@@ -386,6 +384,9 @@ class AuthController extends Controller
             }
 
             AuditTrail::record('registration.created', $registration, "User {$user->name} ({$user->email}) registered for webinar {$webinar->title}.", ['registration_id' => $registration->id, 'webinar_id' => $webinar->id, 'user_id' => $user->id, 'status' => $status]);
+            if ($registration->wasRecentlyCreated) {
+                $campaigns->sendAfterRegistration($webinar, $user);
+            }
 
             Auth::login($user);
             $request->session()->regenerate();
@@ -444,8 +445,6 @@ class AuthController extends Controller
         }
         $email = $data['email'] ?? ('mobile-'.preg_replace('/\D/', '', $data['mobile'] ?? '').'-'.Str::lower(Str::random(6)).'@internal.local');
         $user = User::create(['name' => $data['name'], 'email' => $email, 'mobile' => $data['mobile'] ?? null, 'password' => $data['password'] ?? Str::random(40), 'country_id' => $countryId, 'state_id' => $stateId, 'city_id' => $cityId]);
-        $role = Role::firstOrCreate(['slug' => 'learner'], ['name' => 'Learner', 'description' => 'Webinar learner']);
-        $user->roles()->sync([$role->id]);
         foreach ($fields as $field) {
             $value = data_get($request->input('custom', []), (string) $field->id);
             if ($value !== null) {

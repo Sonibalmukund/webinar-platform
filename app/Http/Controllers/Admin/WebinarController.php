@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Banner;
 use App\Models\Brand;
 use App\Models\CertificateTemplate;
+use App\Models\Speaker;
 use App\Models\Webinar;
 use App\Support\AuditTrail;
 use App\Support\VideoEmbed;
@@ -18,7 +19,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -56,10 +56,13 @@ class WebinarController extends Controller
 
     public function create(): View
     {
-        return view('pages.admin.webinars.form', [
+        return view('pages.admin.webinars.add_edit', [
             'webinar' => new Webinar,
             'sessionResourcesText' => '',
             'agendaItems' => collect(),
+            'webinarBanners' => collect(),
+            'webinarBrands' => collect(),
+            'allSpeakers' => Speaker::orderBy('name')->get(),
             'certificateTemplates' => CertificateTemplate::orderBy('name')->get(),
             'existingPolls' => collect(),
             'activeCertificateTemplate' => null,
@@ -78,6 +81,7 @@ class WebinarController extends Controller
             $this->saveLegacyPollsAndCertificate($request, $webinar);
             $this->saveSessionResources($request, $webinar);
             $this->saveAgenda($request, $webinar);
+            $this->saveBrandingAssets($request, $webinar);
 
             return $webinar;
         });
@@ -90,14 +94,19 @@ class WebinarController extends Controller
     {
         $sessionResourcesText = DB::table('webinar_resources')->where('webinar_id', $webinar->id)->orderBy('display_order')->get()->map(fn ($item) => $item->title.' | '.$item->path_or_url)->join("\n");
         $agendaItems = DB::table('webinar_agenda_items')->where('webinar_id', $webinar->id)->orderBy('display_order')->get();
+        $webinarBanners = Banner::where('webinar_id', $webinar->id)->orderBy('display_order')->get();
+        $webinarBrands = Brand::where('webinar_id', $webinar->id)->orderBy('display_order')->orderBy('name')->get();
         $certificateTemplates = CertificateTemplate::orderBy('name')->get();
         $existingPolls = $webinar->polls()->with('options')->latest()->get();
         $activeCertificateTemplate = isset($webinar->settings['certificate_template_id']) ? CertificateTemplate::find($webinar->settings['certificate_template_id']) : null;
 
-        return view('pages.admin.webinars.form', [
+        return view('pages.admin.webinars.add_edit', [
             'webinar' => $webinar->load('registrationForm.fields.options'),
             'sessionResourcesText' => $sessionResourcesText,
             'agendaItems' => $agendaItems,
+            'webinarBanners' => $webinarBanners,
+            'webinarBrands' => $webinarBrands,
+            'allSpeakers' => Speaker::orderBy('name')->get(),
             'certificateTemplates' => $certificateTemplates,
             'existingPolls' => $existingPolls,
             'activeCertificateTemplate' => $activeCertificateTemplate,
@@ -138,13 +147,16 @@ class WebinarController extends Controller
         $controlData = $request->validate([
             'status' => ['required', 'in:scheduled,live,completed,cancelled'],
             'certificate_min_attendance' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'early_entry_minutes' => ['nullable', 'integer', 'min:0', 'max:240'],
         ]);
         $settings = $webinar->settings ?? [];
         $settings['experience']['certificate_min_attendance'] = $request->filled('certificate_min_attendance')
             ? (int) $controlData['certificate_min_attendance']
             : (int) data_get($settings, 'experience.certificate_min_attendance', 80);
+        $settings['experience']['participants_enabled'] = $request->boolean('participants_enabled');
         $webinar->update([
             'status' => $controlData['status'],
+            'early_entry_minutes' => $request->filled('early_entry_minutes') ? (int) $controlData['early_entry_minutes'] : (int) ($webinar->early_entry_minutes ?? 30),
             'chat_enabled' => $request->boolean('chat_enabled'),
             'qa_enabled' => $request->boolean('qa_enabled'),
             'comments_enabled' => $request->boolean('comments_enabled'),
@@ -166,6 +178,8 @@ class WebinarController extends Controller
                 'feedback_enabled' => $webinar->feedback_enabled,
                 'certificate_enabled' => $webinar->certificate_enabled === 'yes',
                 'certificate_min_attendance' => (int) data_get($webinar->settings, 'experience.certificate_min_attendance', 80),
+                'early_entry_minutes' => (int) $webinar->early_entry_minutes,
+                'participants_enabled' => (bool) data_get($webinar->settings, 'experience.participants_enabled', false),
             ]);
         }
 
@@ -175,7 +189,7 @@ class WebinarController extends Controller
     public function announcement(Request $request, Webinar $webinar): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
-            'message' => ['nullable', 'string', 'max:500'],
+            'message' => ['nullable', 'string', 'max:50'],
             'button_text' => ['nullable', 'string', 'max:50'],
             'button_url' => ['nullable', 'url', 'max:500'],
             'enabled' => ['nullable'],
@@ -227,6 +241,7 @@ class WebinarController extends Controller
             $this->saveLegacyPollsAndCertificate($request, $webinar);
             $this->saveSessionResources($request, $webinar);
             $this->saveAgenda($request, $webinar);
+            $this->saveBrandingAssets($request, $webinar);
         });
         AuditTrail::record('webinar.updated', $webinar, 'Webinar settings updated.', ['changes' => $webinar->getChanges()]);
         $this->broadcastRoom($webinar, 'controls');
@@ -306,26 +321,13 @@ class WebinarController extends Controller
     private function webinarData(Request $request, ?Webinar $webinar = null): array
     {
         $request->merge([
-            'early_entry_minutes' => $request->input('early_entry_minutes', 30),
+            'early_entry_minutes' => $request->input('early_entry_minutes', $webinar?->early_entry_minutes ?? 30),
             'registration_type' => 'free',
             'price' => 0,
             'language' => $request->input('language', $webinar?->language ?: 'en'),
+        ], [
+            'message.max' => 'The announcement message cannot be more than 50 characters.',
         ]);
-        if ($request->filled('starts_at')) {
-            if (blank($request->input('ends_at'))) {
-                $request->merge([
-                    'ends_at' => Carbon::parse($request->input('starts_at'))->addHour()->format('Y-m-d\TH:i'),
-                ]);
-            } else {
-                $s = Carbon::parse($request->input('starts_at'));
-                $e = Carbon::parse($request->input('ends_at'));
-                if ($e->lessThanOrEqualTo($s)) {
-                    $request->merge([
-                        'ends_at' => $s->copy()->addHour()->format('Y-m-d\TH:i'),
-                    ]);
-                }
-            }
-        }
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:180', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('webinars', 'slug')->ignore($webinar?->id)],
@@ -377,9 +379,10 @@ class WebinarController extends Controller
         $experience = $request->validate([
             'room_layout' => ['nullable', 'in:theater,presentation'],
             'brand_primary' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'], 'brand_secondary' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'brand_display_style' => ['nullable', Rule::in(['cards', 'monochrome'])],
             'brand_logo_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:5120'],
             'waiting_message' => ['nullable', 'string', 'max:500'], 'waiting_media_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'], 'post_message' => ['nullable', 'string', 'max:500'], 'registration_success_title' => ['nullable', 'string', 'max:120'], 'registration_success_message' => ['nullable', 'string', 'max:500'],
-            'video_chapters' => ['nullable', 'string', 'max:5000'], 'certificate_min_attendance' => ['nullable', 'integer', 'min:0', 'max:100'], 'certificate_require_poll' => ['nullable', 'boolean'],
+            'agenda_notes' => ['nullable', 'string', 'max:10000'], 'certificate_min_attendance' => ['nullable', 'integer', 'min:0', 'max:100'], 'certificate_require_poll' => ['nullable', 'boolean'],
         ]);
         $contact = $request->validate(['contact_mobile' => ['nullable', 'string', 'max:25', 'regex:/^[+0-9() .-]+$/']]);
         $settings = $webinar?->settings ?? [];
@@ -390,7 +393,7 @@ class WebinarController extends Controller
         if ($request->hasFile('brand_logo_file')) {
             $logoFile = $request->file('brand_logo_file');
             $extension = $logoFile->getClientOriginalExtension();
-            $logoName = \Illuminate\Support\Str::uuid().($extension ? '.'.$extension : '');
+            $logoName = Str::uuid().($extension ? '.'.$extension : '');
             $path = $logoFile->storeAs('webinars', $logoName, 'public');
             $logoUrl = '/storage/'.$path;
         }
@@ -398,19 +401,19 @@ class WebinarController extends Controller
         if ($request->hasFile('waiting_media_file')) {
             $mediaFile = $request->file('waiting_media_file');
             $extension = $mediaFile->getClientOriginalExtension();
-            $mediaName = \Illuminate\Support\Str::uuid().($extension ? '.'.$extension : '');
+            $mediaName = Str::uuid().($extension ? '.'.$extension : '');
             $mediaPath = $mediaFile->storeAs('webinars', $mediaName, 'public');
             $waitingMedia = '/storage/'.$mediaPath;
         }
+        $brandDisplayStyle = $experience['brand_display_style'] ?? data_get($webinar?->settings, 'experience.brand_display_style', 'cards');
+        $brandDisplayStyle = in_array($brandDisplayStyle, ['cards', 'monochrome'], true) ? $brandDisplayStyle : 'cards';
+
         $settings['experience'] = [
             'layout' => $experience['room_layout'] ?? 'theater', 'primary' => $experience['brand_primary'] ?? '#6d28d9', 'secondary' => $experience['brand_secondary'] ?? '#2563eb', 'logo_url' => $logoUrl,
+            'brand_display_style' => $brandDisplayStyle,
             'waiting_message' => $experience['waiting_message'] ?? 'The webinar will begin shortly.', 'waiting_media_url' => $waitingMedia, 'post_message' => $experience['post_message'] ?? 'Thank you for attending.',
             'registration_success_title' => $experience['registration_success_title'] ?? 'You are registered!', 'registration_success_message' => $experience['registration_success_message'] ?? 'Your seat is confirmed. Add the webinar to your calendar and return when the room opens.',
-            'chapters' => collect(preg_split('/\r\n|\r|\n/', $experience['video_chapters'] ?? ''))->filter()->map(function ($line) {
-                [$time,$title] = array_pad(explode('|', $line, 2), 2, '');
-
-                return ['time' => trim($time), 'title' => trim($title)];
-            })->values()->all(),
+            'agenda_notes' => trim((string) ($experience['agenda_notes'] ?? '')),
             'certificate_min_attendance' => (int) ($experience['certificate_min_attendance'] ?? data_get($webinar?->settings, 'experience.certificate_min_attendance', 80)), 'certificate_require_poll' => $request->boolean('certificate_require_poll'),
         ];
         $data['settings'] = $settings;
@@ -454,6 +457,35 @@ class WebinarController extends Controller
 
     private function saveLegacyPollsAndCertificate(Request $request, Webinar $webinar): void
     {
+        // Save all poll cards created in the webinar wizard.
+        foreach ($request->input('new_polls', []) as $row) {
+            if (blank($row['question'] ?? null)) {
+                continue;
+            }
+            $correctIndex = $row['correct_index'] ?? null;
+            $answerReveal = in_array($row['answer_reveal'] ?? null, ['immediate', 'after_webinar', 'never'], true)
+                ? $row['answer_reveal']
+                : 'after_webinar';
+            $poll = $webinar->polls()->create([
+                'created_by' => $request->user()->id,
+                'question' => trim($row['question']),
+                'allow_multiple' => ($row['allow_multiple'] ?? '0') === '1',
+                'answer_reveal' => $correctIndex !== null && $correctIndex !== '' ? $answerReveal : 'never',
+                'status' => in_array($row['status'] ?? null, ['draft', 'active'], true) ? $row['status'] : 'draft',
+                'started_at' => filled($row['started_at'] ?? null) ? Carbon::parse($row['started_at']) : null,
+                'ended_at' => filled($row['ended_at'] ?? null) ? Carbon::parse($row['ended_at']) : null,
+            ]);
+            foreach (($row['answers'] ?? []) as $index => $label) {
+                if (filled($label)) {
+                    $poll->options()->create([
+                        'label' => trim($label),
+                        'is_correct' => $correctIndex !== null && (string) $correctIndex === (string) $index,
+                        'display_order' => $index,
+                    ]);
+                }
+            }
+        }
+
         // 1. Save single/wizard Poll if filled
         if ($request->filled('poll_question')) {
             $pollId = $request->input('poll_id');
@@ -472,7 +504,7 @@ class WebinarController extends Controller
             ]);
 
             $answers = $request->input('poll_answers', []);
-            if (!empty($answers)) {
+            if (! empty($answers)) {
                 $poll->options()->delete();
                 foreach ($answers as $idx => $label) {
                     if (filled($label)) {
@@ -512,12 +544,12 @@ class WebinarController extends Controller
         if ($request->boolean('certificate_enabled')) {
             $settings = $webinar->settings ?? [];
             $defaults = [
-                'headline'  => ['x' => 50, 'y' => 15, 'width' => 70, 'scale' => 100],
-                'recipient' => ['x' => 50, 'y' => 44, 'width' => 55, 'scale' => 100],
-                'webinar'   => ['x' => 50, 'y' => 61, 'width' => 55, 'scale' => 100],
-                'date'      => ['x' => 20, 'y' => 84, 'width' => 25, 'scale' => 100],
-                'signature' => ['x' => 80, 'y' => 76, 'width' => 22, 'scale' => 100],
-                'signatory' => ['x' => 80, 'y' => 86, 'width' => 30, 'scale' => 100],
+                'headline' => ['x' => 50, 'y' => 15, 'width' => 70, 'scale' => 100, 'bold' => 1],
+                'recipient' => ['x' => 50, 'y' => 44, 'width' => 55, 'scale' => 100, 'bold' => 1],
+                'webinar' => ['x' => 50, 'y' => 61, 'width' => 55, 'scale' => 100, 'bold' => 0],
+                'date' => ['x' => 20, 'y' => 84, 'width' => 25, 'scale' => 100, 'bold' => 0],
+                'signature' => ['x' => 80, 'y' => 76, 'width' => 22, 'scale' => 100, 'bold' => 0],
+                'signatory' => ['x' => 80, 'y' => 86, 'width' => 30, 'scale' => 100, 'bold' => 0],
             ];
             $submittedPositions = $request->input('positions');
 
@@ -614,6 +646,8 @@ class WebinarController extends Controller
     private function broadcastRoom(Webinar $webinar, string $change): void
     {
         try {
+            $liveViewers = DB::table('webinar_attendees')->where('webinar_id', $webinar->id)
+                ->whereNull('left_at')->where('last_seen_at', '>=', now()->subSeconds(75))->count();
             broadcast(new WebinarRoomUpdated($webinar->id, $change, [
                 'status' => $webinar->status,
                 'chat_enabled' => (bool) $webinar->chat_enabled,
@@ -623,6 +657,8 @@ class WebinarController extends Controller
                 'feedback_enabled' => (bool) $webinar->feedback_enabled,
                 'certificate_enabled' => $webinar->certificate_enabled === 'yes',
                 'certificate_min_attendance' => (int) data_get($webinar->settings, 'experience.certificate_min_attendance', 80),
+                'participants_enabled' => (bool) data_get($webinar->settings, 'experience.participants_enabled', false),
+                'live_viewers' => $liveViewers,
                 'pinned_announcement' => data_get($webinar->settings, 'pinned_announcement'),
             ]));
         } catch (\Throwable $e) {
@@ -666,6 +702,213 @@ class WebinarController extends Controller
             }$time = (string) ($row['starts_at'] ?? '');
             $duration = $row['duration_minutes'] ?? null;
             DB::table('webinar_agenda_items')->insert(['webinar_id' => $webinar->id, 'title' => $title, 'description' => null, 'starts_at' => preg_match('/^\d{2}:\d{2}$/', $time) ? $time : null, 'duration_minutes' => is_numeric($duration) ? max(1, (int) $duration) : null, 'display_order' => $order, 'created_at' => now(), 'updated_at' => now()]);
+        }
+    }
+
+    private function saveBrandingAssets(Request $request, Webinar $webinar): void
+    {
+        if (! $request->has('branding_assets_present')) {
+            return;
+        }
+
+        $data = $request->validate([
+            'speaker_ids' => ['nullable', 'array'],
+            'speaker_ids.*' => ['integer', 'exists:speakers,id'],
+            'new_speaker_name' => ['nullable', 'string', 'max:255'],
+            'new_speaker_headline' => ['nullable', 'string', 'max:255'],
+            'new_speaker_company' => ['nullable', 'string', 'max:255'],
+            'new_speaker_photo' => ['nullable', 'image', 'max:5120'],
+            'speakers' => ['nullable', 'array'],
+            'speakers.*.id' => ['nullable', 'integer', 'exists:speakers,id'],
+            'speakers.*.name' => ['nullable', 'string', 'max:255'],
+            'speakers.*.headline' => ['nullable', 'string', 'max:255'],
+            'speakers.*.company' => ['nullable', 'string', 'max:255'],
+            'speaker_photos' => ['nullable', 'array'],
+            'speaker_photos.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'banners' => ['nullable', 'array'],
+            'banners.*.id' => ['nullable', 'integer', 'exists:banners,id'],
+            'banners.*.title' => ['nullable', 'string', 'max:255'],
+            'banners.*.media_type' => ['required', Rule::in(['image', 'video'])],
+            'banners.*.media_url' => ['nullable', 'url', 'max:1000'],
+            'banner_media' => ['nullable', 'array'],
+            'banner_media.*' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,mp4,webm,mov', 'max:10240'],
+            'remove_banner_ids' => ['nullable', 'array'],
+            'remove_banner_ids.*' => ['integer', 'exists:banners,id'],
+            'banner_order' => ['nullable', 'array'],
+            'banner_order.*' => ['integer', 'exists:banners,id'],
+            'brands' => ['nullable', 'array'],
+            'brands.*.id' => ['nullable', 'integer', 'exists:brands,id'],
+            'brands.*.name' => ['nullable', 'string', 'max:255'],
+            'brands.*.logo_url' => ['nullable', 'url', 'max:1000'],
+            'brands.*.website_url' => ['nullable', 'url', 'max:1000'],
+            'brands.*.is_active' => ['nullable', 'boolean'],
+            'brand_logos' => ['nullable', 'array'],
+            'brand_logos.*' => ['nullable', 'image', 'max:5120'],
+            'remove_brand_ids' => ['nullable', 'array'],
+            'remove_brand_ids.*' => ['integer', 'exists:brands,id'],
+        ]);
+
+        $requestedRemovedBrandIds = collect($data['remove_brand_ids'] ?? [])->map(fn ($id) => (int) $id);
+        foreach (($data['brands'] ?? []) as $brandIndex => $brandRow) {
+            if ($requestedRemovedBrandIds->contains((int) ($brandRow['id'] ?? 0))) {
+                continue;
+            }
+            $hasBrandContent = filled($brandRow['id'] ?? null)
+                || filled($brandRow['logo_url'] ?? null)
+                || filled($brandRow['website_url'] ?? null)
+                || $request->hasFile("brand_logos.$brandIndex");
+            if ($hasBrandContent && blank($brandRow['name'] ?? null)) {
+                throw ValidationException::withMessages([
+                    "brands.$brandIndex.name" => 'Brand name is required when adding a brand.',
+                ]);
+            }
+        }
+
+        $speakerIds = collect($data['speaker_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
+        foreach (($data['speakers'] ?? []) as $speakerIndex => $speakerRow) {
+            $speakerId = (int) ($speakerRow['id'] ?? 0);
+            $speakerName = trim((string) ($speakerRow['name'] ?? ''));
+            $speakerPhoto = $request->file("speaker_photos.$speakerIndex");
+            if ($speakerName === '' && ! $speakerPhoto && ! $speakerId) {
+                continue;
+            }
+            if ($speakerName === '') {
+                throw ValidationException::withMessages(["speakers.$speakerIndex.name" => 'Speaker name is required.']);
+            }
+            $speaker = $speakerId ? Speaker::find($speakerId) : new Speaker;
+            if (! $speaker) {
+                continue;
+            }
+            if ($speakerPhoto) {
+                $photoName = Str::uuid().'.'.$speakerPhoto->getClientOriginalExtension();
+                $speaker->photo_path = '/storage/'.$speakerPhoto->storeAs('speakers', $photoName, 'public');
+            }
+            $speaker->name = $speakerName;
+            $speaker->slug = $speaker->slug ?: Str::slug($speakerName).'-'.Str::lower(Str::random(5));
+            $speaker->headline = filled($speakerRow['headline'] ?? null) ? trim($speakerRow['headline']) : null;
+            $speaker->company = filled($speakerRow['company'] ?? null) ? trim($speakerRow['company']) : null;
+            $speaker->is_active = true;
+            $speaker->save();
+            $speakerIds->push($speaker->id);
+        }
+        if (filled($data['new_speaker_name'] ?? null)) {
+            $photoPath = null;
+            if ($request->hasFile('new_speaker_photo')) {
+                $photo = $request->file('new_speaker_photo');
+                $photoName = Str::uuid().'.'.$photo->getClientOriginalExtension();
+                $photoPath = '/storage/'.$photo->storeAs('speakers', $photoName, 'public');
+            }
+            $speaker = Speaker::create([
+                'name' => trim($data['new_speaker_name']),
+                'slug' => Str::slug($data['new_speaker_name']).'-'.Str::lower(Str::random(5)),
+                'headline' => $data['new_speaker_headline'] ?? null,
+                'company' => $data['new_speaker_company'] ?? null,
+                'photo_path' => $photoPath,
+                'is_active' => true,
+            ]);
+            $speakerIds->push($speaker->id);
+        }
+        $webinar->speakers()->sync($speakerIds->values()->mapWithKeys(fn ($id, $order) => [$id => ['role' => 'speaker', 'display_order' => $order]])->all());
+
+        $removeBannerIds = collect($data['remove_banner_ids'] ?? [])->map(fn ($id) => (int) $id);
+        if ($removeBannerIds->isNotEmpty()) {
+            Banner::where('webinar_id', $webinar->id)->whereIn('id', $removeBannerIds)->delete();
+        }
+
+        foreach (collect($data['banner_order'] ?? [])->map(fn ($id) => (int) $id)->unique()->values() as $order => $bannerId) {
+            Banner::where('webinar_id', $webinar->id)->whereKey($bannerId)->update(['display_order' => $order]);
+        }
+
+        $bannerDisplayOrder = 0;
+        foreach (($data['banners'] ?? []) as $bannerIndex => $bannerRow) {
+            $bannerId = (int) ($bannerRow['id'] ?? 0);
+            if ($bannerId && $removeBannerIds->contains($bannerId)) {
+                continue;
+            }
+            $bannerFile = $request->file("banner_media.$bannerIndex");
+            $bannerUrl = trim((string) ($bannerRow['media_url'] ?? ''));
+            if (! $bannerId && ! $bannerFile && $bannerUrl === '') {
+                continue;
+            }
+
+            $mediaType = $bannerRow['media_type'] ?? 'image';
+            if ($bannerFile) {
+                $mimeType = (string) $bannerFile->getMimeType();
+                $validType = ($mediaType === 'image' && str_starts_with($mimeType, 'image/'))
+                    || ($mediaType === 'video' && str_starts_with($mimeType, 'video/'));
+                if (! $validType) {
+                    throw ValidationException::withMessages([
+                        "banner_media.$bannerIndex" => 'The uploaded file must match the selected image or video type.',
+                    ]);
+                }
+            }
+
+            $mediaPath = null;
+            if ($bannerFile) {
+                $bannerName = Str::uuid().'.'.$bannerFile->getClientOriginalExtension();
+                $mediaPath = '/storage/'.$bannerFile->storeAs('banners', $bannerName, 'public');
+            }
+            $banner = $bannerId
+                ? Banner::where('webinar_id', $webinar->id)->find($bannerId)
+                : new Banner(['webinar_id' => $webinar->id]);
+            if (! $banner) {
+                continue;
+            }
+            $banner->title = trim((string) ($bannerRow['title'] ?? '')) ?: $webinar->title;
+            $banner->media_type = $mediaType;
+            if ($mediaPath) {
+                $banner->media_path = $mediaPath;
+            }
+            if ($bannerUrl !== '') {
+                $banner->media_url = $bannerUrl;
+                if (! $bannerFile) {
+                    $banner->media_path = null;
+                }
+            } elseif ($bannerFile) {
+                $banner->media_url = null;
+            }
+            $banner->is_active = true;
+            $banner->display_order = $bannerDisplayOrder++;
+            $banner->save();
+        }
+
+        $removeBrandIds = collect($data['remove_brand_ids'] ?? [])->map(fn ($id) => (int) $id);
+        if ($removeBrandIds->isNotEmpty()) {
+            Brand::where('webinar_id', $webinar->id)->whereIn('id', $removeBrandIds)->delete();
+        }
+
+        $brandOrder = 0;
+        foreach (($data['brands'] ?? []) as $brandIndex => $brandRow) {
+            $brandId = (int) ($brandRow['id'] ?? 0);
+            if ($brandId && $removeBrandIds->contains($brandId)) {
+                continue;
+            }
+
+            $brandName = trim((string) ($brandRow['name'] ?? ''));
+            $brandLogo = $request->file("brand_logos.$brandIndex");
+            $brandLogoUrl = trim((string) ($brandRow['logo_url'] ?? ''));
+            if ($brandName === '' && ! $brandLogo && $brandLogoUrl === '') {
+                continue;
+            }
+
+            $brand = $brandId
+                ? Brand::where('webinar_id', $webinar->id)->find($brandId)
+                : new Brand(['webinar_id' => $webinar->id]);
+            if (! $brand) {
+                continue;
+            }
+
+            if ($brandLogo) {
+                $brandLogoName = Str::uuid().'.'.$brandLogo->getClientOriginalExtension();
+                $brand->logo_path = '/storage/'.$brandLogo->storeAs('brands', $brandLogoName, 'public');
+            } elseif ($brandLogoUrl !== '') {
+                $brand->logo_path = $brandLogoUrl;
+            }
+            $brand->name = $brandName ?: $brand->name;
+            $brand->website_url = filled($brandRow['website_url'] ?? null) ? trim($brandRow['website_url']) : null;
+            $brand->is_active = true;
+            $brand->display_order = $brandOrder++;
+            $brand->save();
         }
     }
 }

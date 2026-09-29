@@ -13,6 +13,7 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class StorageUploadsTest extends TestCase
@@ -138,7 +139,7 @@ class StorageUploadsTest extends TestCase
 
         $file = UploadedFile::fake()->create('cheat-sheet.pdf', 100, 'application/pdf');
 
-        $response = $this->actingAs($admin)->put('/admin/webinars/' . $webinar->id, [
+        $response = $this->actingAs($admin)->put('/admin/webinars/'.$webinar->id, [
             'title' => $webinar->title,
             'slug' => $webinar->slug,
             'status' => $webinar->status,
@@ -173,7 +174,7 @@ class StorageUploadsTest extends TestCase
 
         $file = UploadedFile::fake()->image('chat-screenshot.png', 400, 300);
 
-        $response = $this->actingAs($admin)->postJson('/admin/chats/' . $webinar->id, [
+        $response = $this->actingAs($admin)->postJson('/admin/chats/'.$webinar->id, [
             'message' => 'Here is the screenshot',
             'attachment' => $file,
         ]);
@@ -225,7 +226,7 @@ class StorageUploadsTest extends TestCase
         $templateId = data_get($webinar->settings, 'certificate_template_id');
         $this->assertNotNull($templateId);
 
-        $template = \App\Models\CertificateTemplate::findOrFail($templateId);
+        $template = CertificateTemplate::findOrFail($templateId);
         $this->assertStringStartsWith('/storage/certificates/', $template->design['template_image']);
         $this->assertStringStartsWith('/storage/certificates/', $template->design['signature_image']);
 
@@ -260,7 +261,7 @@ class StorageUploadsTest extends TestCase
             'webinar_id' => $first->id,
             'user_id' => $admin->id,
             'template_id' => $shared->id,
-            'credential_id' => (string) \Illuminate\Support\Str::uuid(),
+            'credential_id' => (string) Str::uuid(),
             'status' => 'approved',
             'issued_at' => now(),
             'created_at' => now(),
@@ -303,7 +304,7 @@ class StorageUploadsTest extends TestCase
         ]);
         $webinar->update(['settings' => ['certificate_template_id' => $template->id], 'certificate_enabled' => 'yes']);
         $positions = [
-            'recipient' => ['x' => 50, 'y' => 44, 'width' => 55, 'scale' => 100],
+            'recipient' => ['x' => 50, 'y' => 44, 'width' => 55, 'scale' => 100, 'bold' => 0],
             'webinar' => ['x' => 50, 'y' => 61, 'width' => 55, 'scale' => 100],
             'date' => ['x' => 20, 'y' => 84, 'width' => 25, 'scale' => 100],
             'signature' => ['x' => 80, 'y' => 76, 'width' => 22, 'scale' => 100],
@@ -329,6 +330,7 @@ class StorageUploadsTest extends TestCase
         $this->assertSame('Wizard Template Updated', $saved->name);
         $this->assertSame('portrait', $saved->orientation);
         $this->assertSame('Updated from webinar editor', data_get($saved->design, 'headline'));
+        $this->assertFalse((bool) data_get($saved->design, 'positions.recipient.bold'));
         $this->assertEqualsWithDelta(0.75, (float) data_get($saved->design, 'canvas_aspect_ratio'), 0.00001);
         Storage::disk('public')->assertExists(str_replace('/storage/', '', data_get($saved->design, 'template_image')));
     }
@@ -337,7 +339,7 @@ class StorageUploadsTest extends TestCase
     {
         Storage::fake('public');
         $admin = $this->getSuperAdmin();
-        $user = User::whereHas('roles', fn ($query) => $query->where('slug', 'learner'))->firstOrFail();
+        $user = User::whereHas('registrations')->firstOrFail();
         $webinar = $this->getOrCreateWebinar($admin);
         $path = UploadedFile::fake()->image('download-bg.jpg', 1200, 800)->storeAs('certificates', 'download-bg.jpg', 'public');
         $template = CertificateTemplate::create([
@@ -346,7 +348,9 @@ class StorageUploadsTest extends TestCase
             'design' => [
                 'template_image' => '/storage/'.$path,
                 'canvas_aspect_ratio' => 1.5,
-                'positions' => [],
+                'positions' => [
+                    'recipient' => ['x' => 50, 'y' => 44, 'width' => 55, 'scale' => 100, 'bold' => 0],
+                ],
                 'visible_elements' => [
                     'headline' => false,
                     'recipient' => true,
@@ -370,7 +374,7 @@ class StorageUploadsTest extends TestCase
             ['webinar_id' => $webinar->id, 'user_id' => $user->id],
             [
                 'template_id' => $template->id,
-                'credential_id' => (string) \Illuminate\Support\Str::uuid(),
+                'credential_id' => (string) Str::uuid(),
                 'status' => 'approved',
                 'issued_at' => now(),
                 'revoked_at' => null,
@@ -385,6 +389,7 @@ class StorageUploadsTest extends TestCase
         $response->assertHeader('Content-Type', 'application/pdf');
         $this->assertStringContainsString('/Subtype /Image', $response->getContent());
         $this->assertStringContainsString($user->name, $response->getContent());
+        $this->assertStringContainsString('/F1 27 Tf', $response->getContent());
         $this->assertStringNotContainsString($webinar->title, $response->getContent());
         $this->assertStringNotContainsString('INTERNAL-NAME-MUST-NOT-PRINT', $response->getContent());
     }

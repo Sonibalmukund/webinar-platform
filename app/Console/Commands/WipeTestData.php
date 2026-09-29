@@ -19,6 +19,7 @@ class WipeTestData extends Command
 
         if (! $superAdmin) {
             $this->error('No super-admin user found! Aborting for safety.');
+
             return self::FAILURE;
         }
 
@@ -26,6 +27,7 @@ class WipeTestData extends Command
 
         if (! $this->option('force') && ! $this->confirm('Are you sure you want to wipe all test data and non-admin users?')) {
             $this->info('Operation cancelled.');
+
             return self::SUCCESS;
         }
 
@@ -91,10 +93,12 @@ class WipeTestData extends Command
             DB::commit();
 
             $this->info("Wipe complete! Super Admin ({$superAdmin->email}) preserved. Database is completely clean for fresh testing.");
+
             return self::SUCCESS;
         } catch (\Throwable $e) {
             DB::rollBack();
-            $this->error('Failed to wipe data: ' . $e->getMessage());
+            $this->error('Failed to wipe data: '.$e->getMessage());
+
             return self::FAILURE;
         } finally {
             Schema::enableForeignKeyConstraints();

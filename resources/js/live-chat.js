@@ -8,8 +8,8 @@ const escapeHtml = str => String(str || '').replace(/[&<>'"]/g, tag => ({
 // Fetch a fresh snapshot after events and reconnects so missed/deleted messages reconcile.
 document.addEventListener('DOMContentLoaded', () => {
     const admin = document.querySelector('[data-admin-live-chat]');
-    const learner = document.querySelector('[data-learner-live-chat]');
-    const root = admin || learner;
+    const attendee = document.querySelector('[data-attendee-live-chat]');
+    const root = admin || attendee;
     if (!root || !window.Echo) return;
     const status = document.querySelector('[data-chat-connection]');
     const error = document.querySelector('[data-chat-error]');
@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (className) node.className = className;
         return node;
     };
-    const renderLearner = messages => {
+    const renderAttendee = messages => {
         const fragment = document.createDocumentFragment();
         const tracker = document.querySelector('[data-attendance-tracker]');
         const slug = tracker?.dataset.webinarSlug || root.dataset.webinarSlug || root.dataset.webinarId;
@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (current && updated) current.replaceChildren(...updated.childNodes);
                     }
                     document.querySelector('#chatPersonSearch')?.dispatchEvent(new Event('input'));
-                } else renderLearner((await response.json()).messages || []);
+                } else renderAttendee((await response.json()).messages || []);
                 stream.scrollTop = nearBottom ? stream.scrollHeight : scrollTop;
             } while (queued);
         } catch (exception) { setError(exception.message); }

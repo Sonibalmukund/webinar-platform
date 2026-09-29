@@ -1,8 +1,13 @@
 <?php
 
+use App\Http\Middleware\EnsureAdminAccess;
+use App\Http\Middleware\EnsureUserHasRole;
+use App\Support\FrontendAuth;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -16,30 +21,32 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->redirectGuestsTo(fn (\Illuminate\Http\Request $request) => \App\Support\FrontendAuth::guestRedirect($request));
-        $middleware->redirectUsersTo(function (\Illuminate\Http\Request $request) {
+        $middleware->redirectGuestsTo(fn (Request $request) => FrontendAuth::guestRedirect($request));
+        $middleware->redirectUsersTo(function (Request $request) {
             if ($request->user()?->isAdmin()) {
                 return route('admin.dashboard');
             }
-            $webinar = \App\Support\FrontendAuth::webinar($request);
+            $webinar = FrontendAuth::webinar($request);
             if ($webinar) {
                 return route('webinars.dashboard', $webinar);
             }
+
             return route('dashboard');
         });
         $middleware->alias([
-            'role' => \App\Http\Middleware\EnsureUserHasRole::class,
-            'admin.access' => \App\Http\Middleware\EnsureAdminAccess::class,
+            'role' => EnsureUserHasRole::class,
+            'admin.access' => EnsureAdminAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, \Illuminate\Http\Request $request) {
+        $exceptions->render(function (TokenMismatchException $e, Request $request) {
             if ($request->expectsJson()) {
                 return response()->json([
                     'message' => 'Your session expired. Please refresh and try again.',
                     'csrf_token' => csrf_token(),
                 ], 419);
             }
+
             return redirect()->back()
                 ->withInput($request->except('_token', 'password', 'password_confirmation'))
                 ->withErrors(['login' => 'Your session was refreshed. Please try again.']);

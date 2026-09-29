@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Banner;
+use App\Models\Brand;
 use App\Models\Registration;
 use App\Models\Role;
 use App\Models\User;
@@ -80,10 +82,148 @@ class LearnerSimplifiedFlowTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin.webinars.create'))
             ->assertOk()
-            ->assertSee('5. Dynamic Fields')
+            ->assertSee('3. Registration &amp; Publish', false)
             ->assertSee('name="registration_enabled"', false)
-            ->assertSee('id="pollCorrectIndex"', false)
+            ->assertSee('data-certificate-visibility="headline"', false)
+            ->assertSee('role="switch" name="certificate_visible_elements[headline]"', false)
+            ->assertSee('type="hidden" id="certificateOrientation" name="certificate_orientation"', false)
+            ->assertDontSee('<span>Orientation</span>', false)
+            ->assertSee('data-certificate-field="headline"', false)
+            ->assertSee('data-certificate-designer-only', false)
+            ->assertSee('Upload a certificate background to customize its content and open the live preview.')
+            ->assertSee('Add another speaker')
+            ->assertDontSee('Select existing speakers')
+            ->assertSee('Maximum 10 MB each.')
+            ->assertSee('Advanced element positioning')
+            ->assertSee('Attendee name (automatic)')
+            ->assertSee('Attendee preview name')
+            ->assertSee('id="certificateBold"', false)
+            ->assertSee('data-position-bold="recipient"', false)
+            ->assertSee('Horizontal (X %)')
+            ->assertSee('Vertical (Y %)')
+            ->assertDontSee('Drag to reposition or edit X/Y inputs')
+            ->assertDontSee('Save changes')
+            ->assertSee('Add another poll')
+            ->assertSee('data-poll-correct', false)
+            ->assertSee('Correct answer visibility')
             ->assertDontSee('name="poll_correct_index" value=', false);
+    }
+
+    public function test_admin_can_create_multiple_polls_from_webinar_wizard(): void
+    {
+        $admin = $this->user('super-admin');
+
+        $this->actingAs($admin)->post(route('admin.webinars.store'), [
+            'title' => 'Multiple Poll Webinar',
+            'status' => 'draft',
+            'language' => 'en',
+            'timezone' => 'Asia/Kolkata',
+            'registration_type' => 'free',
+            'polls_enabled' => '1',
+            'new_polls' => [
+                ['question' => 'First question?', 'answers' => ['One', 'Two'], 'correct_index' => '1', 'answer_reveal' => 'immediate', 'status' => 'draft', 'allow_multiple' => '0'],
+                ['question' => 'Second question?', 'answers' => ['Alpha', 'Beta'], 'correct_index' => '0', 'answer_reveal' => 'after_webinar', 'status' => 'draft', 'allow_multiple' => '0'],
+            ],
+        ])->assertRedirect(route('admin.webinars.index'));
+
+        $webinar = Webinar::where('title', 'Multiple Poll Webinar')->firstOrFail();
+        $this->assertDatabaseHas('polls', ['webinar_id' => $webinar->id, 'question' => 'First question?', 'answer_reveal' => 'immediate']);
+        $this->assertDatabaseHas('polls', ['webinar_id' => $webinar->id, 'question' => 'Second question?', 'answer_reveal' => 'after_webinar']);
+        $this->assertDatabaseHas('poll_options', ['label' => 'Two', 'is_correct' => true]);
+        $this->assertDatabaseHas('poll_options', ['label' => 'Alpha', 'is_correct' => true]);
+    }
+
+    public function test_webinar_builder_saves_multiple_speakers_and_requires_a_brand_name(): void
+    {
+        $admin = $this->user('super-admin');
+
+        $this->actingAs($admin)->post(route('admin.webinars.store'), [
+            'title' => 'Speaker Builder Webinar',
+            'status' => 'draft',
+            'language' => 'en',
+            'timezone' => 'Asia/Kolkata',
+            'registration_type' => 'free',
+            'branding_assets_present' => '1',
+            'speakers' => [
+                ['name' => 'First Speaker', 'headline' => 'Host', 'company' => 'Acme'],
+                ['name' => 'Second Speaker', 'headline' => 'Guest', 'company' => 'Beta'],
+            ],
+        ])->assertRedirect(route('admin.webinars.index'));
+
+        $webinar = Webinar::where('title', 'Speaker Builder Webinar')->firstOrFail();
+        $this->assertSame(2, $webinar->speakers()->count());
+        $this->assertDatabaseHas('speakers', ['name' => 'First Speaker', 'company' => 'Acme']);
+        $this->assertDatabaseHas('speakers', ['name' => 'Second Speaker', 'company' => 'Beta']);
+
+        $this->actingAs($admin)->from(route('admin.webinars.create'))->post(route('admin.webinars.store'), [
+            'title' => 'Brand Validation Webinar',
+            'status' => 'draft',
+            'language' => 'en',
+            'timezone' => 'Asia/Kolkata',
+            'registration_type' => 'free',
+            'branding_assets_present' => '1',
+            'brands' => [['name' => '', 'logo_url' => 'https://example.com/logo.png']],
+        ])->assertRedirect(route('admin.webinars.create'))->assertSessionHasErrors('brands.0.name');
+    }
+
+    public function test_dynamic_banner_keys_are_never_used_as_database_display_order(): void
+    {
+        $admin = $this->user('super-admin');
+
+        $this->actingAs($admin)->post(route('admin.webinars.store'), [
+            'title' => 'Safe Banner Ordering',
+            'status' => 'draft',
+            'language' => 'en',
+            'timezone' => 'Asia/Kolkata',
+            'registration_type' => 'free',
+            'branding_assets_present' => '1',
+            'banners' => [
+                1790327030429 => [
+                    'title' => 'Landing image',
+                    'media_type' => 'image',
+                    'media_url' => 'https://example.com/banner.png',
+                ],
+            ],
+        ])->assertRedirect(route('admin.webinars.index'));
+
+        $webinar = Webinar::where('title', 'Safe Banner Ordering')->firstOrFail();
+        $this->assertDatabaseHas('banners', [
+            'webinar_id' => $webinar->id,
+            'title' => 'Landing image',
+            'display_order' => 0,
+        ]);
+    }
+
+    public function test_existing_brand_and_banner_can_be_removed_from_the_webinar_builder(): void
+    {
+        $admin = $this->user('super-admin');
+        $webinar = Webinar::create([
+            'created_by' => $admin->id,
+            'title' => 'Removable Branding',
+            'slug' => 'removable-branding-'.uniqid(),
+            'status' => 'draft',
+            'language' => 'en',
+            'timezone' => 'Asia/Kolkata',
+            'registration_type' => 'free',
+        ]);
+        $brand = Brand::create(['webinar_id' => $webinar->id, 'name' => 'Old Brand', 'logo_path' => '/old-brand.png', 'is_active' => true, 'display_order' => 0]);
+        $banner = Banner::create(['webinar_id' => $webinar->id, 'title' => 'Old Banner', 'media_type' => 'image', 'media_path' => '/old-banner.png', 'is_active' => true, 'display_order' => 0]);
+
+        $this->actingAs($admin)->put(route('admin.webinars.update', $webinar), [
+            'title' => $webinar->title,
+            'status' => 'draft',
+            'language' => 'en',
+            'timezone' => 'Asia/Kolkata',
+            'registration_type' => 'free',
+            'branding_assets_present' => '1',
+            'remove_brand_ids' => [$brand->id],
+            'remove_banner_ids' => [$banner->id],
+            'brands' => [['id' => $brand->id, 'name' => $brand->name]],
+            'banners' => [['id' => $banner->id, 'title' => $banner->title, 'media_type' => 'image', 'media_url' => '']],
+        ])->assertRedirect(route('admin.webinars.index'));
+
+        $this->assertDatabaseMissing('brands', ['id' => $brand->id]);
+        $this->assertDatabaseMissing('banners', ['id' => $banner->id]);
     }
 
     public function test_admin_public_webinar_link_uses_same_tab_and_does_not_auto_open_registration(): void

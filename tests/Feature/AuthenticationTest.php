@@ -31,30 +31,29 @@ class AuthenticationTest extends TestCase
         $this->get('/admin/dashboard')->assertOk();
     }
 
-    public function test_learner_cannot_open_admin_dashboard(): void
+    public function test_registered_attendee_cannot_open_admin_dashboard(): void
     {
-        $role = Role::firstOrCreate(['slug' => 'learner'], ['name' => 'Learner']);
-        $user = User::updateOrCreate(['email' => 'learner@webinarly.test'], ['name' => 'John Anderson', 'password' => 'Webinar@123']);
-        $user->roles()->sync([$role->id]);
+        $user = User::updateOrCreate(['email' => 'attendee@webinarly.test'], ['name' => 'John Anderson', 'password' => 'Webinar@123']);
 
         $this->actingAs($user)->get('/admin/dashboard')->assertForbidden();
     }
 
-    public function test_new_registration_is_saved_as_a_learner_account(): void
+    public function test_new_registration_is_saved_without_an_attendee_role(): void
     {
         $country = Country::where('iso2', 'IN')->firstOrFail();
         $state = State::where('country_id', $country->id)->where('name', 'Gujarat')->firstOrFail();
         $city = City::where('state_id', $state->id)->firstOrFail();
         $requiredField = SignupField::where('is_required', true)->first();
         $this->post('/register', [
-            'name' => 'New Learner', 'email' => 'new.learner@example.com',
+            'name' => 'New Attendee', 'email' => 'new.attendee@example.com',
             'password' => 'SecurePass123', 'password_confirmation' => 'SecurePass123',
             'country_id' => $country->id, 'state_id' => $state->id, 'city_id' => $city->id,
             'custom' => $requiredField ? [$requiredField->id => $requiredField->options()->value('value')] : [],
         ])->assertRedirect(route('dashboard'));
 
-        $this->assertDatabaseHas('users', ['name' => 'New Learner', 'email' => 'new.learner@example.com']);
-        $this->assertDatabaseHas('role_user', ['user_id' => User::where('email', 'new.learner@example.com')->value('id')]);
+        $user = User::where('email', 'new.attendee@example.com')->firstOrFail();
+        $this->assertDatabaseHas('users', ['name' => 'New Attendee', 'email' => 'new.attendee@example.com']);
+        $this->assertDatabaseMissing('role_user', ['user_id' => $user->id]);
     }
 
     public function test_learner_can_reserve_a_webinar_seat(): void
@@ -178,7 +177,7 @@ class AuthenticationTest extends TestCase
         $this->assertDatabaseHas('poll_responses', ['poll_id' => $poll->id, 'poll_option_id' => $option->id, 'user_id' => $learner->id]);
         $this->assertDatabaseMissing('poll_responses', ['poll_id' => $poll->id, 'poll_option_id' => $secondOption->id, 'user_id' => $learner->id]);
 
-        $this->actingAs($learner)->get(route('webinars.mine'))->assertOk()->assertSee('Engagement Actions')->assertDontSee('Not My Webinar')->assertSee('Attendance');
+        $this->actingAs($learner)->get(route('dashboard'))->assertOk()->assertSee('Engagement Actions')->assertDontSee('Not My Webinar')->assertSee('Attendance');
 
         DB::table('certificates')->insert(['webinar_id' => $webinar->id, 'user_id' => $learner->id, 'credential_id' => (string) Str::uuid(), 'status' => 'approved', 'issued_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
         $this->actingAs($learner)->get(route('webinars.certificate.download', $webinar))->assertOk()->assertHeader('content-type', 'application/pdf');

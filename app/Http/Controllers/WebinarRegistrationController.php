@@ -6,12 +6,14 @@ use App\Models\Registration;
 use App\Models\RegistrationAnswer;
 use App\Models\Webinar;
 use App\Support\AuditTrail;
+use App\Support\NotificationCampaignService;
+use App\Support\RegistrationAttribution;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class WebinarRegistrationController extends Controller
 {
-    public function store(Request $request, Webinar $webinar): RedirectResponse
+    public function store(Request $request, Webinar $webinar, NotificationCampaignService $campaigns): RedirectResponse
     {
         abort_unless($webinar->registrationForm?->is_active, 403, 'Registration is disabled.');
         $fields = $webinar->registrationForm->fields()->with('options')->where('is_enabled', true)->get();
@@ -49,7 +51,7 @@ class WebinarRegistrationController extends Controller
             : ($webinar->max_attendees && $admittedCount >= $webinar->max_attendees ? 'waitlisted' : 'approved');
         $registration = Registration::updateOrCreate(
             ['webinar_id' => $webinar->id, 'email' => $request->user()->email],
-            ['user_id' => $request->user()->id, 'status' => $status, 'source' => 'web', 'registered_at' => now(), 'approved_at' => $status === 'approved' ? now() : null]
+            ['user_id' => $request->user()->id, 'status' => $status, 'registered_at' => now(), 'approved_at' => $status === 'approved' ? now() : null] + RegistrationAttribution::values($request, $webinar, 'web')
         );
         foreach ($fields as $field) {
             $lowerLabel = strtolower(trim($field->label));
@@ -72,6 +74,9 @@ class WebinarRegistrationController extends Controller
             }
         }
         AuditTrail::record('registration.created', $registration, 'Webinar registration submitted.', ['status' => $status, 'webinar_id' => $webinar->id]);
+        if ($registration->wasRecentlyCreated) {
+            $campaigns->sendAfterRegistration($webinar, $request->user());
+        }
 
         if ($status === 'waitlisted') {
             return redirect()->route('webinars.show', $webinar)->with('registration_status', 'The webinar is full. You have been added to the waitlist.');

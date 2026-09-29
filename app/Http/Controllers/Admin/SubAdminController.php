@@ -33,7 +33,7 @@ class SubAdminController extends Controller
 
     private function form(User $subAdmin): View
     {
-        return view('pages.admin.subadmins.form', ['subAdmin' => $subAdmin, 'webinars' => Webinar::orderBy('title')->get()]);
+        return view('pages.admin.subadmins.add_edit', ['subAdmin' => $subAdmin, 'webinars' => Webinar::orderBy('title')->get()]);
     }
 
     public function store(Request $request): RedirectResponse

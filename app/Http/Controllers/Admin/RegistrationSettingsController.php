@@ -129,12 +129,12 @@ class RegistrationSettingsController extends Controller
 
     public function createWebinarField(Webinar $webinar): View
     {
-        return view('pages.admin.registration-field-form', ['webinar' => $webinar->load('registrationForm.fields'), 'field' => new RegistrationField]);
+        return view('pages.admin.registration_field_add_edit', ['webinar' => $webinar->load('registrationForm.fields'), 'field' => new RegistrationField]);
     }
 
     public function editWebinarField(RegistrationField $field): View
     {
-        return view('pages.admin.registration-field-form', ['webinar' => $field->form->webinar->load('registrationForm.fields'), 'field' => $field->load('options')]);
+        return view('pages.admin.registration_field_add_edit', ['webinar' => $field->form->webinar->load('registrationForm.fields'), 'field' => $field->load('options')]);
     }
 
     public function updateWebinarField(Request $request, RegistrationField $field): RedirectResponse

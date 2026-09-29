@@ -8,8 +8,8 @@ use App\Models\Brand;
 use App\Models\Webinar;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -58,7 +58,7 @@ class GeneralSettingsController extends Controller
 
     public function bannerForm(?Banner $banner = null): View
     {
-        return view('pages.admin.general.banner-form', ['banner' => $banner ?? new Banner, 'webinars' => Webinar::orderBy('title')->get()]);
+        return view('pages.admin.general.banner_add_edit', ['banner' => $banner ?? new Banner, 'webinars' => Webinar::orderBy('title')->get()]);
     }
 
     public function saveBanner(Request $request, ?Banner $banner = null): RedirectResponse
@@ -100,7 +100,7 @@ class GeneralSettingsController extends Controller
         $tz = $webinar?->timezone ?: 'UTC';
         if ($request->filled('starts_at')) {
             try {
-                $data['starts_at'] = \Illuminate\Support\Carbon::parse($request->input('starts_at'), $tz)->utc();
+                $data['starts_at'] = Carbon::parse($request->input('starts_at'), $tz)->utc();
             } catch (\Exception $e) {
                 $data['starts_at'] = null;
             }
@@ -110,7 +110,7 @@ class GeneralSettingsController extends Controller
 
         if ($request->filled('ends_at')) {
             try {
-                $data['ends_at'] = \Illuminate\Support\Carbon::parse($request->input('ends_at'), $tz)->utc();
+                $data['ends_at'] = Carbon::parse($request->input('ends_at'), $tz)->utc();
             } catch (\Exception $e) {
                 $data['ends_at'] = null;
             }
@@ -180,7 +180,7 @@ class GeneralSettingsController extends Controller
 
     public function brandForm(?Brand $brand = null): View
     {
-        return view('pages.admin.general.brand-form', ['brand' => $brand ?? new Brand, 'webinars' => Webinar::orderBy('title')->get()]);
+        return view('pages.admin.general.brand_add_edit', ['brand' => $brand ?? new Brand, 'webinars' => Webinar::orderBy('title')->get()]);
     }
 
     public function saveBrand(Request $request, ?Brand $brand = null): RedirectResponse

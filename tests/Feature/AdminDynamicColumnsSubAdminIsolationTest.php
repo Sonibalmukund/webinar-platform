@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Webinar;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AdminDynamicColumnsSubAdminIsolationTest extends TestCase
@@ -61,7 +62,7 @@ class AdminDynamicColumnsSubAdminIsolationTest extends TestCase
         $perms = [
             'registrations.view', 'users.view', 'attendance.view',
             'poll-logs.view', 'certificate-logs.view', 'polls.view', 'certificates.view',
-            'q-and-a.view', 'feedback.view'
+            'q-and-a.view', 'feedback.view',
         ];
         foreach ($perms as $slug) {
             $perm = Permission::firstOrCreate(['slug' => $slug], ['name' => $slug, 'module' => strtok($slug, '.')]);
@@ -174,7 +175,7 @@ class AdminDynamicColumnsSubAdminIsolationTest extends TestCase
         DB::table('certificates')->insert([
             'webinar_id' => $webinarA->id,
             'user_id' => $learner->id,
-            'credential_id' => (string) \Illuminate\Support\Str::uuid(),
+            'credential_id' => (string) Str::uuid(),
             'status' => 'pending',
             'created_at' => now(),
             'updated_at' => now(),

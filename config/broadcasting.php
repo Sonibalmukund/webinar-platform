@@ -32,11 +32,11 @@ return [
 
         'reverb' => [
             'driver' => 'reverb',
-            'key' => env('REVERB_APP_KEY','webinar-local-key'),
-            'secret' => env('REVERB_APP_SECRET','webinar-local-secret'),
-            'app_id' => env('REVERB_APP_ID','webinar-local'),
+            'key' => env('REVERB_APP_KEY', 'webinar-local-key'),
+            'secret' => env('REVERB_APP_SECRET', 'webinar-local-secret'),
+            'app_id' => env('REVERB_APP_ID', 'webinar-local'),
             'options' => [
-                'host' => env('REVERB_HOST','127.0.0.1'),
+                'host' => env('REVERB_HOST', '127.0.0.1'),
                 'port' => env('REVERB_PORT', 8080),
                 'scheme' => env('REVERB_SCHEME', 'http'),
                 'useTLS' => env('REVERB_SCHEME', 'http') === 'https',

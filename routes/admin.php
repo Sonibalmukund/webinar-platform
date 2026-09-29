@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\WebinarController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\WebinarController as PublicWebinarController;
 use App\Models\Banner;
 use App\Models\Brand;
 use Illuminate\Http\Request;
@@ -33,6 +34,7 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::get('/admin/profile', [ProfileController::class, 'adminProfile'])->name('admin.profile');
     Route::put('/admin/profile', [ProfileController::class, 'update'])->name('admin.profile.update');
     Route::get('/admin/users', [RegistrationController::class, 'users'])->name('admin.users');
+    Route::get('/admin/users/export', [RegistrationController::class, 'exportUsers'])->name('admin.users.export');
     Route::get('/admin/attendance', [AttendanceController::class, 'index'])->name('admin.attendance');
     Route::get('/admin/attendance/export', [AttendanceController::class, 'export'])->name('admin.attendance.export');
     Route::get('/admin/registrations', [RegistrationController::class, 'index'])->name('admin.registrations');
@@ -60,6 +62,7 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::post('/admin/webinars', [WebinarController::class, 'store'])->name('admin.webinars.store');
     Route::get('/admin/webinars/{webinar}/edit', [WebinarController::class, 'edit'])->name('admin.webinars.edit');
     Route::get('/admin/webinars/{webinar}/live-control', [WebinarController::class, 'live'])->name('admin.webinars.live');
+    Route::get('/admin/webinars/{webinar}/preview-room', [PublicWebinarController::class, 'dashboard'])->name('admin.webinars.preview-room');
     Route::get('/admin/webinars/{webinar}/live-viewers', [WebinarController::class, 'liveViewers'])->name('admin.webinars.live-viewers');
     Route::put('/admin/webinars/{webinar}/live-control', [WebinarController::class, 'controls'])->name('admin.webinars.controls');
     Route::put('/admin/webinars/{webinar}/announcement', [WebinarController::class, 'announcement'])->name('admin.webinars.announcement');
@@ -70,6 +73,7 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::post('/admin/webinars/{webinar}/clone', [WebinarController::class, 'clone'])->name('admin.webinars.clone');
     Route::get('/admin/polls', [PollController::class, 'index'])->name('admin.polls.index');
     Route::get('/admin/poll-logs', [PollController::class, 'logs'])->name('admin.polls.logs');
+    Route::get('/admin/poll-logs/export', [PollController::class, 'exportLogs'])->name('admin.polls.logs.export');
     Route::get('/admin/polls/create', [PollController::class, 'create'])->name('admin.polls.create');
     Route::post('/admin/polls', [PollController::class, 'store'])->name('admin.polls.store');
     Route::get('/admin/polls/{poll}/edit', [PollController::class, 'edit'])->name('admin.polls.edit');
@@ -129,9 +133,11 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::post('/admin/chats/{webinar}', [ChatController::class, 'store'])->name('admin.chats.store');
     Route::delete('/admin/chats/{webinar}/messages/{message}', [ChatController::class, 'destroy'])->name('admin.chats.messages.destroy');
     Route::get('/admin/comments', [EngagementController::class, 'comments'])->name('admin.comments.index');
+    Route::get('/admin/comments/export', [EngagementController::class, 'exportComments'])->name('admin.comments.export');
     Route::get('/admin/comments/{webinar}', [EngagementController::class, 'commentsShow'])->name('admin.comments.show');
     Route::delete('/admin/comments/{webinar}/{item}', [EngagementController::class, 'removeComment'])->name('admin.comments.destroy');
     Route::get('/admin/feedback', [EngagementController::class, 'feedback'])->name('admin.feedback.index');
+    Route::get('/admin/feedback/export', [EngagementController::class, 'exportFeedback'])->name('admin.feedback.export');
     Route::get('/admin/feedback/{webinar}', [EngagementController::class, 'feedbackShow'])->name('admin.feedback.show');
     Route::patch('/admin/feedback/{webinar}/{item}', [EngagementController::class, 'updateFeedback'])->name('admin.feedback.update');
     Route::get('/admin/questions', [QuestionController::class, 'index'])->name('admin.questions.index');
@@ -139,6 +145,9 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::post('/admin/questions/{question}/answer', [QuestionController::class, 'answer'])->name('admin.questions.answer');
     Route::get('/admin/notifications', [NotificationController::class, 'index'])->name('admin.notifications.index');
     Route::get('/admin/notifications/create', [NotificationController::class, 'create'])->name('admin.notifications.create');
+    Route::get('/admin/notifications/email-logs', [NotificationController::class, 'emailLogs'])->name('admin.notifications.email-logs');
+    Route::get('/admin/notifications/email-logs/export', [NotificationController::class, 'exportEmailLogs'])->name('admin.notifications.email-logs.export');
+    Route::get('/admin/notifications/{campaign}/whatsapp', [NotificationController::class, 'whatsapp'])->name('admin.notifications.whatsapp');
     Route::post('/admin/notifications', [NotificationController::class, 'store'])->name('admin.notifications.store');
     Route::redirect('/admin/settings', '/admin/profile');
 });

@@ -18,7 +18,7 @@ class NotificationController extends Controller
             return $row;
         });
 
-        return view('pages.user.notifications', compact('notifications'));
+        return view('pages.user.attendee_notifications', compact('notifications'));
     }
 
     public function read(Request $request, string $notification): RedirectResponse

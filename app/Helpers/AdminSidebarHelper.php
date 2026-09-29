@@ -14,32 +14,46 @@ final class AdminSidebarHelper
         $chatVisible = (clone $eventScope)->where('chat_enabled', true)->exists();
         $commentsVisible = (clone $eventScope)->where('comments_enabled', true)->exists();
         $items = [
-            self::item('Dashboard', 'grid-1x2', '/admin/dashboard', 'dashboard.view', false, 'Overview'),
-            self::item('Webinars', 'camera-video', '/admin/webinars', 'webinars.view', false, 'Webinar management'),
-            self::item('Dynamic Fields', 'ui-checks-grid', '/admin/dynamic-fields', 'dynamic-fields.view', false, 'Webinar management'),
-            self::item('Speakers', 'mic', '/admin/speakers', 'speakers.view', false, 'Webinar management'),
-            self::item('Users', 'people', '/admin/users', 'users.view', false, 'Audience'),
-            self::item('Attendance', 'person-video3', '/admin/attendance', 'attendance.view', false, 'Audience'),
-            ...($chatVisible ? [self::item('Live Chat', 'chat-dots', '/admin/chats', 'chat.view', false, 'Engagement')] : []),
-            ...($commentsVisible ? [self::item('Comments', 'chat-square-text', '/admin/comments', 'q-and-a.view', false, 'Engagement')] : []),
-            self::item('Polls', 'bar-chart', '/admin/polls', 'polls.view', false, 'Engagement'),
-            self::item('Poll Logs', 'clipboard-data', '/admin/poll-logs', 'poll-logs.view', false, 'Engagement'),
-            self::item('Feedback', 'star', '/admin/feedback', 'feedback.view', false, 'Engagement'),
-            self::item('Certificates', 'award', '/admin/certificates', 'certificates.view', false, 'Operations'),
-            self::item('Certificate Logs', 'journal-text', '/admin/certificates/logs', 'certificate-logs.view', false, 'Operations'),
-            self::item('Notifications', 'bell', '/admin/notifications', 'notifications.view', false, 'Operations'),
-            self::item('Reports', 'graph-up', '/admin/reports', 'reports.view', false, 'Operations'),
-            self::item('Profile', 'person-circle', '/admin/profile', '', false, ''),
-            self::item('Sub Admins', 'shield-check', '/admin/sub-admins', 'subadmins.view', true, 'Administration'),
-            self::item('Roles / Permissions', 'key', '/admin/permissions', 'permissions.view', true, 'Administration'),
-            self::group('General Settings', 'gear', 'generalSettingsSubmenu', [
-                self::childItem('Site Settings', '/admin/general-settings/site'),
-                self::childItem('Banners', '/admin/general-settings/banners'),
-                self::childItem('Brands', '/admin/general-settings/brands'),
-            ], 'settings.view', true, 'Administration'),
+            self::item('Dashboard', 'grid-1x2', '/admin/dashboard', 'dashboard.view', false, 'Workspace'),
+            self::item('Webinars', 'camera-video', '/admin/webinars', 'webinars.view', true, 'Workspace'),
+            self::group('Webinar Setup', 'sliders', 'webinarSetupSubmenu', array_filter([
+                self::childItem('Dynamic Fields', '/admin/dynamic-fields', 'dynamic-fields.view'),
+                self::childItem('Speakers', '/admin/speakers', 'speakers.view'),
+            ]), '', false, 'Workspace'),
+            self::group('Audience', 'people', 'audienceSubmenu', array_filter([
+                self::childItem('Users', '/admin/users', 'users.view'),
+                self::childItem('Attendance', '/admin/attendance', 'attendance.view'),
+            ]), '', false, 'Workspace'),
+            self::group('Engagement', 'chat-square-heart', 'engagementSubmenu', array_filter([
+                $chatVisible ? self::childItem('Live Chat', '/admin/chats', 'chat.view') : null,
+                $commentsVisible ? self::childItem('Comments', '/admin/comments', 'q-and-a.view') : null,
+                self::childItem('Polls', '/admin/polls', 'polls.view'),
+                self::childItem('Poll Logs', '/admin/poll-logs', 'poll-logs.view'),
+                self::childItem('Feedback', '/admin/feedback', 'feedback.view'),
+            ]), '', false, 'Manage'),
+            self::group('Certificates', 'award', 'certificateSubmenu', array_filter([
+                self::childItem('Certificates', '/admin/certificates', 'certificates.view'),
+                self::childItem('Certificate Logs', '/admin/certificates/logs', 'certificate-logs.view'),
+            ]), '', false, 'Manage'),
+            self::group('Communication & Reports', 'megaphone', 'communicationSubmenu', array_filter([
+                self::childItem('Notifications', '/admin/notifications', 'notifications.view'),
+                self::childItem('Email Logs', '/admin/notifications/email-logs', 'notifications.view'),
+                self::childItem('Reports', '/admin/reports', 'reports.view'),
+            ]), '', false, 'Manage'),
+            self::group('Administration', 'gear', 'administrationSubmenu', array_filter([
+                self::childItem('Sub Admins', '/admin/sub-admins', 'subadmins.view', true),
+                self::childItem('Roles / Permissions', '/admin/permissions', 'permissions.view', true),
+                self::childItem('Site Settings', '/admin/general-settings/site', 'settings.view', true),
+                self::childItem('Banners', '/admin/general-settings/banners', 'settings.view', true),
+                self::childItem('Brands', '/admin/general-settings/brands', 'settings.view', true),
+            ]), '', false, 'Manage'),
         ];
 
-        return array_values(array_filter($items, fn (array $item) => $user?->hasRole('super-admin') || (! $item['super_admin_only'] && ($item['permission'] === '' || $user?->hasPermission($item['permission']) || ($item['permission'] === 'users.view' && $user?->hasPermission('registrations.view')) || ($item['permission'] === 'registrations.view' && ($user?->hasPermission('registrations.view') || $user?->hasPermission('attendance.view') || $user?->hasPermission('users.view')))))));
+        return array_values(array_filter($items, function (array $item) {
+            return ($item['type'] ?? '') === 'group'
+                ? count($item['children']) > 0
+                : self::allowed($item['permission'], $item['super_admin_only']);
+        }));
     }
 
     private static function item(string $title, string $icon, string $route, string $permission, bool $superAdminOnly = false, string $section = 'Management'): array
@@ -91,11 +105,39 @@ final class AdminSidebarHelper
         ];
     }
 
-    private static function childItem(string $label, string $url): array
+    private static function childItem(string $label, string $url, string $permission = '', bool $superAdminOnly = false): ?array
     {
+        if (! self::allowed($permission, $superAdminOnly)) {
+            return null;
+        }
         $path = '/'.ltrim(request()->path(), '/');
         $active = $path === $url || Str::startsWith($path, rtrim($url, '/').'/');
+        if ($url === '/admin/certificates' && Str::startsWith($path, '/admin/certificates/logs')) {
+            $active = false;
+        }
+        if ($url === '/admin/dynamic-fields') {
+            $active = $active || Str::startsWith($path, '/admin/registration-settings/') || Str::startsWith($path, '/admin/webinar-registration-fields/');
+        }
+        if ($url === '/admin/notifications') {
+            $active = $path === $url || ($active && ! Str::startsWith($path, '/admin/notifications/email-logs'));
+        }
 
         return compact('label', 'url', 'active');
+    }
+
+    private static function allowed(string $permission, bool $superAdminOnly = false): bool
+    {
+        $user = auth()->user();
+        if ($user?->hasRole('super-admin')) {
+            return true;
+        }
+        if ($superAdminOnly) {
+            return false;
+        }
+        if ($permission === '' || $user?->hasPermission($permission)) {
+            return true;
+        }
+
+        return $permission === 'users.view' && $user?->hasPermission('registrations.view');
     }
 }

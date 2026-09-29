@@ -13,6 +13,22 @@ window.Chart = Chart;
 
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-webinar-datetime-picker]').forEach(input => {
+        let valueBeforeOpen = input.value;
+        let isCommitting = false;
+        let yearSelect = null;
+        const minimumYear = new Date().getFullYear();
+        const syncYearSelect = instance => {
+            if (!yearSelect) return;
+            const year = Math.max(minimumYear, Number(instance.currentYear));
+            if (Number(instance.currentYear) < minimumYear) {
+                instance.changeYear(minimumYear);
+                return;
+            }
+            if (![...yearSelect.options].some(option => Number(option.value) === year)) {
+                yearSelect.add(new Option(String(year), String(year)));
+            }
+            yearSelect.value = String(year);
+        };
         const picker = flatpickr(input, {
             enableTime: true,
             time_24hr: false,
@@ -21,28 +37,89 @@ document.addEventListener('DOMContentLoaded', () => {
             altInput: true,
             altFormat: 'd M Y · h:i K',
             dateFormat: 'Y-m-d\\TH:i',
+            minDate: input.dataset.minDate || null,
+            monthSelectorType: 'dropdown',
             disableMobile: true,
-            onChange: () => {
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
+            closeOnSelect: false,
+            onOpen: (_dates, _value, instance) => {
+                valueBeforeOpen = input.value;
+                if (valueBeforeOpen) instance.jumpToDate(valueBeforeOpen);
+                syncYearSelect(instance);
             },
+            onValueUpdate: (_dates, _value, instance) => {
+                if (!instance.isOpen || isCommitting) return;
+                input.value = valueBeforeOpen;
+                if (instance.altInput) {
+                    const committedDate = valueBeforeOpen ? instance.parseDate(valueBeforeOpen, 'Y-m-d\\TH:i') : null;
+                    instance.altInput.value = committedDate ? instance.formatDate(committedDate, instance.config.altFormat) : '';
+                }
+            },
+            onReady: (_dates, _value, instance) => {
+                const yearWrapper = instance.currentYearElement?.closest('.numInputWrapper');
+                if (yearWrapper) {
+                    yearSelect = document.createElement('select');
+                    yearSelect.className = 'flatpickr-yearDropdown';
+                    yearSelect.setAttribute('aria-label', 'Select year');
+                    const currentYear = minimumYear;
+                    const firstYear = currentYear;
+                    const lastYear = Math.max(currentYear + 50, instance.currentYear);
+                    for (let year = firstYear; year <= lastYear; year += 1) {
+                        yearSelect.add(new Option(String(year), String(year)));
+                    }
+                    yearSelect.value = String(instance.currentYear);
+                    yearSelect.addEventListener('change', () => instance.changeYear(Number(yearSelect.value)));
+                    yearWrapper.hidden = true;
+                    yearWrapper.insertAdjacentElement('afterend', yearSelect);
+                }
+
+                const actions = document.createElement('div');
+                actions.className = 'flatpickr-actions';
+                actions.innerHTML = '<button type="button" class="flatpickr-cancel">Cancel</button><button type="button" class="flatpickr-apply">Apply</button>';
+
+                actions.querySelector('.flatpickr-cancel').addEventListener('click', () => {
+                    isCommitting = true;
+                    if (valueBeforeOpen) instance.setDate(valueBeforeOpen, false, 'Y-m-d\\TH:i');
+                    else instance.clear(false);
+                    input.dispatchEvent(new CustomEvent('change', {
+                        bubbles: true,
+                        detail: { previousValue: input.value },
+                    }));
+                    instance.close();
+                    isCommitting = false;
+                });
+
+                actions.querySelector('.flatpickr-apply').addEventListener('click', () => {
+                    const previousValue = valueBeforeOpen;
+                    const selectedDate = instance.selectedDates[0];
+                    isCommitting = true;
+                    if (selectedDate) instance.setDate(selectedDate, false);
+                    else instance.clear(false);
+                    valueBeforeOpen = input.value;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new CustomEvent('change', {
+                        bubbles: true,
+                        detail: { previousValue },
+                    }));
+                    instance.close();
+                    isCommitting = false;
+                });
+
+                instance.calendarContainer.appendChild(actions);
+            },
+            onYearChange: (_dates, _value, instance) => syncYearSelect(instance),
         });
         input._flatpickr = picker;
     });
 
     const startsAt = document.querySelector('#webinarStartsAt');
     const endsAt = document.querySelector('#webinarEndsAt');
-    startsAt?._flatpickr?.config.onChange.push((dates) => {
-        const start = dates[0];
-        if (!start) return;
-        endsAt?._flatpickr?.set('minDate', start);
-        const currentEnd = endsAt?._flatpickr?.selectedDates[0];
-        if (!currentEnd || currentEnd <= start) {
-            const autoEnd = new Date(start.getTime() + 60 * 60 * 1000);
-            endsAt?._flatpickr?.setDate(autoEnd, true);
+    if (startsAt?.value) {
+        if (endsAt?.value && new Date(endsAt.value) <= new Date(startsAt.value)) {
+            endsAt._flatpickr?.clear(false);
+            endsAt.value = '';
         }
-    });
-    if (startsAt?.value) endsAt?._flatpickr?.set('minDate', startsAt.value);
+        endsAt?._flatpickr?.set('minDate', startsAt.value);
+    }
 });
 
 window.showToast = function(message, tone = 'success') {
@@ -642,8 +719,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     const fieldType = document.querySelector('#fieldType');
     const optionBuilder = document.querySelector('#optionBuilder');
-    fieldType?.addEventListener('change', () => optionBuilder?.classList.toggle('d-none', fieldType.value === 'text'));
-    fieldType?.addEventListener('change', () => optionBuilder?.classList.toggle('d-none', !['dropdown','radio','checkbox'].includes(fieldType.value)));
+    const syncOptionBuilder = () => {
+        const supportsOptions = ['dropdown', 'radio', 'checkbox'].includes(fieldType?.value);
+        optionBuilder?.classList.toggle('d-none', !supportsOptions);
+        if (!supportsOptions) {
+            const optionsInput = optionBuilder?.querySelector('[name="options"]');
+            if (optionsInput) optionsInput.value = '';
+        }
+    };
+    fieldType?.addEventListener('change', syncOptionBuilder);
+    syncOptionBuilder();
     const webinarCountry=document.querySelector('.webinar-location-country'), webinarState=document.querySelector('.webinar-location-state'), webinarCity=document.querySelector('.webinar-location-city');
     webinarCountry?.addEventListener('change',async()=>{if(webinarState){webinarState.disabled=true;fillSelect(webinarState,[],'Loading states...');const states=webinarCountry.value?await fetch(`/locations/states?country_id=${encodeURIComponent(webinarCountry.value)}`).then(r=>r.json()):[];fillSelect(webinarState,states,'Select state');webinarState.disabled=false}if(webinarCity)fillSelect(webinarCity,[],'Select city')});
     webinarState?.addEventListener('change',async()=>{if(!webinarCity)return;webinarCity.disabled=true;fillSelect(webinarCity,[],'Loading cities...');const cities=webinarState.value?await fetch(`/locations/cities?state_id=${encodeURIComponent(webinarState.value)}`).then(r=>r.json()):[];fillSelect(webinarCity,cities,'Select city');webinarCity.disabled=false});
@@ -729,17 +814,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderExperiencePreview=()=>{const primary=validHex(brandPrimary?.value)?brandPrimary.value:'#6d28d9',secondary=validHex(brandSecondary?.value)?brandSecondary.value:'#2563eb';document.querySelectorAll('[data-color-swatch="primary"]').forEach(node=>node.style.background=primary);document.querySelectorAll('[data-color-swatch="secondary"]').forEach(node=>node.style.background=secondary);document.querySelectorAll('[data-color-code="primary"]').forEach(node=>node.textContent=primary.toUpperCase());document.querySelectorAll('[data-color-code="secondary"]').forEach(node=>node.textContent=secondary.toUpperCase());if(!experienceFrame)return;const label=roomLayout?.selectedOptions[0]?.textContent?.trim()||'Interactive';const title=escapePreview(experienceFrame.dataset.previewTitle||'Your webinar title');experienceFrame.srcdoc=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#070b14;color:#fff}.top{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:#0c1322;border-bottom:1px solid #ffffff17}.brand{display:flex;align-items:center;gap:10px;font-weight:800}.mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,${primary},${secondary});display:grid;place-items:center}.live{padding:6px 10px;border-radius:20px;background:${primary}33;color:${primary};font-size:11px;font-weight:800}.stage{padding:22px;background:radial-gradient(circle at 90% 5%,${secondary}44,transparent 34%)}.hero{min-height:205px;border:1px solid #ffffff18;border-radius:16px;padding:24px;display:flex;flex-direction:column;justify-content:flex-end;background:linear-gradient(140deg,${primary}d9,${secondary}b8)}.hero small{letter-spacing:.15em;opacity:.78}.hero h1{margin:9px 0 5px;font-size:25px}.body{display:grid;grid-template-columns:1fr 130px;gap:12px;margin-top:12px}.tile{height:74px;border:1px solid #ffffff15;border-radius:12px;background:#111a2a;padding:13px}.bar{height:8px;border-radius:8px;background:linear-gradient(90deg,${primary},${secondary});margin-top:12px}</style></head><body><div class="top"><div class="brand"><span class="mark">▶</span>Virtual Room</div><span class="live">LIVE PREVIEW</span></div><main class="stage"><section class="hero"><small>${escapePreview(label.toUpperCase())} MODE</small><h1>${title}</h1><span>Your branded attendee experience</span></section><div class="body"><div class="tile">Stream & engagement<div class="bar"></div></div><div class="tile">Chat<br>Polls<br>Q&amp;A</div></div></main></body></html>`;};
     [roomLayout,brandPrimary,brandSecondary].forEach(input=>input?.addEventListener('input',renderExperiencePreview));renderExperiencePreview();
 
-    const svField=document.querySelector('#brandSvField'),pickerMarker=document.querySelector('#brandPickerMarker'),hueSlider=document.querySelector('#brandHueSlider'),nativeColor=document.querySelector('#brandNativeColor'),activeHex=document.querySelector('#brandActiveHex'),rgbReadout=document.querySelector('#brandRgbReadout'),hsvReadout=document.querySelector('#brandHsvReadout');
-    const colorTargets={primary:brandPrimary,secondary:brandSecondary};let activeColorTarget='primary',pickerHsv={h:260,s:.82,v:.85};
-    const syncPickerFromInput=()=>{const input=colorTargets[activeColorTarget];if(!input||!validHex(input.value))return;pickerHsv=rgbToHsv(hexToRgb(input.value));if(hueSlider)hueSlider.value=Math.round(pickerHsv.h);if(svField)svField.style.setProperty('--picker-hue',pickerHsv.h);if(pickerMarker){pickerMarker.style.left=`${pickerHsv.s*100}%`;pickerMarker.style.top=`${(1-pickerHsv.v)*100}%`;}if(nativeColor)nativeColor.value=input.value;if(activeHex)activeHex.textContent=`HEX ${input.value.toUpperCase()}`;if(rgbReadout){const rgb=hexToRgb(input.value);rgbReadout.textContent=`RGB ${rgb.r} · ${rgb.g} · ${rgb.b}`;}if(hsvReadout)hsvReadout.textContent=`HSV ${Math.round(pickerHsv.h)}° · ${Math.round(pickerHsv.s*100)}% · ${Math.round(pickerHsv.v*100)}%`;};
-    const applyPickerColor=()=>{const input=colorTargets[activeColorTarget];if(!input)return;input.value=rgbToHex(hsvToRgb(pickerHsv)).toUpperCase();renderExperiencePreview();syncPickerFromInput();};
-    document.querySelectorAll('[data-color-target]').forEach(button=>button.addEventListener('click',()=>{activeColorTarget=button.dataset.colorTarget;document.querySelectorAll('[data-color-target]').forEach(item=>item.classList.toggle('active',item===button));syncPickerFromInput();}));
-    document.querySelectorAll('[data-color-open]').forEach(button=>button.addEventListener('click',()=>{activeColorTarget=button.dataset.colorOpen;document.querySelectorAll('[data-color-target]').forEach(item=>item.classList.toggle('active',item.dataset.colorTarget===activeColorTarget));syncPickerFromInput();const modal=document.querySelector('#themeColorPickerModal');if(modal&&window.bootstrap)bootstrap.Modal.getOrCreateInstance(modal).show();}));
-    const pickSaturationValue=event=>{if(!svField)return;const rect=svField.getBoundingClientRect();pickerHsv.s=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width));pickerHsv.v=1-Math.max(0,Math.min(1,(event.clientY-rect.top)/rect.height));applyPickerColor();};
+    const svField=document.querySelector('#brandSvField'),pickerMarker=document.querySelector('#brandPickerMarker'),hueSlider=document.querySelector('#brandHueSlider'),nativeColor=document.querySelector('#brandNativeColor'),activeHex=document.querySelector('#brandActiveHex'),rgbReadout=document.querySelector('#brandRgbReadout'),hsvReadout=document.querySelector('#brandHsvReadout'),themeColorModal=document.querySelector('#themeColorPickerModal'),applyThemeColor=document.querySelector('#applyThemeColor');
+    const colorTargets={primary:brandPrimary,secondary:brandSecondary};
+    let activeColorTarget='primary',pickerHsv={h:260,s:.82,v:.85},draftColors={primary:'#6D28D9',secondary:'#2563EB'};
+    const syncPickerFromColor=color=>{if(!validHex(color))return;const normalized=color.toUpperCase();pickerHsv=rgbToHsv(hexToRgb(normalized));if(hueSlider)hueSlider.value=Math.round(pickerHsv.h);if(svField)svField.style.setProperty('--picker-hue',pickerHsv.h);if(pickerMarker){pickerMarker.style.left=`${pickerHsv.s*100}%`;pickerMarker.style.top=`${(1-pickerHsv.v)*100}%`;}if(nativeColor)nativeColor.value=normalized;if(activeHex){activeHex.value=normalized;activeHex.classList.remove('is-invalid');}if(rgbReadout){const rgb=hexToRgb(normalized);rgbReadout.textContent=`RGB ${rgb.r} · ${rgb.g} · ${rgb.b}`;}if(hsvReadout)hsvReadout.textContent=`HSV ${Math.round(pickerHsv.h)}° · ${Math.round(pickerHsv.s*100)}% · ${Math.round(pickerHsv.v*100)}%`;document.querySelectorAll(`#themeColorPickerModal [data-color-swatch="${activeColorTarget}"]`).forEach(node=>node.style.background=normalized);};
+    const syncPickerFromDraft=()=>syncPickerFromColor(draftColors[activeColorTarget]);
+    const updateDraftFromPicker=()=>{draftColors[activeColorTarget]=rgbToHex(hsvToRgb(pickerHsv)).toUpperCase();syncPickerFromDraft();};
+    document.querySelectorAll('[data-color-target]').forEach(button=>button.addEventListener('click',()=>{activeColorTarget=button.dataset.colorTarget;document.querySelectorAll('[data-color-target]').forEach(item=>item.classList.toggle('active',item===button));syncPickerFromDraft();}));
+    document.querySelectorAll('[data-color-open]').forEach(button=>button.addEventListener('click',()=>{draftColors={primary:validHex(brandPrimary?.value)?brandPrimary.value.toUpperCase():'#6D28D9',secondary:validHex(brandSecondary?.value)?brandSecondary.value.toUpperCase():'#2563EB'};activeColorTarget=button.dataset.colorOpen;document.querySelectorAll('[data-color-target]').forEach(item=>item.classList.toggle('active',item.dataset.colorTarget===activeColorTarget));syncPickerFromDraft();if(themeColorModal&&window.bootstrap)bootstrap.Modal.getOrCreateInstance(themeColorModal).show();}));
+    const pickSaturationValue=event=>{if(!svField)return;const rect=svField.getBoundingClientRect();pickerHsv.s=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width));pickerHsv.v=1-Math.max(0,Math.min(1,(event.clientY-rect.top)/rect.height));updateDraftFromPicker();};
     svField?.addEventListener('pointerdown',event=>{svField.setPointerCapture(event.pointerId);pickSaturationValue(event);});svField?.addEventListener('pointermove',event=>{if(svField.hasPointerCapture(event.pointerId))pickSaturationValue(event);});
-    hueSlider?.addEventListener('input',()=>{pickerHsv.h=Number(hueSlider.value);if(svField)svField.style.setProperty('--picker-hue',pickerHsv.h);applyPickerColor();});
-    nativeColor?.addEventListener('input',()=>{const input=colorTargets[activeColorTarget];if(input)input.value=nativeColor.value.toUpperCase();renderExperiencePreview();syncPickerFromInput();});
-    [brandPrimary,brandSecondary].forEach(input=>input?.addEventListener('input',()=>{renderExperiencePreview();if(input===colorTargets[activeColorTarget])syncPickerFromInput();}));syncPickerFromInput();
+    hueSlider?.addEventListener('input',()=>{pickerHsv.h=Number(hueSlider.value);if(svField)svField.style.setProperty('--picker-hue',pickerHsv.h);updateDraftFromPicker();});
+    nativeColor?.addEventListener('input',()=>{draftColors[activeColorTarget]=nativeColor.value.toUpperCase();syncPickerFromDraft();});
+    activeHex?.addEventListener('input',()=>{let value=activeHex.value.trim().toUpperCase();if(value&&!value.startsWith('#'))value=`#${value}`;const valid=validHex(value);activeHex.classList.toggle('is-invalid',!valid);if(valid){draftColors[activeColorTarget]=value;syncPickerFromDraft();}});
+    applyThemeColor?.addEventListener('click',()=>{if(!validHex(draftColors.primary)||!validHex(draftColors.secondary)){activeHex?.classList.add('is-invalid');return;}if(brandPrimary)brandPrimary.value=draftColors.primary;if(brandSecondary)brandSecondary.value=draftColors.secondary;renderExperiencePreview();bootstrap.Modal.getOrCreateInstance(themeColorModal).hide();});
+    [brandPrimary,brandSecondary].forEach(input=>input?.addEventListener('input',renderExperiencePreview));
+    draftColors={primary:validHex(brandPrimary?.value)?brandPrimary.value.toUpperCase():'#6D28D9',secondary:validHex(brandSecondary?.value)?brandSecondary.value.toUpperCase():'#2563EB'};syncPickerFromDraft();
 
     document.querySelectorAll('[data-site-preview-input]').forEach(input => input.addEventListener('change', event => {
         const file = event.target.files?.[0];
@@ -765,7 +855,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (titleEl) titleEl.textContent = title;
         if (badgeEl) badgeEl.textContent = badge;
-        if (metaEl) metaEl.textContent = src.length > 55 ? src.slice(0, 52) + '...' : src;
+        if (metaEl) metaEl.textContent = badge;
         if (openBtn) {
             openBtn.href = src || '#';
             openBtn.style.display = src ? 'inline-flex' : 'none';

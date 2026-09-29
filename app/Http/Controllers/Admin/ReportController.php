@@ -33,7 +33,14 @@ class ReportController extends Controller
 
             return ['webinar' => $webinar, 'registered' => $registered, 'attended' => $attended, 'rate' => $registered ? round($attended / $registered * 100) : 0, 'polls' => $eventPolls->count(), 'votes' => $votes->whereIn('poll_id', $eventPolls->pluck('id'))->count(), 'watch' => (int) $attendees->where('webinar_id', $webinar->id)->sum('watch_seconds')];
         });
+        $sourceBreakdown = $registrations->groupBy(fn ($registration) => filled($registration->utm_source)
+            ? $registration->utm_source
+            : (filled($registration->referral_code) ? 'Referral: '.$registration->referral_code : ($registration->source ?: 'Direct')))
+            ->map(fn ($rows, $source) => ['source' => $source, 'registrations' => $rows->count(), 'share' => $registrations->count() ? round($rows->count() / $registrations->count() * 100) : 0])
+            ->sortByDesc('registrations')->values();
+        $campaignBreakdown = $registrations->filter(fn ($registration) => filled($registration->utm_campaign))->groupBy('utm_campaign')
+            ->map(fn ($rows, $campaign) => ['campaign' => $campaign, 'registrations' => $rows->count()])->sortByDesc('registrations')->values();
 
-        return view('pages.admin.reports.index', ['webinars' => $webinars, 'selected' => $selected, 'registrations' => $registrations, 'attendees' => $attendees, 'polls' => $polls, 'votes' => $votes, 'trend' => $trend, 'maxTrend' => $maxTrend, 'performance' => $performance, 'watchSeconds' => (int) $attendees->sum('watch_seconds')]);
+        return view('pages.admin.reports.index', ['webinars' => $webinars, 'selected' => $selected, 'registrations' => $registrations, 'attendees' => $attendees, 'polls' => $polls, 'votes' => $votes, 'trend' => $trend, 'maxTrend' => $maxTrend, 'performance' => $performance, 'watchSeconds' => (int) $attendees->sum('watch_seconds'), 'sourceBreakdown' => $sourceBreakdown, 'campaignBreakdown' => $campaignBreakdown]);
     }
 }

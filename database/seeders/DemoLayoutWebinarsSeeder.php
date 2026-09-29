@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Poll;
-use App\Models\Role;
 use App\Models\User;
 use App\Models\Webinar;
 use Illuminate\Database\Seeder;
@@ -13,15 +12,10 @@ class DemoLayoutWebinarsSeeder extends Seeder
     public function run(): void
     {
         $admin = User::where('email', 'admin@gmail.com')->firstOrFail();
-        $learnerRole = Role::firstOrCreate(
-            ['slug' => 'learner'],
-            ['name' => 'Learner', 'description' => 'Webinar attendee access', 'is_system' => true]
-        );
-        $learner = User::firstOrCreate(
+        $attendee = User::firstOrCreate(
             ['email' => 'layout.tester@webinar.test'],
             ['name' => 'Layout Test Attendee', 'mobile' => '+91 90000 00002', 'password' => str()->random(40), 'status' => 'active', 'timezone' => 'Asia/Kolkata']
         );
-        $learner->roles()->syncWithoutDetaching([$learnerRole->id]);
 
         $examples = [
             [
@@ -112,8 +106,8 @@ class DemoLayoutWebinarsSeeder extends Seeder
             }
 
             $webinar->registrations()->updateOrCreate(
-                ['user_id' => $learner->id],
-                ['email' => $learner->email, 'status' => 'approved', 'source' => 'layout-demo-seeder', 'registered_at' => now(), 'approved_at' => now()]
+                ['user_id' => $attendee->id],
+                ['email' => $attendee->email, 'status' => 'approved', 'source' => 'layout-demo-seeder', 'registered_at' => now(), 'approved_at' => now()]
             );
         }
     }
