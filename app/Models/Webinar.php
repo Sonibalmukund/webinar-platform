@@ -55,6 +55,10 @@ class Webinar extends Model
 
     public function canEnter(): bool
     {
+        if (in_array($this->status, ['scheduled', 'live'], true) && data_get($this->settings, 'experience.early_room_open', false)) {
+            return true;
+        }
+
         return $this->status === 'live' || ($this->opensAt() && now()->greaterThanOrEqualTo($this->opensAt()) && (! $this->closesAt() || now()->lessThanOrEqualTo($this->closesAt())));
     }
 

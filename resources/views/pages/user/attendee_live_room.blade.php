@@ -20,7 +20,6 @@
 @section('shell')
     @php($xp = data_get($webinar->settings, 'experience', []))
     @php($roomLayout = ($xp['layout'] ?? 'presentation') === 'theater' ? 'theater' : 'presentation')
-    @php($brand = $brands->first())
     @php($dashboardLogo = $xp['logo_url'] ?? null)
     @php($displayBrand = $webinar->title)
     @php($waitingRoomImage = $xp['waiting_media_url'] ?? null)
@@ -1965,8 +1964,7 @@
                     <img src="{{ $dashboardLogo }}" alt="{{ $displayBrand }}">@else<span
                             class="event-brand-mark">{{ Str::of($displayBrand)->substr(0, 2)->upper() }}</span>
                     @endif
-                    <span>
-                        <small>{{ $displayBrand }}</small><strong>{{ $webinar->title }}</strong></span>
+                    <span><strong>{{ $displayBrand }}</strong></span>
                 </a></div>
             <div class="event-user"><span
                     class="event-state {{ $webinar->status }}"><i></i>{{ strtoupper($webinar->status) }}</span>@php(
@@ -2048,12 +2046,6 @@
                     </div>
                 </div><a class="theater-engagement-cue" href="#engagement-tabs"><i class="bi bi-arrow-down-circle"></i>
                     Scroll for Chat, Polls, Comments & Feedback</a>
-                @if (filled($webinar->description))
-                    <section class="event-section">
-                        <h2>About this event</h2>
-                        <p class="text-white-50 mb-0">{!! nl2br(e($webinar->description)) !!}</p>
-                    </section>
-                @endif
                 @if ($agenda->isNotEmpty() || $agendaNotes !== '')
                     <section class="event-section dashboard-agenda event-program-section">
                         <div class="agenda-heading">
@@ -2318,8 +2310,7 @@
                 </div>
             </aside>
         </main>
-        <footer class="event-footer"><span><strong>{{ $displayBrand }}</strong> ·
-                {{ $webinar->title }}</span><span>{{ $siteSettings['footer_text'] ?? '© ' . date('Y') . ' All rights reserved.' }}
+        <footer class="event-footer"><span><strong>{{ $displayBrand }}</strong></span><span>{{ $siteSettings['footer_text'] ?? '© ' . date('Y') . ' All rights reserved.' }}
                 · Privacy · Terms</span></footer>
     </div>
     <script>

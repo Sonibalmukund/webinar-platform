@@ -65,7 +65,7 @@
                                                 <strong>{{ $message->reply_to_user_name }}</strong>:
                                                 {{ Str::limit($message->reply_to_message, 45) }}</span>
                                         </div>
-                                        @endif{{ $message->message }}@if ($message->attachment_path)
+                                        @endif<span class="chat-message-text">{{ $message->message }}</span>@if ($message->attachment_path)
                                             <a class="chat-attachment" href="{{ $message->attachment_path }}"
                                                 target="_blank" download><i
                                                     class="bi bi-paperclip"></i><span>{{ $message->attachment_name }}</span></a>

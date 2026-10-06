@@ -279,12 +279,12 @@ class ProfilePreferencesAndEarlyAccessTest extends TestCase
         $this->assertDatabaseHas('speakers', ['name' => 'Maya Speaker', 'headline' => 'Keynote Speaker']);
         $this->assertSame(['Maya Speaker'], $webinar->speakers()->pluck('name')->all());
         $this->get(route('webinars.show', $webinar))->assertOk()
-            ->assertSee('Session Agenda')
-            ->assertSee('Welcome and introductions')
-            ->assertSee('Opening session')
+            ->assertDontSee('Session Agenda')
+            ->assertDontSee('Welcome and introductions')
+            ->assertDontSee('Opening session')
             ->assertSee('New York Health Partner')
             ->assertSee('brand-style-monochrome', false)
-            ->assertSee('9:30 AM');
+            ->assertDontSee('9:30 AM');
     }
 
     public function test_scheduled_webinar_requires_dates_and_ist_attendance_starts_at_entered_local_time(): void

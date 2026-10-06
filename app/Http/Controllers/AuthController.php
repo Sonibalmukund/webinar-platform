@@ -96,7 +96,33 @@ class AuthController extends Controller
         $login = $credentials['login'];
         $user = User::where('email', $login)->orWhere('mobile', $login)->first();
         if (! $user) {
-            return ($portal === 'user' ? redirect(FrontendAuth::landing($request, 'login')) : back())->withErrors(['login' => 'No account was found for this '.($dashboardWebinar ? 'webinar' : 'email address').'.'])->onlyInput('login', '_auth_modal', 'return_to', 'webinar_id');
+            if ($portal === 'user') {
+                $request->merge(['_auth_modal' => 'register']);
+                $registrationInput = $request->only('return_to', 'webinar_id');
+                $registrationInput['_auth_modal'] = 'register';
+
+                if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+                    $registrationInput['email'] = $login;
+                    $emailField = $dashboardWebinar?->registrationForm?->fields
+                        ?->first(function ($field) {
+                            $lowerLabel = strtolower(trim($field->label));
+
+                            return $field->is_enabled && ($field->field_type === 'email'
+                                || in_array($lowerLabel, ['email', 'email address'], true)
+                                || str_starts_with($field->field_key, 'email'));
+                        });
+
+                    if ($emailField) {
+                        $registrationInput['fields'][$emailField->id] = $login;
+                    }
+                }
+
+                return redirect(FrontendAuth::landing($request, 'register'))
+                    ->withInput($registrationInput)
+                    ->with('registration_prompt', 'No account was found. Please complete your registration.');
+            }
+
+            return back()->withErrors(['login' => 'No account was found for this email address.'])->onlyInput('login');
         }
         if ($passwordEnabled && ! Hash::check($credentials['password'], $user->password)) {
             return ($portal === 'user' ? redirect(FrontendAuth::landing($request, 'login')) : back())->withErrors(['password' => 'The password entered is incorrect.'])->onlyInput('login', '_auth_modal', 'return_to', 'webinar_id');

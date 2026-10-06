@@ -141,7 +141,16 @@ class FrontendAuthFlowTest extends TestCase
     {
         $webinar = $this->webinar();
         $this->post('/login', ['return_to' => '/'.$webinar->slug, 'login' => 'unknown@example.test', 'password' => 'incorrect'])
-            ->assertRedirect('/'.$webinar->slug.'?auth=login')->assertSessionHasErrors('login')->assertSessionHas('_old_input._auth_modal', 'login');
+            ->assertRedirect('/'.$webinar->slug.'?auth=register')
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('_old_input._auth_modal', 'register')
+            ->assertSessionHas('_old_input.email', 'unknown@example.test')
+            ->assertSessionHas('registration_prompt');
+        $this->get('/'.$webinar->slug.'?auth=register')
+            ->assertOk()
+            ->assertSee('data-auth-open="register"', false)
+            ->assertSee('value="unknown@example.test"', false)
+            ->assertSee('No account was found. Please complete your registration.');
         $this->post('/register', ['return_to' => '/'.$webinar->slug, 'webinar_id' => $webinar->id])
             ->assertRedirect('/'.$webinar->slug.'?auth=register')->assertSessionHasErrors('name')->assertSessionHas('_old_input._auth_modal', 'register');
     }

@@ -970,7 +970,14 @@
         }
 
         .form-subhead i {
-            font-size: 1.1rem;
+            width: 30px;
+            height: 30px;
+            display: grid;
+            place-items: center;
+            flex: 0 0 30px;
+            border-radius: 8px;
+            font-size: .9rem;
+            line-height: 1;
             color: #7c3aed;
         }
 
@@ -1907,6 +1914,7 @@
         @if ($webinar->exists)
             @method('PUT')
         @endif
+        <input type="hidden" name="wizard_step" id="wizardStepInput" value="{{ old('wizard_step', request('step', '1')) }}">
 
         @if ($errors->any())
             <div class="alert alert-danger shadow-sm border-0 rounded-4 mb-4 p-3 d-flex align-items-start gap-3"
@@ -2473,16 +2481,11 @@
                                                             value="{{ $brandRow['id'] }}">
                                                     @endif
                                                     <div class="col-12"><label class="form-label-custom"><span>Brand
-                                                                name</span><span class="req">*</span></label><input
-                                                            class="form-control @error('brands.' . $brandIndex . '.name') is-invalid @enderror"
+                                                                name <small class="text-muted">(optional)</small></span></label><input
+                                                            class="form-control"
                                                             name="brands[{{ $brandIndex }}][name]"
                                                             value="{{ $brandRow['name'] ?? '' }}" maxlength="255"
                                                             placeholder="e.g. Acme Corp" data-brand-name>
-                                                        <div class="wizard-field-error @unless ($errors->has('brands.' . $brandIndex . '.name')) d-none @endunless"
-                                                            data-brand-name-error><i
-                                                                class="bi bi-exclamation-circle-fill"></i>
-                                                            {{ $errors->first('brands.' . $brandIndex . '.name') ?: 'Brand name is required when adding a brand.' }}
-                                                        </div>
                                                     </div>
                                                     <div class="col-12"><label
                                                             class="form-label-custom"><span>{{ $brandLogoPath ? 'Replace brand logo' : 'Upload brand logo' }}</span></label><input
@@ -2878,7 +2881,7 @@
                                         max="1440" name="agenda[{{ $index }}][duration_minutes]"
                                         value="{{ $item['duration_minutes'] ?? '' }}" placeholder="30">
                                 </div>
-                                <div class="pt-4">
+                                <div class="pt-4 @if ($agendaRows->count() === 1) d-none @endif" data-agenda-delete-wrap>
                                     <button class="btn btn-sm btn-outline-danger" type="button" data-delete-agenda
                                         title="Delete agenda item"><i class="bi bi-trash3"></i></button>
                                 </div>
@@ -3500,6 +3503,12 @@
                 <button type="button" class="btn btn-light" id="btnPrevStep" style="display:none;">
                     <i class="bi bi-arrow-left me-1"></i> Back
                 </button>
+                @if ($webinar->exists)
+                    <button type="submit" class="btn btn-outline-danger px-4" id="btnSaveChanges"
+                        name="save_action" value="stay">
+                        <i class="bi bi-floppy me-1"></i> Save Changes
+                    </button>
+                @endif
                 <button type="button" class="btn btn-gradient px-4" id="btnNextStep">
                     Next: Design &amp; Content <i class="bi bi-arrow-right ms-1"></i>
                 </button>
@@ -3596,11 +3605,89 @@
             const btnPrev = document.querySelector('#btnPrevStep');
             const btnNext = document.querySelector('#btnNextStep');
             const btnFinal = document.querySelector('#btnFinalSubmit');
+            const btnSaveChanges = document.querySelector('#btnSaveChanges');
+            const wizardStepInput = document.querySelector('#wizardStepInput');
             const footerIndicator = document.querySelector('#footerStepIndicator');
 
             const togglePolls = document.querySelector('#togglePollsEnabled');
             const toggleCert = document.querySelector('#toggleCertificateEnabled');
-            let currentStepKey = '1';
+            let currentStepKey = @json((string) old('wizard_step', request('step', '1')));
+
+            const setupDesignContentSwitches = () => {
+                const hasSavedContent = (content, labelText) => {
+                    if (content.querySelector('.is-invalid, [data-preview-ready="1"]')) return true;
+                    if (/Theme Colors/i.test(labelText)) return true;
+
+                    return [...content.querySelectorAll('input, textarea')].some(field => {
+                        if (field.disabled || field.type === 'file' || field.type === 'checkbox' || field.type === 'radio') {
+                            return false;
+                        }
+                        const value = String(field.value || '').trim();
+                        if (!value) return false;
+                        if (field.type === 'hidden') {
+                            return /\[id\]$/.test(field.name) || ['brand_primary', 'brand_secondary'].includes(field.name);
+                        }
+                        if (/duration_minutes/.test(field.name)) return false;
+                        return true;
+                    });
+                };
+
+                const createSwitch = (heading, content, labelText) => {
+                    if (!heading || !content) return;
+                    const control = document.createElement('label');
+                    control.className = 'design-content-switch form-check form-switch';
+                    control.title = `Show or hide ${labelText}`;
+                    control.innerHTML = `<input class="form-check-input" type="checkbox" role="switch" aria-label="Show or hide ${labelText}">`;
+                    const input = control.querySelector('input');
+                    const linkedActions = [...heading.querySelectorAll('#addAgendaItem')];
+                    const setOpen = open => {
+                        input.checked = open;
+                        content.hidden = !open;
+                        linkedActions.forEach(action => action.hidden = !open);
+                        heading.classList.toggle('section-open', open);
+                    };
+                    input.addEventListener('change', () => setOpen(input.checked));
+                    heading.appendChild(control);
+                    setOpen(hasSavedContent(content, labelText));
+                };
+
+                document.querySelectorAll('.wizard-step-pane[data-step-pane="2"] .form-grid').forEach(grid => {
+                    const headings = [...grid.children].filter(child => child.classList.contains('form-subhead'));
+                    headings.forEach((heading, index) => {
+                        heading.classList.add('design-content-heading');
+                        const content = document.createElement('div');
+                        content.className = 'design-section-content full';
+                        let sibling = heading.nextElementSibling;
+                        while (sibling && !sibling.classList.contains('form-subhead')) {
+                            const next = sibling.nextElementSibling;
+                            content.appendChild(sibling);
+                            sibling = next;
+                        }
+                        heading.after(content);
+                        const title = heading.querySelector('strong')?.textContent.trim() || `Section ${index + 1}`;
+                        createSwitch(heading, content, title);
+                    });
+                });
+
+                document.querySelectorAll('.wizard-step-pane[data-step-pane="2"] > section.panel-card').forEach(panel => {
+                    if (panel.querySelector(':scope > .form-grid > .form-subhead')) return;
+                    const heading = panel.querySelector(':scope > .panel-title');
+                    if (!heading) return;
+                    const content = document.createElement('div');
+                    content.className = 'design-panel-content';
+                    let sibling = heading.nextElementSibling;
+                    while (sibling) {
+                        const next = sibling.nextElementSibling;
+                        content.appendChild(sibling);
+                        sibling = next;
+                    }
+                    heading.after(content);
+                    heading.classList.add('design-content-heading');
+                    const title = heading.querySelector('h3')?.textContent.trim() || 'Section';
+                    createSwitch(heading, content, title);
+                });
+            };
+            setupDesignContentSwitches();
 
             function getActiveSteps() {
                 return [{
@@ -3696,6 +3783,12 @@
                 }
 
                 const isLastStep = (currentIndex === activeSteps.length - 1);
+                if (wizardStepInput) {
+                    wizardStepInput.value = currentStepKey;
+                }
+                if (btnSaveChanges) {
+                    btnSaveChanges.style.display = isLastStep ? 'none' : 'inline-flex';
+                }
                 if (btnNext && btnFinal) {
                     if (isLastStep) {
                         btnNext.style.display = 'none';
@@ -3852,6 +3945,14 @@
             // Form submit listener: validate all active steps before submitting
             const form = document.getElementById('webinarForm');
             form?.addEventListener('submit', (e) => {
+                if (e.submitter?.id === 'btnSaveChanges') {
+                    if (!validateStep(currentStepKey)) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    return;
+                }
+
                 const activeSteps = getActiveSteps();
                 for (const step of activeSteps) {
                     if (!validateStep(step.key)) {
@@ -4273,7 +4374,7 @@
                     renderStep('1', false);
                 }
             } else {
-                renderStep('1', false);
+                renderStep(currentStepKey, false);
             }
 
             // -------------------------------------------------------------
@@ -4487,21 +4588,7 @@
                     button.hidden = rowCount <= 1;
                 });
             };
-            const validateBrandRow = row => {
-                const nameInput = row.querySelector('[data-brand-name]');
-                const error = row.querySelector('[data-brand-name-error]');
-                if (!nameInput || !error) return true;
-                const hasContent = Boolean(
-                    row.querySelector('input[name*="[id]"]')?.value ||
-                    row.querySelector('[data-brand-logo]')?.files?.length ||
-                    row.querySelector('[data-brand-logo-url]')?.value.trim() ||
-                    row.querySelector('input[name*="[website_url]"]')?.value.trim()
-                );
-                const invalid = hasContent && !nameInput.value.trim();
-                nameInput.classList.toggle('is-invalid', invalid);
-                error.classList.toggle('d-none', !invalid);
-                return !invalid;
-            };
+            const validateBrandRow = () => true;
             const bindBrandRow = row => {
                 const input = row.querySelector('[data-brand-logo]');
                 const urlInput = row.querySelector('[data-brand-logo-url]');
@@ -4548,18 +4635,6 @@
             };
             brandRows?.querySelectorAll('[data-brand-row]').forEach(bindBrandRow);
             syncBrandRemoveButtons();
-            document.querySelector('#webinarForm')?.addEventListener('submit', event => {
-                const invalidRow = [...(brandRows?.querySelectorAll('[data-brand-row]:not(.d-none)') || [])]
-                    .find(row => !validateBrandRow(row));
-                if (!invalidRow) return;
-                event.preventDefault();
-                renderStep('2', false);
-                invalidRow.querySelector('[data-brand-name]')?.focus();
-                invalidRow.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'center'
-                });
-            });
             addBrandRow?.addEventListener('click', () => {
                 const index = Date.now();
                 const row = document.createElement('div');
@@ -4569,7 +4644,7 @@
             <div class="media-config-card"><div class="media-config-grid">
                 <div class="media-config-fields"><div class="row g-3">
                     <div class="col-12 builder-card-toolbar"><button class="btn btn-outline-danger btn-sm builder-remove" type="button" data-remove-brand><i class="bi bi-trash3 me-1"></i>Remove brand</button></div>
-                    <div class="col-12"><label class="form-label-custom"><span>Brand name</span><span class="req">*</span></label><input class="form-control" name="brands[${index}][name]" maxlength="255" placeholder="e.g. Acme Corp" data-brand-name><div class="wizard-field-error d-none" data-brand-name-error><i class="bi bi-exclamation-circle-fill"></i> Brand name is required when adding a brand.</div></div>
+                    <div class="col-12"><label class="form-label-custom"><span>Brand name <small class="text-muted">(optional)</small></span></label><input class="form-control" name="brands[${index}][name]" maxlength="255" placeholder="e.g. Acme Corp" data-brand-name></div>
                     <div class="col-12"><label class="form-label-custom"><span>Upload brand logo</span></label><input class="form-control" type="file" name="brand_logos[${index}]" accept="image/png,image/jpeg,image/webp,image/svg+xml" data-brand-logo></div>
                     <div class="col-12"><label class="form-label-custom"><span>Or image URL</span></label><input class="form-control" type="url" name="brands[${index}][logo_url]" placeholder="https://example.com/brand-logo.png" data-brand-logo-url></div>
                     <div class="col-12"><label class="form-label-custom"><span>Website URL (optional)</span></label><input class="form-control" type="url" name="brands[${index}][website_url]" placeholder="https://example.com"></div>
@@ -5077,6 +5152,12 @@
 
             const agendaRows = document.querySelector('#agendaBuilderRows');
             const addAgenda = document.querySelector('#addAgendaItem');
+            const updateAgendaDeleteButtons = () => {
+                const rows = agendaRows ? [...agendaRows.querySelectorAll('[data-agenda-row]')] : [];
+                rows.forEach(row => {
+                    row.querySelector('[data-agenda-delete-wrap]')?.classList.toggle('d-none', rows.length <= 1);
+                });
+            };
             const minutesToTime = totalMinutes => {
                 const normalized = ((totalMinutes % 1440) + 1440) % 1440;
                 const hours = Math.floor(normalized / 60);
@@ -5111,6 +5192,7 @@
                         const previousRow = row.previousElementSibling;
                         row.remove();
                         if (previousRow?.matches('[data-agenda-row]')) syncFollowingAgendaTimes(previousRow);
+                        updateAgendaDeleteButtons();
                     } else {
                         row.querySelectorAll('input').forEach(input => {
                             if (input.type === 'number') {
@@ -5122,6 +5204,7 @@
                     }
                 });
             agendaRows?.querySelectorAll('[data-agenda-row]').forEach(bindAgendaDelete);
+            updateAgendaDeleteButtons();
             agendaRows?.addEventListener('input', event => {
                 const row = event.target.closest('[data-agenda-row]');
                 if (!row) return;
@@ -5154,12 +5237,13 @@
                 <label class="form-label-custom small mb-1"><span>Minutes</span></label>
                 <input class="form-control form-control-sm" type="number" min="1" max="1440" name="agenda[${index}][duration_minutes]" placeholder="30">
             </div>
-            <div class="pt-4">
+            <div class="pt-4" data-agenda-delete-wrap>
                 <button class="btn btn-sm btn-outline-danger" type="button" data-delete-agenda title="Delete agenda item"><i class="bi bi-trash3"></i></button>
             </div>
         `;
                 agendaRows.appendChild(row);
                 bindAgendaDelete(row);
+                updateAgendaDeleteButtons();
                 row.querySelector('input[type="time"]')?.focus();
             });
         });

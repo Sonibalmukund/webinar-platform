@@ -56,6 +56,9 @@
                 </button>
             </div>
             <div class="modal-body">
+                @if (session('registration_prompt'))
+                    <div class="alert alert-info" role="status">{{ session('registration_prompt') }}</div>
+                @endif
                 @if (auth()->check() && $authWebinar)
                     @if (old('_auth_modal') === 'register' && $errors->any())
                         <div class="alert alert-danger">{{ $errors->first() }}</div>

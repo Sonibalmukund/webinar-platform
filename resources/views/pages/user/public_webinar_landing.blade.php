@@ -5,7 +5,6 @@
     $theme = data_get($webinar->settings, 'experience', []);
     $brandDisplayStyle = data_get($webinar->settings, 'experience.brand_display_style', 'cards');
     $brandDisplayStyle = in_array($brandDisplayStyle, ['cards', 'monochrome'], true) ? $brandDisplayStyle : 'cards';
-    $agendaNotes = trim((string) data_get($webinar->settings, 'experience.agenda_notes', ''));
     $pinnedAnnouncement = data_get($webinar->settings, 'pinned_announcement', []);
     $defaultBannerObj = (object) [
         'media_type' => 'image',
@@ -108,60 +107,6 @@
             border: 0;
             background: linear-gradient(135deg, var(--webinar-primary), var(--webinar-secondary));
             color: #fff
-        }
-
-        .landing-agenda-card {
-            padding: clamp(24px, 4vw, 44px);
-            border: 1px solid #e6eaf1;
-            border-radius: 24px;
-            background: #fff;
-            box-shadow: 0 14px 40px rgba(15, 23, 42, .06)
-        }
-
-        .landing-agenda-notes {
-            margin: 0 0 24px;
-            color: #526079;
-            line-height: 1.8;
-            white-space: pre-line
-        }
-
-        .landing-agenda-list {
-            display: grid;
-            gap: 10px
-        }
-
-        .landing-agenda-item {
-            display: grid;
-            grid-template-columns: 95px minmax(0, 1fr) auto;
-            gap: 18px;
-            align-items: center;
-            padding: 16px 18px;
-            border-radius: 15px;
-            background: #f7f8fc
-        }
-
-        .landing-agenda-item time {
-            color: var(--webinar-primary);
-            font-weight: 800
-        }
-
-        .landing-agenda-item strong {
-            font-size: .95rem
-        }
-
-        .landing-agenda-item span {
-            color: #7a879d;
-            font-size: .78rem
-        }
-
-        @media(max-width:600px) {
-            .landing-agenda-item {
-                grid-template-columns: 75px minmax(0, 1fr)
-            }
-
-            .landing-agenda-item span {
-                grid-column: 2
-            }
         }
 
         .microsite-nav {
@@ -1331,9 +1276,6 @@
                 @if (filled($webinar->description) || filled($webinar->short_description))
                     <a href="#about-event">{{ __('webinar.about_event') }}</a>
                 @endif
-                @if ($agenda->isNotEmpty() || $agendaNotes !== '')
-                    <a href="#session-agenda">Session Agenda</a>
-                @endif
                 @if ($webinar->speakers->isNotEmpty())
                     <a href="#speakers">{{ __('webinar.speakers') }}</a>
                 @endif
@@ -1361,7 +1303,7 @@
                         href="{{ route('webinars.dashboard', $webinar) }}">{{ __('webinar.enter') }}</a>
                 @elseif($isRegistered)
                     <span
-                        class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill fw-bold"
+                        class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill fw-bold" data-room-waiting
                         style="font-size: 0.84rem;">
                         <i class="bi bi-check2-circle me-1"></i> {{ __('webinar.registered') }}
                     </span>
@@ -1379,10 +1321,6 @@
                 @if (filled($webinar->description) || filled($webinar->short_description))
                     <a href="#about-event" data-bs-toggle="collapse"
                         data-bs-target="#micrositeMobileNav">{{ __('webinar.about_event') }}</a>
-                @endif
-                @if ($agenda->isNotEmpty() || $agendaNotes !== '')
-                    <a href="#session-agenda" data-bs-toggle="collapse" data-bs-target="#micrositeMobileNav">Session
-                        Agenda</a>
                 @endif
                 @if ($webinar->speakers->isNotEmpty())
                     <a href="#speakers" data-bs-toggle="collapse"
@@ -1410,7 +1348,7 @@
                             href="{{ route('webinars.dashboard', $webinar) }}">{{ __('webinar.enter') }}</a>
                     @elseif($isRegistered)
                         <span
-                            class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill fw-bold">
+                            class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill fw-bold" data-room-waiting>
                             <i class="bi bi-check2-circle me-1"></i> {{ __('webinar.registered') }}
                         </span>
                     @else
@@ -1592,35 +1530,6 @@
             </section>
         @endif
 
-        @if ($agenda->isNotEmpty() || $agendaNotes !== '')
-            <section class="content-section microsite-section" id="session-agenda">
-                <div class="container landing-container">
-                    <div class="landing-agenda-card">
-                        <div class="section-head mb-4">
-                            <span class="eyebrow">EVENT PROGRAM</span>
-                            <h2>Session Agenda</h2>
-                        </div>
-                        @if ($agendaNotes !== '')
-                            <div class="landing-agenda-notes">{{ $agendaNotes }}</div>
-                        @endif
-                        @if ($agenda->isNotEmpty())
-                            <div class="landing-agenda-list">
-                                @foreach ($agenda as $item)
-                                    <article class="landing-agenda-item">
-                                        <time>{{ $item->starts_at ? Carbon\Carbon::parse($item->starts_at)->format('g:i A') : 'TBA' }}</time>
-                                        <strong>{{ $item->title }}</strong>
-                                        @if ($item->duration_minutes)
-                                            <span>{{ $item->duration_minutes }} minutes</span>
-                                        @endif
-                                    </article>
-                                @endforeach
-                            </div>
-                        @endif
-                    </div>
-                </div>
-            </section>
-        @endif
-
         @if ($webinar->speakers->isNotEmpty())
             <section class="content-section microsite-section" id="speakers">
                 <div class="container landing-container">
@@ -1724,9 +1633,6 @@
                     @endif
                     @if ($webinar->speakers->isNotEmpty())
                         <a href="#speakers">{{ __('webinar.speakers') }}</a>
-                    @endif
-                    @if ($agenda->isNotEmpty() || $agendaNotes !== '')
-                        <a href="#session-agenda">Session Agenda</a>
                     @endif
                     @if ($brands->isNotEmpty())
                         <a href="#brands">{{ __('webinar.brands') }}</a>
@@ -1951,6 +1857,9 @@
             if (window.Echo) {
                 window.Echo.channel('webinar.public.{{ $webinar->id }}')
                     .listen('.room.updated', event => {
+                        if (event.state?.early_room_open === true && document.querySelector('[data-room-waiting]')) {
+                            window.location.reload();
+                        }
                         if (event.state && typeof event.state.participants_enabled !== 'undefined') {
                             const enabled = Boolean(event.state.participants_enabled);
                             const online = document.querySelector('[data-landing-online]');

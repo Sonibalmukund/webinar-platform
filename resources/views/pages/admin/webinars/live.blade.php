@@ -55,6 +55,24 @@
             border-color: #22c55e;
             box-shadow: 0 0 0 .2rem rgba(34, 197, 94, .13)
         }
+
+        .control-preview {
+            overflow: hidden;
+            background: #020617
+        }
+
+        .control-preview iframe,
+        .control-preview>img {
+            width: 100%;
+            height: 100%;
+            border: 0;
+            object-fit: cover
+        }
+
+        .control-preview .status-badge {
+            z-index: 2;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, .24)
+        }
     </style>
     <div class="page-heading pt-2">
         <div><span class="eyebrow">LIVE CONTROL</span>
@@ -82,10 +100,13 @@
         data-live-viewers-url="{{ route('admin.webinars.live-viewers', $webinar) }}">
         <div class="control-stage">
             <div class="control-preview"><span
-                    class="status-badge {{ $webinar->status }}">{{ strtoupper($webinar->status) }}</span><i
-                    class="bi bi-camera-video display-1"></i>
-                <h2>{{ $webinar->title }}</h2>
-                <p>{{ $webinar->short_description }}</p>
+                    class="status-badge {{ $webinar->status }}">{{ strtoupper($webinar->status) }}</span>
+                @if ($webinar->live_url)
+                    <iframe src="{{ $webinar->live_url }}" title="{{ $webinar->title }} live room preview"
+                        allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+                @else
+                    <img src="{{ $previewImage }}" alt="{{ $webinar->title }} live room preview">
+                @endif
             </div>
         </div>
         <div>
@@ -107,6 +128,14 @@
                                 </option>
                             @endforeach
                         </select></label><label
+                        class="live-control-switch"><span><strong>Live Early Room Access</strong><small
+                                class="text-muted">Open the webinar room immediately for registered attendees, regardless
+                                of the scheduled early-access time.</small></span>
+                        <span class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch"
+                                id="earlyRoomOpen" name="early_room_open" value="1"
+                                @checked(data_get($webinar->settings, 'experience.early_room_open', false))
+                                aria-label="Open early room access now"></span>
+                    </label><label
                         style="display:flex;align-items:center;justify-content:space-between;gap:16px"><span><strong>Early
                                 Room Access (minutes)</strong><small class="d-block text-muted">How early registered
                                 attendees may enter before the start time.</small></span><input class="form-control"

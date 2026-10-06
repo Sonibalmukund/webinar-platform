@@ -127,8 +127,19 @@ class WebinarController extends Controller
     public function live(Webinar $webinar): View
     {
         $liveViewers = DB::table('webinar_attendees')->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', now()->subSeconds(75))->count();
+        $previewImage = data_get($webinar->settings, 'experience.waiting_media_url')
+            ?: Banner::where('webinar_id', $webinar->id)
+                ->where('is_active', true)
+                ->where('media_type', 'image')
+                ->orderBy('display_order')
+                ->value(DB::raw('COALESCE(media_path, media_url)'))
+            ?: ($webinar->banner_path ?: asset('images/default-banner.jpg'));
 
-        return view('pages.admin.webinars.live', ['webinar' => $webinar->loadCount('registrations'), 'liveViewers' => $liveViewers]);
+        return view('pages.admin.webinars.live', [
+            'webinar' => $webinar->loadCount('registrations'),
+            'liveViewers' => $liveViewers,
+            'previewImage' => $previewImage,
+        ]);
     }
 
     public function liveViewers(Webinar $webinar): JsonResponse
@@ -154,6 +165,7 @@ class WebinarController extends Controller
             ? (int) $controlData['certificate_min_attendance']
             : (int) data_get($settings, 'experience.certificate_min_attendance', 80);
         $settings['experience']['participants_enabled'] = $request->boolean('participants_enabled');
+        $settings['experience']['early_room_open'] = $request->boolean('early_room_open');
         $webinar->update([
             'status' => $controlData['status'],
             'early_entry_minutes' => $request->filled('early_entry_minutes') ? (int) $controlData['early_entry_minutes'] : (int) ($webinar->early_entry_minutes ?? 30),
@@ -180,6 +192,7 @@ class WebinarController extends Controller
                 'certificate_min_attendance' => (int) data_get($webinar->settings, 'experience.certificate_min_attendance', 80),
                 'early_entry_minutes' => (int) $webinar->early_entry_minutes,
                 'participants_enabled' => (bool) data_get($webinar->settings, 'experience.participants_enabled', false),
+                'early_room_open' => (bool) data_get($webinar->settings, 'experience.early_room_open', false),
             ]);
         }
 
@@ -245,6 +258,15 @@ class WebinarController extends Controller
         });
         AuditTrail::record('webinar.updated', $webinar, 'Webinar settings updated.', ['changes' => $webinar->getChanges()]);
         $this->broadcastRoom($webinar, 'controls');
+
+        if ($request->input('save_action') === 'stay') {
+            $step = in_array((string) $request->input('wizard_step'), ['1', '2'], true)
+                ? (string) $request->input('wizard_step')
+                : '1';
+
+            return redirect()->route('admin.webinars.edit', ['webinar' => $webinar, 'step' => $step])
+                ->with('status', 'Changes saved successfully.');
+        }
 
         return redirect()->route('admin.webinars.index')->with('status', 'Webinar updated successfully.');
     }
@@ -658,6 +680,7 @@ class WebinarController extends Controller
                 'certificate_enabled' => $webinar->certificate_enabled === 'yes',
                 'certificate_min_attendance' => (int) data_get($webinar->settings, 'experience.certificate_min_attendance', 80),
                 'participants_enabled' => (bool) data_get($webinar->settings, 'experience.participants_enabled', false),
+                'early_room_open' => (bool) data_get($webinar->settings, 'experience.early_room_open', false),
                 'live_viewers' => $liveViewers,
                 'pinned_announcement' => data_get($webinar->settings, 'pinned_announcement'),
             ]));
@@ -747,22 +770,6 @@ class WebinarController extends Controller
             'remove_brand_ids' => ['nullable', 'array'],
             'remove_brand_ids.*' => ['integer', 'exists:brands,id'],
         ]);
-
-        $requestedRemovedBrandIds = collect($data['remove_brand_ids'] ?? [])->map(fn ($id) => (int) $id);
-        foreach (($data['brands'] ?? []) as $brandIndex => $brandRow) {
-            if ($requestedRemovedBrandIds->contains((int) ($brandRow['id'] ?? 0))) {
-                continue;
-            }
-            $hasBrandContent = filled($brandRow['id'] ?? null)
-                || filled($brandRow['logo_url'] ?? null)
-                || filled($brandRow['website_url'] ?? null)
-                || $request->hasFile("brand_logos.$brandIndex");
-            if ($hasBrandContent && blank($brandRow['name'] ?? null)) {
-                throw ValidationException::withMessages([
-                    "brands.$brandIndex.name" => 'Brand name is required when adding a brand.',
-                ]);
-            }
-        }
 
         $speakerIds = collect($data['speaker_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
         foreach (($data['speakers'] ?? []) as $speakerIndex => $speakerRow) {
@@ -904,7 +911,7 @@ class WebinarController extends Controller
             } elseif ($brandLogoUrl !== '') {
                 $brand->logo_path = $brandLogoUrl;
             }
-            $brand->name = $brandName ?: $brand->name;
+            $brand->name = $brandName !== '' ? $brandName : null;
             $brand->website_url = filled($brandRow['website_url'] ?? null) ? trim($brandRow['website_url']) : null;
             $brand->is_active = true;
             $brand->display_order = $brandOrder++;

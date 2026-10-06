@@ -133,7 +133,7 @@ class LearnerSimplifiedFlowTest extends TestCase
         $this->assertDatabaseHas('poll_options', ['label' => 'Alpha', 'is_correct' => true]);
     }
 
-    public function test_webinar_builder_saves_multiple_speakers_and_requires_a_brand_name(): void
+    public function test_webinar_builder_saves_multiple_speakers_and_allows_an_unnamed_brand(): void
     {
         $admin = $this->user('super-admin');
 
@@ -163,7 +163,14 @@ class LearnerSimplifiedFlowTest extends TestCase
             'registration_type' => 'free',
             'branding_assets_present' => '1',
             'brands' => [['name' => '', 'logo_url' => 'https://example.com/logo.png']],
-        ])->assertRedirect(route('admin.webinars.create'))->assertSessionHasErrors('brands.0.name');
+        ])->assertRedirect(route('admin.webinars.index'))->assertSessionDoesntHaveErrors('brands.0.name');
+
+        $brandWebinar = Webinar::where('title', 'Brand Validation Webinar')->firstOrFail();
+        $this->assertDatabaseHas('brands', [
+            'webinar_id' => $brandWebinar->id,
+            'name' => null,
+            'logo_path' => 'https://example.com/logo.png',
+        ]);
     }
 
     public function test_dynamic_banner_keys_are_never_used_as_database_display_order(): void
