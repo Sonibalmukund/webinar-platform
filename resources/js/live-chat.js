@@ -13,9 +13,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!root || !window.Echo) return;
     const status = document.querySelector('[data-chat-connection]');
     const error = document.querySelector('[data-chat-error]');
+    const retry = document.querySelector('[data-chat-retry]');
     const stream = document.querySelector(admin ? '#chatMessageStream' : '[data-realtime-chat]');
     const form = document.querySelector(admin ? '#adminChatForm' : '[data-realtime-chat-form]');
     const setError = message => { if (error) { error.textContent = message; error.hidden = !message; } };
+    const setConnection = (state, message) => {
+        if (status) {
+            status.dataset.state = state;
+            const icon = state === 'connected' ? 'bi-check-circle-fill text-success' : (state === 'connecting' ? 'bi-arrow-repeat' : 'bi-wifi-off');
+            status.innerHTML = `<i class="bi ${icon} me-1"></i> ${message}`;
+        }
+        if (retry) retry.hidden = state !== 'disconnected';
+        if (state === 'connected') setError('');
+    };
+    if (!window.Echo) {
+        setConnection('disconnected', 'Live updates unavailable');
+        setError('Live chat could not connect. Retry after the realtime service is available.');
+        retry?.addEventListener('click', () => window.location.reload());
+        return;
+    }
     const textNode = (tag, text, className) => {
         const node = document.createElement(tag);
         node.textContent = text;
@@ -114,8 +130,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.querySelector('#chatPersonSearch')?.dispatchEvent(new Event('input'));
                 } else renderAttendee((await response.json()).messages || []);
                 stream.scrollTop = nearBottom ? stream.scrollHeight : scrollTop;
+                setConnection('connected', 'Live chat connected');
             } while (queued);
-        } catch (exception) { setError(exception.message); }
+        } catch (exception) { setConnection('disconnected', 'Live chat disconnected'); setError(exception.message); }
         finally { refreshing = false; }
     };
     window.refreshLiveChat = refresh;
@@ -257,10 +274,24 @@ document.addEventListener('DOMContentLoaded', () => {
             // Re-order messages so higher upvoted messages move up
             refresh();
         })
-        .subscribed(() => { if (status) status.textContent = 'Live chat connected'; refresh(); })
-        .error(() => { if (status) status.textContent = 'Live chat unavailable — reload to retry'; });
+        .subscribed(() => { setConnection('connected', 'Live chat connected'); refresh(); })
+        .error(() => {
+            setConnection('disconnected', 'Live chat unavailable');
+            setError('Live chat could not connect. Start Reverb, then retry.');
+        });
+    retry?.addEventListener('click', () => {
+        setConnection('connecting', 'Connecting to live chat…');
+        setError('');
+        window.location.reload();
+    });
     const connection = window.Echo.connector?.pusher?.connection;
     connection?.bind('state_change', ({current}) => {
-        if (status && current !== 'connected') status.textContent = 'Reconnecting to live chat…';
+        if (current === 'connected') {
+            setConnection('connected', 'Live chat connected');
+        } else if (['unavailable', 'failed', 'disconnected'].includes(current)) {
+            setConnection('disconnected', 'Live chat disconnected');
+        } else {
+            setConnection('connecting', 'Reconnecting to live chat…');
+        }
     });
 });

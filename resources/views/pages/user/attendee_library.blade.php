@@ -75,7 +75,7 @@
                     @endif
                 </p>
                 @if ($type === 'bookmarks')
-                    <a class="btn btn-gradient" href="{{ route('webinars.index') }}">Discover webinars</a>
+                    <a class="btn btn-gradient" href="{{ route('dashboard') }}">Back to dashboard</a>
                 @endif
             </div>
         @endforelse

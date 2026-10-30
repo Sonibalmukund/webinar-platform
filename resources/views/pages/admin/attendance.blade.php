@@ -34,7 +34,7 @@
             </thead>
             <tbody>
                 @forelse($rows as $row)
-                    @php($displayTimezone = $row->webinar_timezone ?: config('app.timezone'))@php($joinedAt = $row->joined_at ?: $row->created_at)
+                    @php($displayTimezone = $row->webinar_timezone ?: config('app.timezone'))@php($joinedAt = $row->joined_at ?: $row->created_at)@php($isPresent = !$row->left_at && $row->last_seen_at && Carbon\Carbon::parse($row->last_seen_at)->greaterThanOrEqualTo(now()->subSeconds(75)))
                     <tr>
                         <td>{{ $rows->firstItem() + $loop->index }}</td>
                         <td><strong>{{ $row->user_name }}</strong></td>
@@ -45,7 +45,7 @@
                             <td>{{ $row->dynamic_fields[$col] ?? '—' }}</td>
                         @endforeach
                         <td>
-                            <small>{{ $joinedAt ? Carbon\Carbon::parse($joinedAt)->timezone($displayTimezone)->format('d M, h:i A T') : '—' }}<br>{{ $row->left_at ? Carbon\Carbon::parse($row->left_at)->timezone($displayTimezone)->format('d M, h:i A T') : 'Currently present' }}</small>
+                            <small>{{ $joinedAt ? Carbon\Carbon::parse($joinedAt)->timezone($displayTimezone)->format('d M, h:i A T') : '—' }}<br>{{ $row->left_at ? Carbon\Carbon::parse($row->left_at)->timezone($displayTimezone)->format('d M, h:i A T') : ($isPresent ? 'Currently present' : 'Session inactive') }}</small>
                         </td>
                         <td>{{ gmdate('H:i:s', $row->watch_seconds) }}</td>
                         <td><strong>{{ number_format((float) $row->metrics['attendancePercent'], 2) }}%</strong></td>

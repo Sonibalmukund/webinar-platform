@@ -9,6 +9,7 @@ use App\Support\NotificationCampaignService;
 use App\Support\RichText;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -18,13 +19,14 @@ class NotificationController extends Controller
 {
     public function index(): View
     {
-        return view('pages.admin.notifications.index', ['campaigns' => DB::table('notification_campaigns')->leftJoin('webinars', 'webinars.id', '=', 'notification_campaigns.webinar_id')->select('notification_campaigns.*', 'webinars.title as webinar_title')->latest('notification_campaigns.id')->paginate(20)]);
+        return view('pages.admin.notifications.index', ['campaigns' => DB::table('notification_campaigns')->leftJoin('webinars', 'webinars.id', '=', 'notification_campaigns.webinar_id')->select('notification_campaigns.*', 'webinars.title as webinar_title', 'webinars.timezone as webinar_timezone')->latest('notification_campaigns.id')->paginate(20)]);
     }
 
     public function create(): View
     {
         return view('pages.admin.notifications.create', [
-            'webinars' => Webinar::orderBy('title')->get(['id', 'title']),
+            'webinars' => Webinar::withCount('registrations')->orderBy('title')->get(['id', 'title', 'timezone', 'starts_at']),
+            'allRecipients' => User::whereHas('registrations')->count(),
         ]);
     }
 
@@ -92,14 +94,17 @@ class NotificationController extends Controller
         $request->merge(['delivery_mode' => $request->input('delivery_mode', 'reminder_now'), 'channel' => $request->input('channel', 'email')]);
         if ($request->input('delivery_mode') === 'after_registration_email') {
             $request->merge(['audience' => 'webinar', 'channel' => 'email']);
+        } elseif ($request->input('delivery_mode') === 'scheduled_reminder') {
+            $request->merge(['channel' => 'email']);
         }
         $data = $request->validate([
             'subject' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string', 'max:20000'],
-            'delivery_mode' => ['required', Rule::in(['reminder_now', 'after_registration_email', 'save_template'])],
+            'delivery_mode' => ['required', Rule::in(['reminder_now', 'scheduled_reminder', 'after_registration_email', 'save_template'])],
             'channel' => ['required', Rule::in(['email', 'whatsapp'])],
             'audience' => ['required', 'in:all_registrations,webinar'],
             'webinar_id' => ['nullable', Rule::requiredIf(fn () => $request->input('audience') === 'webinar' || $request->input('delivery_mode') === 'after_registration_email'), 'exists:webinars,id'],
+            'scheduled_at' => [Rule::requiredIf(fn () => $request->input('delivery_mode') === 'scheduled_reminder'), 'nullable', 'date', 'after:now'],
             'attachment' => ['nullable', 'file', 'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,ppt,pptx,txt', 'max:10240'],
         ]);
         $data['message'] = RichText::sanitize($data['message']);
@@ -111,6 +116,10 @@ class NotificationController extends Controller
             $data['channel'] = 'email';
         }
         $webinar = ! empty($data['webinar_id']) ? Webinar::findOrFail($data['webinar_id']) : null;
+        $scheduleTimezone = $webinar?->timezone ?: config('app.timezone');
+        $scheduledAt = $data['delivery_mode'] === 'scheduled_reminder'
+            ? Carbon::parse($data['scheduled_at'], $scheduleTimezone)->utc()
+            : null;
         $attachment = ['attachment_path' => null, 'attachment_name' => null, 'attachment_mime' => null];
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
@@ -129,8 +138,13 @@ class NotificationController extends Controller
             'channels' => json_encode([$data['channel']]),
             'audience' => $data['audience'],
             'delivery_mode' => $data['delivery_mode'],
-            'status' => $data['delivery_mode'] === 'save_template' ? 'template' : ($data['delivery_mode'] === 'after_registration_email' ? 'active' : ($data['channel'] === 'whatsapp' ? 'ready' : 'draft')),
-            'scheduled_at' => null,
+            'status' => match ($data['delivery_mode']) {
+                'save_template' => 'template',
+                'after_registration_email' => 'active',
+                'scheduled_reminder' => 'scheduled',
+                default => $data['channel'] === 'whatsapp' ? 'ready' : 'draft',
+            },
+            'scheduled_at' => $scheduledAt,
             'sent_at' => null,
             'updated_at' => now(),
         ], $attachment);
@@ -145,6 +159,9 @@ class NotificationController extends Controller
         }
 
         $campaignId = DB::table('notification_campaigns')->insertGetId($values + ['sent_count' => 0, 'created_at' => now()]);
+        if ($data['delivery_mode'] === 'scheduled_reminder') {
+            return redirect()->route('admin.notifications.index')->with('status', 'Reminder scheduled for '.$scheduledAt->copy()->timezone($scheduleTimezone)->format('M d, Y · g:i A').' ('.$scheduleTimezone.').');
+        }
         if ($data['delivery_mode'] === 'save_template') {
             return redirect()->route('admin.notifications.index')->with('status', 'Communication template saved. Nothing was sent.');
         }

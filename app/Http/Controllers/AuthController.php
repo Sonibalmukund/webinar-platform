@@ -98,24 +98,7 @@ class AuthController extends Controller
         if (! $user) {
             if ($portal === 'user') {
                 $request->merge(['_auth_modal' => 'register']);
-                $registrationInput = $request->only('return_to', 'webinar_id');
-                $registrationInput['_auth_modal'] = 'register';
-
-                if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
-                    $registrationInput['email'] = $login;
-                    $emailField = $dashboardWebinar?->registrationForm?->fields
-                        ?->first(function ($field) {
-                            $lowerLabel = strtolower(trim($field->label));
-
-                            return $field->is_enabled && ($field->field_type === 'email'
-                                || in_array($lowerLabel, ['email', 'email address'], true)
-                                || str_starts_with($field->field_key, 'email'));
-                        });
-
-                    if ($emailField) {
-                        $registrationInput['fields'][$emailField->id] = $login;
-                    }
-                }
+                $registrationInput = $this->registrationPrefill($request, $dashboardWebinar, $login);
 
                 return redirect(FrontendAuth::landing($request, 'register'))
                     ->withInput($registrationInput)
@@ -144,10 +127,14 @@ class AuthController extends Controller
                 ->exists();
             if (! $isRegistered) {
                 $request->session()->forget('url.intended');
+                $request->merge(['_auth_modal' => 'register']);
+                $registrationInput = $this->registrationPrefill($request, $dashboardWebinar, $login);
+                Auth::logout();
+                $request->session()->regenerateToken();
 
-                return redirect(FrontendAuth::landing($request, 'login'))
-                    ->withErrors(['login' => 'You are not registered for this webinar. Please register before signing in.'])
-                    ->onlyInput('login', '_auth_modal', 'return_to', 'webinar_id');
+                return redirect(FrontendAuth::landing($request, 'register'))
+                    ->withInput($registrationInput)
+                    ->with('registration_prompt', 'This email is not registered for this webinar. Please complete the registration form.');
             }
             $request->session()->put('frontend_event_slug', $dashboardWebinar->slug);
             $destination = route('webinars.dashboard', $dashboardWebinar);
@@ -493,6 +480,32 @@ class AuthController extends Controller
         return $validator->validated();
     }
 
+    private function registrationPrefill(Request $request, ?Webinar $webinar, string $login): array
+    {
+        $input = $request->only('return_to', 'webinar_id');
+        $input['_auth_modal'] = 'register';
+
+        if (! filter_var($login, FILTER_VALIDATE_EMAIL)) {
+            return $input;
+        }
+
+        $input['email'] = $login;
+        $emailField = $webinar?->registrationForm?->fields
+            ?->first(function ($field) {
+                $lowerLabel = strtolower(trim($field->label));
+
+                return $field->is_enabled && ($field->field_type === 'email'
+                    || in_array($lowerLabel, ['email', 'email address'], true)
+                    || str_starts_with($field->field_key, 'email'));
+            });
+
+        if ($emailField) {
+            $input['fields'][$emailField->id] = $login;
+        }
+
+        return $input;
+    }
+
     private function micrositeReturnPath(Request $request): ?string
     {
         $path = $request->string('return_to')->toString();
@@ -524,7 +537,7 @@ class AuthController extends Controller
         }
         if (! $destination && ($referer = $request->headers->get('referer'))) {
             $path = parse_url($referer, PHP_URL_PATH);
-            if (is_string($path) && preg_match('#^/([A-Za-z0-9-]+)/dashboard$#', $path, $matches) && Webinar::where('slug', $matches[1])->whereNot('status', 'draft')->exists()) {
+            if (is_string($path) && preg_match('#^/([A-Za-z0-9-]+)/dashboard$#', $path, $matches) && Webinar::where('slug', $matches[1])->where('status', '!=', 'cancelled')->exists()) {
                 $destination = '/'.$matches[1];
             }
         }

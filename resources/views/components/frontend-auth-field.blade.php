@@ -3,10 +3,6 @@
     $fieldName = $prefix . '[' . $field->id . ']';
     $fieldValue = old($prefix . '.' . $field->id);
     $lowerLabel = strtolower(trim($field->label));
-    $isName =
-        in_array($lowerLabel, ['name', 'full name', 'your name']) ||
-        str_starts_with($field->field_key, 'name') ||
-        str_starts_with($field->field_key, 'full_name');
     $isEmail =
         $field->field_type === 'email' ||
         in_array($lowerLabel, ['email', 'email address']) ||
@@ -18,15 +14,6 @@
         str_starts_with($field->field_key, 'phone');
     $isNumber = $field->field_type === 'number';
 
-    if ($fieldValue === null && auth()->check()) {
-        if ($isName) {
-            $fieldValue = auth()->user()->name;
-        } elseif ($isEmail) {
-            $fieldValue = auth()->user()->email;
-        } elseif ($isMobile) {
-            $fieldValue = auth()->user()->mobile;
-        }
-    }
     $inputType = $isEmail ? 'email' : ($isNumber ? 'number' : ($isMobile ? 'tel' : 'text'));
 @endphp
 <div class="col-12">
@@ -74,6 +61,7 @@
     @else
         <input id="{{ $fieldId }}" type="{{ $inputType }}" class="form-control" name="{{ $fieldName }}"
             value="{{ $fieldValue }}" placeholder="{{ $field->placeholder ?: 'Enter ' . $field->label }}"
+            autocomplete="off"
             @required($field->is_required) @if ($isEmail)
         data-rule-email="true"
     @endif>

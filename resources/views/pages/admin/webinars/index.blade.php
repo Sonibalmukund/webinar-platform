@@ -2,13 +2,21 @@
 @section('title', 'Manage Webinars')
 @section('content')
     @php($isSuperAdmin = auth()->user()->hasRole('super-admin'))
+    <style>
+        .webinar-index-table th:last-child, .webinar-index-table td:last-child { position:static; background:inherit; box-shadow:none; }
+        .webinar-health-copy { display:block; margin-top:4px; color:#64748b; font-size:.65rem; line-height:1.3; }
+        .webinar-actions-dropdown .dropdown-menu { min-width:215px; padding:8px; border:1px solid #e5e7eb!important; border-radius:12px; z-index:1085; }
+        .webinar-actions-dropdown .dropdown-item { display:flex; align-items:center; gap:10px; min-height:40px; padding:9px 11px; border-radius:8px; font-size:.82rem; white-space:nowrap; }
+        .webinar-actions-dropdown .dropdown-item:hover { background:#f8fafc; }
+        .webinar-actions-dropdown .dropdown-item i { width:18px; margin-right:0!important; text-align:center; }
+        .webinar-index-table td:last-child:has(.dropdown-menu.show) { z-index:20; }
+    </style>
     <div class="page-heading">
         <div>
             <h1>Webinars</h1>
         </div>
         @if ($isSuperAdmin || auth()->user()->hasPermission('webinars.create'))
-            <a class="btn btn-gradient" href="{{ route('admin.webinars.create') }}"><i class="bi bi-plus-lg"></i> Add
-                Webinar</a>
+            <a class="btn btn-gradient" href="{{ route('admin.webinars.create') }}"><i class="bi bi-plus-lg"></i> Add Webinar</a>
         @endif
     </div>
     @if (session('status'))
@@ -41,7 +49,7 @@
 
     <div class="panel-card">
         <div class="table-responsive">
-            <table class="premium-table">
+            <table class="premium-table webinar-index-table">
                 <thead>
                     <tr>
                         <th>Index</th>
@@ -49,7 +57,7 @@
                         <th>Client URL</th>
                         <th>Starts</th>
                         <th>Registrations</th>
-                        <th>Health</th>
+                        <th>Engagement health</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -57,7 +65,7 @@
                 <tbody>
                     @forelse($webinars as $webinar)
                         @php($publicUrl = route('webinars.show', $webinar))
-                        <tr>
+                        <tr id="webinar-{{ $webinar->id }}">
                             <td>{{ $webinars->firstItem() + $loop->index }}</td>
                             <td>
                                 <div class="speaker-line"><span class="table-webinar purple"><i
@@ -74,7 +82,7 @@
                             <td>
                                 <div class="webinar-url-cell">
                                     <div class="webinar-url-value" title="{{ $publicUrl }}"><i
-                                            class="bi bi-link-45deg"></i><span>/webinars/{{ $webinar->slug }}</span></div>
+                                            class="bi bi-link-45deg"></i><span>{{ parse_url($publicUrl, PHP_URL_PATH) }}</span></div>
                                     <div class="webinar-url-actions"><button type="button" class="url-action copy"
                                             data-copy-url="{{ $publicUrl }}"><i class="bi bi-copy"></i><span>Copy
                                                 URL</span></button><a class="url-action open" href="{{ $publicUrl }}"><i
@@ -87,6 +95,7 @@
                             <td><span
                                     class="status-badge {{ $webinar->health['score'] >= 70 ? 'active' : ($webinar->health['score'] >= 40 ? 'scheduled' : 'draft') }}"
                                     title="Attendance {{ $webinar->health['attendanceRate'] }}% · Poll participation {{ $webinar->health['pollRate'] }}%">{{ $webinar->health['score'] }}/100</span>
+                                <small class="webinar-health-copy">Attendance {{ $webinar->health['attendanceRate'] }}% · Poll participation {{ $webinar->health['pollRate'] }}%</small>
                             </td>
                             <td>
                                 @if ($isSuperAdmin || auth()->user()->hasPermission('webinars.edit'))
@@ -105,7 +114,7 @@
                                 @endif
                             </td>
                             <td>
-                                <div class="dropdown"><button class="icon-btn" data-bs-toggle="dropdown"
+                                <div class="dropdown webinar-actions-dropdown"><button class="icon-btn" data-bs-toggle="dropdown" data-bs-boundary="viewport" data-bs-offset="0,8"
                                         aria-label="Actions"><i class="bi bi-three-dots"></i></button>
                                     <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
                                         @if ($isSuperAdmin || auth()->user()->hasPermission('live-control.view'))

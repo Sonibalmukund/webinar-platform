@@ -169,7 +169,12 @@ class PollController extends Controller
         $data = $request->validate(['status' => ['required', 'in:draft,active,ended,hidden']]);
         $values = ['status' => $data['status']];
         if ($data['status'] === 'active') {
-            $values['started_at'] = now();
+            $startedAt = now();
+            $poll->webinar->polls()->where('id', '!=', $poll->id)->where('status', 'active')->update([
+                'status' => 'ended',
+                'ended_at' => now(),
+            ]);
+            $values['started_at'] = $startedAt;
             $values['ended_at'] = null;
             $poll->webinar()->update(['polls_enabled' => true]);
         }
@@ -246,15 +251,21 @@ class PollController extends Controller
                 throw ValidationException::withMessages(['answers' => 'Options and the correct answer cannot be changed after voting has started.']);
             }
         }
+        $status = $data['status'] ?? ($poll->exists ? $poll->status : 'draft');
+        $startedAt = filled($data['started_at'] ?? null) ? Carbon::parse($data['started_at']) : null;
+        $endedAt = filled($data['ended_at'] ?? null) ? Carbon::parse($data['ended_at']) : null;
+        if ($status === 'active') {
+            $startedAt ??= now();
+        }
         $poll->fill([
             'webinar_id' => $data['webinar_id'],
             'created_by' => $poll->exists ? $poll->created_by : $request->user()->id,
             'question' => $data['question'],
             'allow_multiple' => $request->boolean('allow_multiple'),
             'answer_reveal' => $data['type'] === 'quiz' ? ($data['answer_reveal'] ?? 'after_webinar') : 'never',
-            'status' => $data['status'] ?? ($poll->exists ? $poll->status : 'draft'),
-            'started_at' => $data['started_at'] ?? null,
-            'ended_at' => $data['ended_at'] ?? null,
+            'status' => $status,
+            'started_at' => $startedAt,
+            'ended_at' => $endedAt,
         ])->save();
         if (! $poll->options()->whereHas('responses')->exists()) {
             $poll->options()->delete();

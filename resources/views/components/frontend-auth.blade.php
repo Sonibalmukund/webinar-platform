@@ -1,5 +1,5 @@
 @php
-    $authReturn = $authWebinar ? route('webinars.show', $authWebinar, false) : route('webinars.index', [], false);
+    $authReturn = $authWebinar ? route('webinars.show', $authWebinar, false) : route('home', [], false);
 @endphp
 <span hidden data-auth-open="{{ old('_auth_modal', request('auth')) }}">
 </span>
@@ -37,6 +37,9 @@
                             @if (!$loginField || $loginField->field_type === 'email') data-rule-email="true" @endif></div>
                     <div class="col-12"><button class="btn btn-gradient w-100" type="submit">Login <i
                                 class="bi bi-arrow-right"></i></button></div>
+                    <div class="col-12 auth-modal-switch">New here? <button type="button"
+                            class="auth-modal-link" data-bs-toggle="modal"
+                            data-bs-target="#micrositeRegisterModal">Register here</button></div>
                 </form>
             </div>
         </div>
@@ -64,52 +67,34 @@
                         <div class="alert alert-danger">{{ $errors->first() }}</div>
                     @endif
                     <form method="POST" action="{{ route('webinars.register', $authWebinar) }}"
-                        class="frontend-auth-form" id="micrositeAuthWebinarRegisterForm" novalidate>
+                        class="frontend-auth-form" id="micrositeAuthWebinarRegisterForm" autocomplete="off" novalidate>
                         @csrf
                         <div class="row g-3">
-                            <div class="col-12">
-                                <div class="p-3 rounded-3 bg-light border d-flex align-items-center gap-3">
-                                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
-                                        style="width:42px;height:42px;font-weight:700;flex-shrink:0;">
-                                        {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
-                                    </div>
-                                    <div class="flex-grow-1 overflow-hidden">
-                                        <strong class="text-truncate d-block">{{ auth()->user()->name }}</strong>
-                                        <small
-                                            class="text-muted text-truncate d-block">{{ auth()->user()->email }}</small>
-                                    </div>
-                                </div>
-                            </div>
-                            @foreach ($registrationFields as $field)
-                                @php
-                                    $lowerLabel = strtolower(trim($field->label));
-                                    $isName =
-                                        in_array($lowerLabel, ['name', 'full name', 'your name']) ||
-                                        str_starts_with($field->field_key, 'name') ||
-                                        str_starts_with($field->field_key, 'full_name');
-                                    $isEmail =
-                                        in_array($lowerLabel, ['email', 'email address']) ||
-                                        str_starts_with($field->field_key, 'email');
-                                    $isMobile =
-                                        in_array($lowerLabel, ['mobile', 'mobile number', 'phone', 'phone number']) ||
-                                        str_starts_with($field->field_key, 'mobile');
-                                @endphp
-                                @if ($isName)
-                                    <input type="hidden" name="fields[{{ $field->id }}]"
-                                        value="{{ auth()->user()->name }}">
-                                @elseif($isEmail)
-                                    <input type="hidden" name="fields[{{ $field->id }}]"
-                                        value="{{ auth()->user()->email }}">
-                                @elseif($isMobile && auth()->user()->mobile)
-                                    <input type="hidden" name="fields[{{ $field->id }}]"
-                                        value="{{ auth()->user()->mobile }}">
-                                @else
+                            @if ($registrationFields->isNotEmpty())
+                                @foreach ($registrationFields as $field)
                                     @include('components.frontend-auth-field', [
                                         'field' => $field,
                                         'prefix' => 'fields',
                                     ])
-                                @endif
-                            @endforeach
+                                @endforeach
+                            @else
+                                <div class="col-12"><label class="form-label">Full name <span
+                                            class="text-danger">*</span></label><input class="form-control" name="name"
+                                        value="{{ old('name') }}" autocomplete="off" placeholder="Enter your full name"
+                                        required></div>
+                                <div class="col-12"><label class="form-label">Email address <span
+                                            class="text-danger">*</span></label><input class="form-control" name="email"
+                                        type="email" value="{{ old('email') }}" autocomplete="off"
+                                        placeholder="you@example.com" data-rule-email="true" required></div>
+                                <div class="col-12"><label class="form-label">Mobile number</label><input
+                                        class="form-control" name="mobile" type="tel" value="{{ old('mobile') }}"
+                                        autocomplete="off" placeholder="Enter mobile number"></div>
+                            @endif
+                            <div class="col-12"><label class="form-check"><input class="form-check-input"
+                                        type="checkbox" name="terms" required> <span class="form-check-label">I agree to
+                                        the <a href="{{ route('terms') }}" target="_blank" rel="noopener">Terms</a> and
+                                        <a href="{{ route('privacy') }}" target="_blank" rel="noopener">Privacy
+                                            Policy</a>. <span class="text-danger">*</span></span></label></div>
                             <div class="col-12">
                                 <button class="btn btn-gradient w-100 btn-lg" type="submit">Complete
                                     Registration</button>
@@ -121,7 +106,7 @@
                         <div class="alert alert-danger">{{ $errors->first() }}</div>
                     @endif
                     <form method="POST" action="{{ route('register') }}" class="frontend-auth-form"
-                        id="micrositeRegisterForm" novalidate>
+                        id="micrositeRegisterForm" autocomplete="off" novalidate>
                         <div class="row g-3">@csrf<input type="hidden" name="_auth_modal" value="register">
                             @if ($authWebinar)
                                 <input type="hidden" name="webinar_id" value="{{ $authWebinar->id }}">
@@ -137,7 +122,7 @@
                             @else
                                 <div class="col-12">
                                     <label class="form-label">Full name <span class="text-danger">*</span></label>
-                                    <input class="form-control" name="name" value="{{ old('name') }}" required
+                                    <input class="form-control" name="name" value="{{ old('name') }}" autocomplete="off" required
                                         placeholder="Enter your full name">
                                 </div>
                                 @if (($authSettings['registration_email_enabled'] ?? '1') === '1')
@@ -146,7 +131,7 @@
                                                 <span class="text-danger">*</span>
                                             @endif
                                         </label>
-                                        <input class="form-control" name="email" type="email"
+                                        <input class="form-control" name="email" type="email" autocomplete="off"
                                             value="{{ old('email') }}" placeholder="you@example.com"
                                             @required(($authSettings['registration_email_required'] ?? '1') === '1') data-rule-email="true">
                                     </div>@endif @if (($authSettings['registration_mobile_enabled'] ?? '1') === '1')
@@ -155,7 +140,7 @@
                                                     <span class="text-danger">*</span>
                                                 @endif
                                             </label>
-                                            <input class="form-control" name="mobile" type="tel"
+                                            <input class="form-control" name="mobile" type="tel" autocomplete="off"
                                                 value="{{ old('mobile') }}" placeholder="Enter mobile number"
                                                 @required(($authSettings['registration_mobile_required'] ?? '0') === '1')>
                                         </div>@endif @if (($authSettings['registration_country_enabled'] ?? '1') === '1')
@@ -208,8 +193,7 @@
                                             <div class="col-12">
                                                 <label class="form-check">
                                                     <input class="form-check-input" type="checkbox" name="terms"
-                                                        id="authTermsAgree" required> <span class="form-check-label">I
-                                                        agree to the Terms and Privacy Policy. <span
+                                                        id="authTermsAgree" required> <span class="form-check-label">I agree to the <a href="{{ route('terms') }}" target="_blank" rel="noopener">Terms</a> and <a href="{{ route('privacy') }}" target="_blank" rel="noopener">Privacy Policy</a>. <span
                                                             class="text-danger">*</span></span>
                                                 </label>
                                             </div>
@@ -217,12 +201,12 @@
                                                 <button class="btn btn-gradient w-100 btn-lg" type="submit">Complete
                                                     Registration</button>
                                             </div>
-                                            <div class="col-12 auth-modal-switch">Already registered? <button
-                                                    type="button" class="auth-modal-link" data-bs-toggle="modal"
-                                                    data-bs-target="#micrositeLoginModal">Login here</button></div>
                         </div>
                     </form>
                 @endif
+                <div class="auth-modal-switch mt-3">Already registered? <button type="button"
+                        class="auth-modal-link" data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">Login
+                        here</button></div>
             </div>
         </div>
     </div>

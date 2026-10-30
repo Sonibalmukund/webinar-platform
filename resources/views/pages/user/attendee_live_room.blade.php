@@ -1083,10 +1083,10 @@
         }
 
         .quick-grid a:hover {
-            border-color: #8b5cf6;
-            background: #7c3aed16;
+            border-color: var(--event-primary);
+            background: color-mix(in srgb, var(--event-primary) 12%, transparent);
             color: #fff;
-            box-shadow: 0 0 0 1px #8b5cf6, 0 6px 18px #7c3aed20
+            box-shadow: 0 0 0 1px var(--event-primary), 0 6px 18px color-mix(in srgb, var(--event-primary) 18%, transparent)
         }
 
         @keyframes eventPulse {
@@ -1374,14 +1374,17 @@
 
         .quick-grid .raise-hand-action:hover,
         .quick-grid .raise-hand-action.active {
-            border-color: #fbbf24;
-            background: #fbbf2412;
-            color: #fbbf24;
-            box-shadow: 0 0 0 1px #fbbf24, 0 6px 18px #fbbf2418
+            border-color: var(--event-primary);
+            background: color-mix(in srgb, var(--event-primary) 12%, transparent);
+            color: #fff;
+            box-shadow: 0 0 0 1px var(--event-primary), 0 6px 18px color-mix(in srgb, var(--event-primary) 18%, transparent)
         }
 
-        .quick-grid .raise-hand-action.active i {
-            color: #fbbf24
+        .quick-grid .raise-hand-action:hover i,
+        .quick-grid .raise-hand-action.active i,
+        .quick-grid .raise-hand-action:hover .raised-hand-icon,
+        .quick-grid .raise-hand-action.active .raised-hand-icon {
+            color: var(--event-primary)
         }
 
         .online-pill {
@@ -1868,6 +1871,35 @@
             background: #ffffff04
         }
 
+        .cert-card-shell:hover {
+            border-color: var(--event-primary);
+            background: color-mix(in srgb, var(--event-primary) 10%, transparent);
+            box-shadow: 0 0 0 1px var(--event-primary), 0 6px 18px color-mix(in srgb, var(--event-primary) 16%, transparent)
+        }
+
+        .cert-card-shell [data-certificate-action-state] .btn-gradient {
+            border: 1px solid color-mix(in srgb, var(--event-primary) 55%, transparent);
+            background: linear-gradient(135deg, var(--event-primary), var(--event-secondary));
+            box-shadow: 0 8px 20px color-mix(in srgb, var(--event-primary) 24%, transparent)
+        }
+
+        .cert-card-shell [data-certificate-action-state] .btn-gradient:hover {
+            border-color: var(--event-primary);
+            background: linear-gradient(135deg, var(--event-secondary), var(--event-primary));
+            box-shadow: 0 10px 24px color-mix(in srgb, var(--event-primary) 32%, transparent)
+        }
+
+        .certificate-download-disabled {
+            width: 100%;
+            cursor: not-allowed;
+            border-color: color-mix(in srgb, var(--event-primary) 32%, #ffffff18) !important;
+            background: color-mix(in srgb, var(--event-primary) 12%, #152033) !important;
+            color: #8290aa !important;
+            box-shadow: none !important;
+            opacity: 1;
+            pointer-events: none
+        }
+
         .cert-card-shell .quick-disabled {
             height: 100%;
             display: grid;
@@ -1934,7 +1966,15 @@
             color: #fff
         }
 
-        .event-notification-button b {
+        .event-notification-button:focus,
+        .event-notification-button[aria-expanded="true"] {
+            border-color: var(--event-primary);
+            color: #fff;
+            outline: 0;
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--event-primary) 22%, transparent)
+        }
+
+        .event-notification-button [data-notification-badge] {
             position: absolute;
             right: -5px;
             top: -6px;
@@ -1967,12 +2007,8 @@
                     <span><strong>{{ $displayBrand }}</strong></span>
                 </a></div>
             <div class="event-user"><span
-                    class="event-state {{ $webinar->status }}"><i></i>{{ strtoupper($webinar->status) }}</span>@php(
-    $roomUnread = DB::table('user_notifications')->where('user_id', auth()->id())->whereNull('read_at')->count()
-)<a
-                    class="event-notification-button" href="{{ route('notifications.index') }}" title="Notifications"><i
-                        class="bi bi-bell"></i><b data-notification-badge
-                        @if (!$roomUnread) hidden @endif>{{ $roomUnread }}</b></a>
+                    class="event-state {{ $webinar->status }}"><i></i>{{ strtoupper($webinar->status) }}</span>
+                <x-notification-dropdown button-class="event-notification-button" badge-class="event-notification-badge" />
                 <div class="dropdown"><button class="event-profile-trigger" type="button" data-bs-toggle="dropdown"
                         aria-expanded="false" title="Open profile menu"><span
                             class="event-avatar">{{ Str::of(auth()->user()->name)->substr(0, 2)->upper() }}</span><i
@@ -2032,7 +2068,7 @@
                     <div class="event-player">
                         @if ($webinar->live_url)
                             <iframe src="{{ $webinar->live_url }}" title="{{ $webinar->title }}"
-                                allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+                                allow="autoplay; fullscreen; picture-in-picture"></iframe>
                         @elseif($waitingRoomImage)
                             <img src="{{ $waitingRoomImage }}" alt="{{ $webinar->title }} waiting room">
                         @elseif($banners->first())
@@ -2124,8 +2160,10 @@
                         data-module-enabled="{{ $module['enabled'] ? 'true' : 'false' }}"
                         @if (!$module['enabled']) hidden style="display:none;" @endif>
                         @if ($module['key'] === 'chat')
-                            <p class="small text-white-50" data-chat-connection role="status">Connecting to live chat…
-                            </p>
+                            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                                <p class="small text-white-50 mb-0" data-chat-connection data-state="connecting" role="status"><i class="bi bi-arrow-repeat me-1"></i> Connecting to live chat…</p>
+                                <button type="button" class="btn btn-sm btn-outline-light" data-chat-retry hidden><i class="bi bi-arrow-clockwise me-1"></i> Retry</button>
+                            </div>
                             <div class="alert alert-danger" data-chat-error role="alert" hidden></div>
                             <div class="module-scroll" data-realtime-chat data-attendee-live-chat
                                 data-webinar-id="{{ $webinar->id }}"
@@ -2239,7 +2277,7 @@
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <h3 class="h6 mb-0">Quick actions</h3>
                     </div>
-                    <div class="quick-grid @if ($webinar->certificate_enabled !== 'yes' && $resources->isEmpty()) single-action @endif"><button type="button"
+                    <div class="quick-grid"><button type="button"
                             class="raise-hand-action {{ $raisedHand ? 'active' : '' }}" data-raise-hand
                             data-url="{{ route('webinars.attendance.hand', $webinar) }}"><x-raised-hand-icon /><span>{{ $raisedHand ? 'Lower hand' : 'Raise hand' }}</span></button>
                         @if ($resources->isNotEmpty())
@@ -2254,12 +2292,17 @@
                         ?>
                         <div class="cert-card-shell" data-certificate-download
                             data-certificate-url="{{ route('webinars.certificate.download', $webinar) }}"
+                            data-certificate-enabled="{{ $webinar->certificate_enabled === 'yes' ? '1' : '0' }}"
+                            data-certificate-minimum="{{ $metrics['minimum'] }}"
                             data-attendance-percent="{{ $metrics['attendancePercent'] }}"
                             data-certificate-poll-required="{{ $metrics['pollRequired'] ? '1' : '0' }}"
-                            data-certificate-poll-answered="{{ $metrics['pollAnswers'] > 0 ? '1' : '0' }}"
-                            @if ($webinar->certificate_enabled !== 'yes') hidden style="display:none;" @endif>
+                            data-certificate-poll-answered="{{ $metrics['pollAnswers'] > 0 ? '1' : '0' }}">
                             <div data-certificate-action-state>
-                                @if ($metrics['eligible'])
+                                @if ($webinar->certificate_enabled !== 'yes')
+                                    <button type="button"
+                                        class="btn btn-gradient certificate-download-disabled d-inline-flex align-items-center justify-content-center gap-2 py-2 fw-bold text-white"
+                                        disabled aria-disabled="true"><i class="bi bi-award-fill"></i>Download certificate</button>
+                                @elseif ($metrics['eligible'])
                                     <a href="{{ route('webinars.certificate.download', $webinar) }}"
                                         class="btn btn-gradient w-100 d-inline-flex align-items-center justify-content-center gap-2 py-2 fw-bold text-white"><i
                                             class="bi bi-award-fill"></i>Download certificate</a>

@@ -6,6 +6,10 @@
     $brandDisplayStyle = data_get($webinar->settings, 'experience.brand_display_style', 'cards');
     $brandDisplayStyle = in_array($brandDisplayStyle, ['cards', 'monochrome'], true) ? $brandDisplayStyle : 'cards';
     $pinnedAnnouncement = data_get($webinar->settings, 'pinned_announcement', []);
+    $registrationAvailable = $webinar->status !== 'cancelled';
+    $roomOpensText = $opensAt
+        ? $opensAt->timezone($webinar->timezone)->format('M d, Y · g:i A').' ('.$webinar->timezone.')'
+        : 'soon';
     $defaultBannerObj = (object) [
         'media_type' => 'image',
         'media_path' => asset('images/default-banner.jpg'),
@@ -14,6 +18,8 @@
     ];
     $orderedBanners = $banners->sortByDesc(fn($banner) => $banner->media_type === 'video')->values();
     $heroBanner = $orderedBanners->first() ?: $defaultBannerObj;
+    $heroCaption = trim((string) ($heroBanner->title ?? ''));
+    $showHeroCaption = $heroCaption !== '' && mb_strtolower($heroCaption) !== mb_strtolower(trim($webinar->title));
     $bannerSlides = $banners->isNotEmpty()
         ? $orderedBanners
             ->map(
@@ -135,7 +141,14 @@
             color: var(--webinar-text);
             font-weight: 800;
             text-decoration: none;
-            flex-shrink: 0
+            flex-shrink: 1;
+            min-width: 0
+        }
+
+        .microsite-logo span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap
         }
 
         .microsite-logo img {
@@ -578,6 +591,39 @@
             box-shadow: 0 0 0 1px var(--webinar-primary), 0 4px 12px color-mix(in srgb, var(--webinar-primary) 18%, transparent)
         }
 
+        @media(max-width:600px) {
+            .event-action-bar {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 4px;
+                padding: 10px 8px 14px
+            }
+
+            .event-action-bar a,
+            .event-action-bar button {
+                width: 100%;
+                min-width: 0;
+                justify-content: center;
+                gap: 3px;
+                padding: 7px 2px;
+                font-size: .62rem;
+                white-space: nowrap
+            }
+
+            .event-action-bar i {
+                font-size: .72rem
+            }
+
+            .event-action-bar .action-label {
+                font-size: 0
+            }
+
+            .event-action-bar .action-label::after {
+                content: attr(data-mobile-label);
+                font-size: .58rem
+            }
+        }
+
         /* Sections General */
         .content-section {
             padding: 54px 0;
@@ -700,7 +746,7 @@
 
         .webinar-microsite-page .speaker-info .designation {
             display: block;
-            color: var(--webinar-primary);
+            color: var(--webinar-text);
             font-weight: 700;
             font-size: .88rem
         }
@@ -881,6 +927,13 @@
             transform: translateY(-2px);
             background: var(--webinar-primary);
             color: #fff
+        }
+
+        .room-waiting-button {
+            border-color: color-mix(in srgb, var(--webinar-primary) 28%, transparent) !important;
+            background: color-mix(in srgb, var(--webinar-primary) 10%, #fff) !important;
+            color: var(--webinar-primary) !important;
+            box-shadow: none !important
         }
 
         .brand-grid-toggle i {
@@ -1195,6 +1248,14 @@
                 max-width: 130px
             }
 
+            .microsite-logo {
+                max-width: calc(100% - 52px)
+            }
+
+            .microsite-logo span {
+                font-size: .82rem
+            }
+
             .microsite-nav-actions {
                 gap: 8px
             }
@@ -1293,6 +1354,10 @@
                         Form</button>
                     <a class="btn btn-register-nav" href="{{ route('admin.webinars.edit', $webinar) }}"><i
                             class="bi bi-pencil-square me-1"></i> {{ __('webinar.admin_edit') }}</a>
+                @elseif(!$registrationAvailable)
+                    <span class="badge bg-secondary-subtle text-secondary border px-3 py-2 rounded-pill fw-bold">
+                        {{ $webinar->status === 'completed' ? __('webinar.concluded') : ucfirst($webinar->status) }}
+                    </span>
                 @elseif(!auth()->check())
                     <button type="button" class="btn-login-unique" data-landing-login data-bs-toggle="modal"
                         data-bs-target="#micrositeLoginModal">{{ __('webinar.login') }}</button>
@@ -1302,11 +1367,10 @@
                     <a class="btn btn-register-nav"
                         href="{{ route('webinars.dashboard', $webinar) }}">{{ __('webinar.enter') }}</a>
                 @elseif($isRegistered)
-                    <span
-                        class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill fw-bold" data-room-waiting
-                        style="font-size: 0.84rem;">
-                        <i class="bi bi-check2-circle me-1"></i> {{ __('webinar.registered') }}
-                    </span>
+                    <button type="button" class="btn btn-register-nav room-waiting-button" data-room-waiting
+                        data-room-message="Room opens at {{ $roomOpensText }}">
+                        <i class="bi bi-clock me-1"></i> Room Opens Soon
+                    </button>
                 @else
                     <button type="button" class="btn btn-register-nav" data-bs-toggle="modal"
                         data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
@@ -1338,6 +1402,10 @@
                             data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Registration Form</button>
                         <a class="btn btn-sm btn-register-nav rounded-pill px-3"
                             href="{{ route('admin.webinars.edit', $webinar) }}">{{ __('webinar.admin_edit') }}</a>
+                    @elseif(!$registrationAvailable)
+                        <span class="badge bg-secondary-subtle text-secondary border px-3 py-2 rounded-pill fw-bold">
+                            {{ $webinar->status === 'completed' ? __('webinar.concluded') : ucfirst($webinar->status) }}
+                        </span>
                     @elseif(!auth()->check())
                         <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" data-landing-login
                             data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">{{ __('webinar.login') }}</button>
@@ -1347,10 +1415,10 @@
                         <a class="btn btn-sm btn-register-nav rounded-pill px-3"
                             href="{{ route('webinars.dashboard', $webinar) }}">{{ __('webinar.enter') }}</a>
                     @elseif($isRegistered)
-                        <span
-                            class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill fw-bold" data-room-waiting>
-                            <i class="bi bi-check2-circle me-1"></i> {{ __('webinar.registered') }}
-                        </span>
+                        <button type="button" class="btn btn-sm btn-register-nav room-waiting-button rounded-pill px-3"
+                            data-room-waiting data-room-message="Room opens at {{ $roomOpensText }}">
+                            <i class="bi bi-clock me-1"></i> Room Opens Soon
+                        </button>
                     @else
                         <button type="button" class="btn btn-sm btn-register-nav rounded-pill px-3" data-bs-toggle="modal"
                             data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
@@ -1360,6 +1428,24 @@
         </div>
     </header>
 
+
+    @unless($isStaffPreview)
+        <div class="event-mobile-cta" aria-label="Primary event action">
+            @if(!$registrationAvailable)
+                <small>{{ ucfirst($webinar->status) }} event</small>
+            @elseif(!auth()->check())
+                <button type="button" class="btn btn-register-nav" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
+            @elseif($isRegistered && $canEnter)
+                <a class="btn btn-register-nav" href="{{ route('webinars.dashboard', $webinar) }}">{{ __('webinar.enter') }}</a>
+            @elseif($isRegistered)
+                <button type="button" class="btn btn-register-nav room-waiting-button" data-room-waiting
+                    data-room-message="Room opens at {{ $roomOpensText }}"><i class="bi bi-clock me-1"></i>Room Opens
+                    Soon</button>
+            @else
+                <button type="button" class="btn btn-register-nav" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
+            @endif
+        </div>
+    @endunless
     <div class="landing-announcement-bar" id="landingAnnouncementBar"
         @if (empty($pinnedAnnouncement['enabled']) || empty($pinnedAnnouncement['message'])) style="display:none;" @endif>
         <div class="landing-announcement-inner">
@@ -1381,10 +1467,11 @@
     <main data-public-webinar="{{ $webinar->id }}">
         <section class="hero-section event-hero">
             <div class="container landing-container">
-                <div class="landing-hero-header">
-                    <h1 class="landing-webinar-title">{{ $webinar->title }}</h1>
-                </div>
-
+                @if (!empty($theme['logo_url']))
+                    <div class="landing-hero-header">
+                        <h1 class="landing-webinar-title">{{ $webinar->title }}</h1>
+                    </div>
+                @endif
                 <div class="event-banner-card">
                     <div class="event-banner">
                         <span class="banner-status-pill"><b></b> {{ strtoupper($webinar->status) }}</span>
@@ -1406,11 +1493,11 @@
                                 @if (!empty($heroYt[1]))
                                     <iframe class="banner-main-media"
                                         src="https://www.youtube-nocookie.com/embed/{{ $heroYt[1] }}?autoplay=1&mute=1&loop=1&playlist={{ $heroYt[1] }}&controls=0"
-                                        allow="autoplay; encrypted-media" allowfullscreen></iframe>
+                                        allow="autoplay; encrypted-media; fullscreen"></iframe>
                                 @elseif(!empty($heroVim[1]))
                                     <iframe class="banner-main-media"
                                         src="https://player.vimeo.com/video/{{ $heroVim[1] }}?autoplay=1&muted=1&loop=1&autopause=0&background=1"
-                                        allow="autoplay; fullscreen" allowfullscreen></iframe>
+                                        allow="autoplay; fullscreen"></iframe>
                                 @else
                                     <video class="banner-main-media" src="{{ $heroMediaSrc }}" autoplay muted loop
                                         playsinline preload="auto"></video>
@@ -1420,7 +1507,9 @@
                                 <img class="banner-main-media" src="{{ $heroMediaSrc }}"
                                     alt="{{ $heroBanner->title }}">
                             @endif
-                            <span class="banner-slide-caption">{{ $heroBanner->title ?: $webinar->title }}</span>
+                            @if ($showHeroCaption)
+                                <span class="banner-slide-caption">{{ $heroCaption }}</span>
+                            @endif
                         @else
                             <div class="banner-placeholder d-flex flex-column align-items-center justify-content-center text-center p-5 h-100"
                                 style="background: linear-gradient(135deg, color-mix(in srgb, var(--webinar-primary) 70%, #0f172a), color-mix(in srgb, var(--webinar-secondary) 70%, #0f172a));">
@@ -1467,9 +1556,9 @@
                             <div class="rail-icon"><i class="bi bi-hourglass-split"></i></div>
                             <div class="rail-info">
                                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                                    <strong>{{ $webinar->status === 'live' ? __('webinar.live_stream') : ($webinar->status === 'ended' ? __('webinar.concluded') : __('webinar.registration_open')) }}</strong>
+                                    <strong>{{ $webinar->status === 'live' ? __('webinar.live_stream') : ($webinar->status === 'completed' ? __('webinar.concluded') : __('webinar.registration_open')) }}</strong>
                                     <span class="badge-status-pill"
-                                        data-banner-countdown>{{ $webinar->status === 'live' ? __('webinar.live_now') : ($webinar->status === 'ended' ? __('webinar.concluded') : __('webinar.starting_soon')) }}</span>
+                                        data-banner-countdown>{{ $webinar->status === 'live' ? __('webinar.live_now') : ($webinar->status === 'completed' ? __('webinar.concluded') : __('webinar.starting_soon')) }}</span>
                                 </div>
                                 <small>{{ __('webinar.event_status') }}</small>
                             </div>
@@ -1501,13 +1590,17 @@
                     @endphp
                     <div class="event-action-bar">
                         <a href="{{ $googleCal }}" target="_blank" rel="noopener"><i
-                                class="bi bi-calendar-plus"></i> {{ __('webinar.add_calendar') }}</a>
+                                class="bi bi-calendar-plus"></i><span class="action-label"
+                                data-mobile-label="Calendar">{{ __('webinar.add_calendar') }}</span></a>
                         <a href="https://wa.me/?text={{ $shareText }}%20{{ $shareUrl }}" target="_blank"
-                            rel="noopener"><i class="bi bi-whatsapp"></i> WhatsApp</a>
+                            rel="noopener"><i class="bi bi-whatsapp"></i><span class="action-label"
+                                data-mobile-label="WhatsApp">WhatsApp</span></a>
                         <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ $shareUrl }}" target="_blank"
-                            rel="noopener"><i class="bi bi-linkedin"></i> LinkedIn</a>
+                            rel="noopener"><i class="bi bi-linkedin"></i><span class="action-label"
+                                data-mobile-label="LinkedIn">LinkedIn</span></a>
                         <button type="button" data-copy-event-link><i
-                                class="bi bi-link-45deg"></i><span>{{ __('webinar.copy_link') }}</span></button>
+                                class="bi bi-link-45deg"></i><span class="action-label"
+                                data-mobile-label="Copy">{{ __('webinar.copy_link') }}</span></button>
                     </div>
                 </div>
             </div>
@@ -1524,7 +1617,8 @@
                 <div class="container landing-container">
                     <div class="about-event-card">
                         <h2 class="about-card-heading">{{ __('webinar.about_us') }}</h2>
-                        <div class="about-copy">{!! nl2br(e($webinar->description ?: $webinar->short_description)) !!}</div>
+                        @php($aboutSource = $webinar->description ?: $webinar->short_description)
+                        <div class="about-copy">{!! str_contains($aboutSource, '<') ? \App\Support\RichText::sanitize($aboutSource) : nl2br(e($aboutSource)) !!}</div>
                     </div>
                 </div>
             </section>
@@ -1647,8 +1741,8 @@
                     @endif
                     <a
                         href="mailto:{{ $siteSettings['admin_email'] ?? 'support@example.com' }}">{{ __('webinar.contact_us') }}</a>
-                    <a href="#">{{ __('webinar.privacy') }}</a>
-                    <a href="#">{{ __('webinar.terms') }}</a>
+                    <a href="{{ route('privacy') }}">{{ __('webinar.privacy') }}</a>
+                    <a href="{{ route('terms') }}">{{ __('webinar.terms') }}</a>
                 </nav>
             </div>
             <div class="footer-bottom">
@@ -1698,16 +1792,23 @@
                             /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/i
                         ) || src.match(/^([A-Za-z0-9_-]{11})$/);
                         if (ytMatch)
-                            return `<iframe class="banner-main-media" src="https://www.youtube-nocookie.com/embed/${ytMatch[1]}?autoplay=1&mute=1&loop=1&playlist=${ytMatch[1]}&controls=0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+                            return `<iframe class="banner-main-media" src="https://www.youtube-nocookie.com/embed/${ytMatch[1]}?autoplay=1&mute=1&loop=1&playlist=${ytMatch[1]}&controls=0" allow="autoplay; encrypted-media; fullscreen"></iframe>`;
                         const vimeoMatch = src.match(/vimeo\.com\/(?:video\/)?(\d{6,12})/i);
                         if (vimeoMatch)
-                            return `<iframe class="banner-main-media" src="https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=1&loop=1&autopause=0&background=1" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+                            return `<iframe class="banner-main-media" src="https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=1&loop=1&autopause=0&background=1" allow="autoplay; fullscreen"></iframe>`;
                         return `<video class="banner-main-media" src="${safe(src)}" autoplay muted loop playsinline preload="auto"></video>`;
                     }
                     return `<div class="banner-backdrop" style="background-image:url('${safe(src)}')"></div><img class="banner-main-media" src="${safe(src)}" alt="${safe(slide.title||@json($webinar->title))}">`;
                 };
+                const webinarTitle = @json($webinar->title);
+                const renderSlideCaption = slide => {
+                    const title = String(slide.title || '').trim();
+                    return title && title.localeCompare(webinarTitle, undefined, { sensitivity: 'accent' }) !== 0
+                        ? `<span class="banner-slide-caption">${safe(title)}</span>`
+                        : '';
+                };
                 const carouselItems = slides.map((slide, index) =>
-                    `<div class="carousel-item ${index===0?'active':''}">${renderSlideMedia(slide)}<span class="banner-slide-caption">${safe(slide.title||@json($webinar->title))}</span></div>`
+                    `<div class="carousel-item ${index===0?'active':''}">${renderSlideMedia(slide)}${renderSlideCaption(slide)}</div>`
                 ).join('');
                 const indicators =
                     `<div class="carousel-indicators">${slides.map((_,index)=>`<button type="button" data-bs-target="#webinarBannerCarousel" data-bs-slide-to="${index}" class="${index===0?'active':''}" aria-label="Banner ${index+1}"></button>`).join('')}</div>`;
@@ -1854,6 +1955,13 @@
             }
 
             // Live Pinned Announcement / Important Note updates on Landing Page
+            document.querySelectorAll('[data-room-waiting]').forEach(button => {
+                button.addEventListener('click', () => {
+                    window.showToast?.(button.dataset.roomMessage || 'The webinar room is not open yet.',
+                        'info');
+                });
+            });
+
             if (window.Echo) {
                 window.Echo.channel('webinar.public.{{ $webinar->id }}')
                     .listen('.room.updated', event => {
@@ -2011,7 +2119,7 @@
 @endsection
 
 @section('auth-modals')
-    @unless ($isStaffPreview)
+    @if ($registrationAvailable || $isStaffPreview)
         @include('components.frontend-auth', ['authWebinar' => $webinar])
-    @endunless
+    @endif
 @endsection

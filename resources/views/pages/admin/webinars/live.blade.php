@@ -103,7 +103,7 @@
                     class="status-badge {{ $webinar->status }}">{{ strtoupper($webinar->status) }}</span>
                 @if ($webinar->live_url)
                     <iframe src="{{ $webinar->live_url }}" title="{{ $webinar->title }} live room preview"
-                        allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+                        allow="autoplay; fullscreen; picture-in-picture"></iframe>
                 @else
                     <img src="{{ $previewImage }}" alt="{{ $webinar->title }} live room preview">
                 @endif
@@ -114,7 +114,7 @@
                     :live="true" data-live-viewer-count /><x-stat-card label="Registered" :value="$webinar->registrations_count"
                     icon="people" /><x-stat-card label="Capacity" :value="$webinar->max_attendees ?: 'Unlimited'" icon="person-check" tone="blue" />
             </div>
-            <form class="panel-card mt-3" method="POST" action="{{ route('admin.webinars.controls', $webinar) }}"
+            <form class="panel-card mt-3" id="liveControlsForm" method="POST" action="{{ route('admin.webinars.controls', $webinar) }}"
                 data-admin-live-controls>@csrf @method('PUT')<div class="panel-title">
                     <h3>Webinar controls</h3>
                 </div>
@@ -123,7 +123,7 @@
                             style="white-space:nowrap;font-weight:600">Status</span><select class="form-select"
                             name="status"
                             style="width:auto;min-width:160px;font-weight:650;padding:6px 36px 6px 14px;border-radius:10px">
-                            @foreach (['scheduled', 'live', 'completed', 'cancelled'] as $status)
+                            @foreach (['draft', 'scheduled', 'live', 'completed', 'cancelled'] as $status)
                                 <option value="{{ $status }}" @selected($webinar->status === $status)>{{ ucfirst($status) }}
                                 </option>
                             @endforeach
@@ -175,10 +175,46 @@
                                 @checked($webinar->feedback_enabled) aria-label="Toggle feedback"></div>
                     </div>
                 </div>
-                <div class="d-flex align-items-center gap-2 mt-3"><button class="btn btn-gradient">Save live
-                        controls</button><a href="{{ route('admin.webinars.index') }}" class="btn btn-light">Back</a>
+                <div class="d-flex align-items-center gap-2 mt-3"><button class="btn btn-gradient">Save status &amp;
+                        values</button><a href="{{ route('admin.webinars.index') }}" class="btn btn-light">Back</a>
                 </div>
             </form>
+            <div class="panel-card mt-3" data-live-room-certificate>
+                <div class="panel-title">
+                    <div>
+                        <h3>Live Room Certificate</h3>
+                        <p>Control whether eligible attendees can see and download their certificate in the live room.</p>
+                    </div>
+                </div>
+                <div class="live-control-switch">
+                    <span><strong>Certificate download</strong><small class="text-muted">ON shows the download option in the attendee live room; OFF hides it immediately.</small></span>
+                    <input type="hidden" name="certificate_enabled" value="0" form="liveControlsForm">
+                    <div class="form-check form-switch"><input class="form-check-input" type="checkbox"
+                            role="switch" id="certificateEnabled" name="certificate_enabled" value="1"
+                            form="liveControlsForm" @checked($webinar->certificate_enabled === 'yes')
+                            aria-label="Toggle live room certificate download"></div>
+                </div>
+            </div>
+            <div class="panel-card mt-3" data-live-poll-controls>
+                <div class="panel-title">
+                    <div><h3>Poll &amp; Quiz controls</h3><p>Use the switch to show or hide a poll manually on the attendee frontend.</p></div>
+                    <a class="btn btn-sm btn-light" href="{{ route('admin.webinars.edit', $webinar) }}#poll-builder"><i class="bi bi-plus-lg me-1"></i>Add Poll</a>
+                </div>
+                <div class="switch-list">
+                    @forelse ($webinar->polls->sortByDesc('created_at') as $poll)
+                        @php($pollRunning = $poll->status === 'active')
+                        <form class="live-control-switch" method="POST" action="{{ route('admin.polls.status', $poll) }}" data-live-poll-switch>
+                            @csrf @method('PATCH')
+                            <input type="hidden" name="status" value="{{ $pollRunning ? 'ended' : 'active' }}" data-poll-status>
+                            <span><span class="d-flex align-items-center gap-2 flex-wrap"><strong>{{ $poll->question }}</strong><span class="badge {{ $poll->type === 'Quiz' ? 'text-bg-primary' : 'text-bg-secondary' }}">{{ $poll->type }}</span></span>
+                                <small class="text-muted">{{ $pollRunning ? 'Visible to attendees now' : ucfirst($poll->status) }}</small></span>
+                            <span class="form-check form-switch flex-shrink-0"><input class="form-check-input" type="checkbox" role="switch" @checked($pollRunning) aria-label="Show {{ $poll->type }} on attendee frontend" data-poll-start-switch></span>
+                        </form>
+                    @empty
+                        <div class="text-center py-4 text-muted">No poll or quiz has been configured for this webinar.</div>
+                    @endforelse
+                </div>
+            </div>
             @php($pinned = data_get($webinar->settings, 'pinned_announcement', []))
             <form class="panel-card mt-3" method="POST" action="{{ route('admin.webinars.announcement', $webinar) }}"
                 data-admin-announcement-form>@csrf @method('PUT')<div class="panel-title">
@@ -206,4 +242,14 @@
             </form>
         </div>
     </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('[data-live-poll-switch]').forEach(form => {
+                form.querySelector('[data-poll-start-switch]')?.addEventListener('change', event => {
+                    form.querySelector('[data-poll-status]').value = event.target.checked ? 'active' : 'ended';
+                    form.submit();
+                });
+            });
+        });
+    </script>
 @endsection

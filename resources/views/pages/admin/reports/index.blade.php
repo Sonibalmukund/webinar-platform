@@ -4,8 +4,9 @@
     @php
         $registrationCount = $registrations->count();
         $attendeeCount = $attendees->count();
+        $uniquePeople = $registrations->pluck('user_id')->filter()->unique()->count();
         $attendanceRate = $registrationCount ? round(($attendeeCount / $registrationCount) * 100) : 0;
-        $uniqueVoters = $votes->pluck('registration_id')->filter()->unique()->count();
+        $uniqueVoters = $votes->pluck('user_id')->filter()->unique()->count();
         $averageWatch = $attendeeCount ? round($watchSeconds / $attendeeCount / 60) : 0;
         $registrationPoints = $trend
             ->map(fn($row, $i) => 24 + $i * (752 / 13) . ',' . (204 - ($row['registrations'] / $maxTrend) * 170))
@@ -36,8 +37,7 @@
 
     <div class="report-metrics">
         <article><span class="report-metric-icon purple"><i class="bi bi-people"></i></span>
-            <div><small>Registrations</small><strong>{{ number_format($registrationCount) }}</strong><em>Audience
-                    acquired</em></div>
+            <div><small>Event registrations</small><strong>{{ number_format($registrationCount) }}</strong><em>One record per event registration</em></div>
         </article>
         <article><span class="report-metric-icon blue"><i class="bi bi-person-check"></i></span>
             <div><small>Attendees</small><strong>{{ number_format($attendeeCount) }}</strong><em>Joined webinar</em></div>
@@ -52,6 +52,14 @@
         </article>
     </div>
 
+    <div class="panel-card mb-4" style="padding:16px 20px;display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+        <div><small class="text-muted d-block">Report scope</small><strong>{{ $selected?->title ?? 'All assigned events' }}</strong></div>
+        <div><small class="text-muted d-block">Timezone</small><strong>{{ $selected?->timezone ?? 'Each event timezone' }}</strong></div>
+        <div><small class="text-muted d-block">Unique people</small><strong>{{ number_format($uniquePeople) }}</strong></div>
+        <div><small class="text-muted d-block">Unique voters</small><strong>{{ number_format($uniqueVoters) }}</strong></div>
+        <div><small class="text-muted d-block">Submitted votes</small><strong>{{ number_format($votes->count()) }}</strong></div>
+        <small class="text-muted ms-lg-auto">The chart shows the latest 14 days. Summary totals use the selected event scope.</small>
+    </div>
     <div class="report-main-grid">
         <section class="panel-card report-chart-card" style="padding: 24px;">
             <div class="panel-title d-flex justify-content-between align-items-center mb-3">
@@ -63,7 +71,7 @@
                 <div class="d-flex align-items-center gap-3" style="font-size:0.75rem; font-weight:700;">
                     <span class="d-inline-flex align-items-center gap-1"><span
                             style="width:10px; height:10px; border-radius:50%; background:#ee1f2d; display:inline-block;"></span>
-                        <span style="color:#b91522;">Registrations</span></span>
+                        <span style="color:#b91522;">Event registrations</span></span>
                     <span class="d-inline-flex align-items-center gap-1"><span
                             style="width:10px; height:10px; border-radius:50%; background:#10b981; display:inline-block;"></span>
                         <span style="color:#059669;">Attendees</span></span>
@@ -139,7 +147,7 @@
                     data: {
                         labels: @json($trend->pluck('label')),
                         datasets: [{
-                                label: 'Registrations',
+                                label: 'Event registrations',
                                 data: @json($trend->pluck('registrations')),
                                 borderColor: '#ee1f2d',
                                 backgroundColor: gradPurple,

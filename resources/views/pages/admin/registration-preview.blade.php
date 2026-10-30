@@ -12,7 +12,7 @@
         <div class="alert alert-info">This preview is available to administrators and does not submit a registration.</div>
         <div class="form-grid"><label>Full name<input class="form-control" value="Sample Attendee"
                     disabled></label><label>Email<input class="form-control" value="attendee@example.com" disabled></label>
-            @foreach ($webinar->registrationForm?->fields?->where('is_enabled', true) ?? [] as $field)
+            @foreach (($webinar->registrationForm?->fields?->where('is_enabled', true) ?? collect())->reject(fn ($field) => in_array($field->field_key, ['full_name', 'name', 'email'], true)) as $field)
                 <label class="{{ $field->field_type === 'text' ? '' : 'full' }}">{{ $field->label }}@if ($field->field_type === 'text')
                     <input class="form-control" placeholder="{{ $field->placeholder }}" disabled>@else<select
                             class="form-select" disabled>

@@ -24,7 +24,7 @@
                             class="live-dot"></span></span><span><b>Virtual</b><strong>Portal</strong><small>LIVE •
                             CONNECT • ENGAGE</small></span></a>
                 <div class="nav-links"><a href="#features">Features</a><a href="#solutions">Solutions</a><a
-                        href="#process">How it works</a><a href="#faq">FAQ</a></div><a class="button button-small"
+                        href="#process">How it works</a><a href="#faq">FAQ</a></div><details class="home-mobile-nav"><summary aria-label="Open navigation">☰</summary><div><a href="#features">Features</a><a href="#solutions">Solutions</a><a href="#process">How it works</a><a href="#faq">FAQ</a><a href="#contact">Book a demo</a></div></details><a class="button button-small"
                     href="#contact">Book a demo <svg aria-hidden="true" viewBox="0 0 24 24" width="18"
                         height="18" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M5 12h14M13 6l6 6-6 6"></path>
@@ -451,8 +451,7 @@
                         href="mailto:info@evoqraeventsmedia.com">Email our team</a><a
                         href="https://wa.me/919904111866">WhatsApp</a></div>
             </div>
-            <div class="shell footer-bottom"><span>© 2026 VirtualPortal.in. All rights reserved.</span><span>Privacy
-                    Policy   •   Terms of Use</span></div>
+            <div class="shell footer-bottom"><span>© 2026 VirtualPortal.in. All rights reserved.</span><span><a id="privacy-policy" href="{{ route('privacy') }}">Privacy Policy</a> &nbsp; • &nbsp; <a id="terms-of-use" href="{{ route('terms') }}">Terms of Use</a></span></div>
         </footer>
     </main>
 

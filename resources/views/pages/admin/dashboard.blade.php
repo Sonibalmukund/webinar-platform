@@ -397,7 +397,7 @@
         <article class="dashboard-primary-card">
             <span class="dashboard-primary-icon"><i class="bi bi-people"></i></span>
             <span
-                class="dashboard-primary-copy"><small>Registrations</small><strong>{{ number_format($registeredUsers) }}</strong><span>+{{ number_format($todayRegistrations) }}
+                class="dashboard-primary-copy"><small>Unique people</small><strong>{{ number_format($registeredUsers) }}</strong><span>+{{ number_format($todayRegistrations) }}
                     added today</span></span>
         </article>
         <article class="dashboard-primary-card">
@@ -416,8 +416,8 @@
 
     <div class="dashboard-insight-strip" aria-label="Engagement overview">
         <div class="dashboard-insight"><i
-                class="bi bi-person-plus"></i><span><strong>{{ number_format($todayRegistrations) }}</strong><small>New
-                    today</small></span></div>
+                class="bi bi-person-plus"></i><span><strong>{{ number_format($totalRegistrations) }}</strong><small>Event
+                    registrations</small></span></div>
         <div class="dashboard-insight"><i
                 class="bi bi-chat-dots"></i><span><strong>{{ number_format($chatMessages) }}</strong><small>Chat
                     messages</small></span></div>
@@ -473,7 +473,7 @@
                 </div>
                 <div class="pro-chart-totals">
                     <span><i
-                            class="blue"></i><small>Registrations</small><strong>{{ $chart->sum('registrations') }}</strong></span>
+                            class="blue"></i><small>Event registrations</small><strong>{{ $chart->sum('registrations') }}</strong></span>
                     <span><i
                             class="green"></i><small>Attendees</small><strong>{{ $chart->sum('attendees') }}</strong></span>
                 </div>
@@ -491,7 +491,8 @@
                 <canvas id="dashboardDonutChart" style="max-height: 105px;"></canvas>
             </div>
             <div class="engagement-list">
-                <div><span>Registrations</span><strong>{{ $totalRegistrations }}</strong></div>
+                <div><span>Event registrations</span><strong>{{ $totalRegistrations }}</strong></div>
+                <div><span>Unique people</span><strong>{{ $registeredUsers }}</strong></div>
                 <div><span>Chat messages</span><strong>{{ $chatMessages }}</strong></div>
                 <div><span>Private comments</span><strong>{{ $commentsCount }}</strong></div>
                 <div><span>Total watch time</span><strong>{{ number_format($watchSeconds / 3600, 1) }} hrs</strong></div>
@@ -521,7 +522,7 @@
                     data: {
                         labels: @json($chartLabels),
                         datasets: [{
-                                label: 'Registrations',
+                                label: 'Event registrations',
                                 data: @json($chartRegistrations),
                                 borderColor: '#7c3aed',
                                 backgroundColor: gradPurple,

@@ -69,11 +69,11 @@
                         @php(preg_match('/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{11})/i', $previewMediaSrc, $previewYt))@php(preg_match('/vimeo\.com\/(?:video\/)?(\d{6,12})/i', $previewMediaSrc, $previewVim))@if (!empty($previewYt[1]))
                             <iframe
                                 src="https://www.youtube-nocookie.com/embed/{{ $previewYt[1] }}?autoplay=1&mute=1&loop=1&playlist={{ $previewYt[1] }}&controls=0"
-                                allow="autoplay; encrypted-media" allowfullscreen></iframe>
+                                allow="autoplay; encrypted-media; fullscreen"></iframe>
                         @elseif(!empty($previewVim[1]))
                             <iframe
                                 src="https://player.vimeo.com/video/{{ $previewVim[1] }}?autoplay=1&muted=1&loop=1&autopause=0&background=1"
-                            allow="autoplay; fullscreen" allowfullscreen></iframe>@else<video
+                            allow="autoplay; fullscreen"></iframe>@else<video
                                 src="{{ $previewMediaSrc }}" controls></video>
                     @endif @else<div><i class="bi bi-image"></i><span>Choose a banner file to
                                 preview it here.</span></div>

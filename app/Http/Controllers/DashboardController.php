@@ -96,10 +96,10 @@ class DashboardController extends Controller
             'webinars' => $webinars, 'subadmin' => $subadmin, 'totalRegistrations' => $registrations->count(), 'registeredUsers' => $registrations->pluck('user_id')->filter()->unique()->count(),
             'todayRegistrations' => $registrations->filter(fn ($row) => ($row->registered_at ?? $row->created_at)?->isToday())->count(),
             'totalAttendees' => $attendance->count(), 'liveNow' => $attendance->filter(fn ($row) => is_null($row->left_at) && $row->last_seen_at && Carbon::parse($row->last_seen_at)->greaterThanOrEqualTo(now()->subSeconds(75)))->count(),
-            'pollsCount' => $subadmin ? Poll::whereIn('webinar_id', $webinarIds)->count() : Poll::count(), 'pollVoters' => $pollResponses->pluck('user_id')->unique()->count(), 'votesCount' => $pollResponses->count(),
+            'pollsCount' => $subadmin ? Poll::whereIn('webinar_id', $webinarIds)->count() : Poll::count(), 'pollVoters' => $pollResponses->pluck('user_id')->filter()->unique()->count(), 'votesCount' => $pollResponses->count(),
             'chatMessages' => DB::table('chat_messages')->when($subadmin, fn ($query) => $query->whereIn('webinar_id', $webinarIds))->count(), 'commentsCount' => DB::table('comments')->when($subadmin, fn ($query) => $query->whereIn('webinar_id', $webinarIds))->count(),
             'watchSeconds' => (int) $attendance->sum('watch_seconds'), 'recentRegistrations' => $registrations->take(6), 'chart' => $chart, 'maxChart' => $maxChart, 'eventPerformance' => $eventPerformance,
-            'waitlistCount' => $registrations->where('status', 'waitlisted')->count(), 'pendingCertificates' => DB::table('certificates')->where('status', 'pending')->when($subadmin, fn ($query) => $query->whereIn('webinar_id', $webinarIds))->count(), 'missingVideo' => $webinars->whereNull('live_url')->count(), 'upcomingSoon' => $webinars->filter(fn ($w) => $w->starts_at?->between(now(), now()->addDay()))->count(),
+            'waitlistCount' => $registrations->where('status', 'waitlisted')->count(), 'pendingCertificates' => DB::table('certificates')->where('status', 'pending')->when($subadmin, fn ($query) => $query->whereIn('webinar_id', $webinarIds))->count(), 'missingVideo' => $webinars->filter(fn ($webinar) => filled($webinar->live_provider) && blank($webinar->live_url))->count(), 'upcomingSoon' => $webinars->filter(fn ($w) => $w->starts_at?->between(now(), now()->addDay()))->count(),
         ]);
     }
 }

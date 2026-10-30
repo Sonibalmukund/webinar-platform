@@ -14,7 +14,7 @@ class FrontendAuth
             return $routeWebinar;
         }
         if (is_string($routeWebinar)) {
-            $webinar = Webinar::where('slug', $routeWebinar)->whereNot('status', 'draft')->first();
+            $webinar = Webinar::where('slug', $routeWebinar)->where('status', '!=', 'cancelled')->first();
             if ($webinar) {
                 return $webinar;
             }
@@ -31,7 +31,7 @@ class FrontendAuth
         // A submitted webinar ID is explicit request context and must win over
         // an intended URL or last-viewed event left behind by another tab.
         if ($request->filled('webinar_id')) {
-            $webinar = Webinar::whereKey($request->integer('webinar_id'))->whereNot('status', 'draft')->first();
+            $webinar = Webinar::whereKey($request->integer('webinar_id'))->where('status', '!=', 'cancelled')->first();
             if ($webinar) {
                 return $webinar;
             }
@@ -45,7 +45,7 @@ class FrontendAuth
             }
         }
 
-        return Webinar::where('slug', $request->session()->get('frontend_event_slug'))->whereNot('status', 'draft')->first();
+        return Webinar::where('slug', $request->session()->get('frontend_event_slug'))->where('status', '!=', 'cancelled')->first();
     }
 
     private static function webinarFromPath(Request $request, string $path): ?Webinar
@@ -56,7 +56,7 @@ class FrontendAuth
         }
         $path = parse_url($path, PHP_URL_PATH);
         if (is_string($path) && preg_match('#^/(?:webinars/)?([A-Za-z0-9-]+)(?:/dashboard)?$#', $path, $matches)) {
-            $webinar = Webinar::where('slug', $matches[1])->whereNot('status', 'draft')->first();
+            $webinar = Webinar::where('slug', $matches[1])->where('status', '!=', 'cancelled')->first();
             if ($webinar) {
                 return $webinar;
             }
@@ -68,7 +68,7 @@ class FrontendAuth
     public static function landing(Request $request, ?string $modal = null): string
     {
         $webinar = self::webinar($request);
-        $path = $webinar ? route('webinars.show', $webinar, false) : route('webinars.index', [], false);
+        $path = $webinar ? route('webinars.show', $webinar, false) : route('home', [], false);
 
         return $path.($modal ? '?auth='.$modal : '');
     }

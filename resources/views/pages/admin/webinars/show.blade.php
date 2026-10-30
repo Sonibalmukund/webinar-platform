@@ -7,7 +7,7 @@
             <p><i class="bi bi-calendar3"></i>
                 {{ $webinar->starts_at?->timezone($webinar->timezone)->format('M d, Y · g:i A') ?: 'Not scheduled' }}</p>
         </div>
-        <div><a class="btn btn-light" href="{{ route('admin.webinars.edit', $webinar) }}">Edit webinar</a><a
+        <div><a class="btn btn-outline-secondary" href="{{ route('admin.webinars.index') }}"><i class="bi bi-arrow-left me-1"></i>Back to webinars</a><a class="btn btn-light" href="{{ route('admin.webinars.edit', $webinar) }}">Edit webinar</a><a
                 class="btn btn-danger" href="{{ route('admin.webinars.live', $webinar) }}"><i class="bi bi-broadcast"></i> Live
                 control</a></div>
     </div>
@@ -29,10 +29,17 @@
                     </div><strong
                         class="fs-3">{{ round((collect($readiness)->filter()->count() / count($readiness)) * 100) }}%</strong>
                 </div>
+
+                @php($readinessSteps = ['Schedule' => 1, 'Video player' => 1, 'Registration form' => 3, 'Speaker assigned' => 2, 'Poll configured' => 3, 'Certificate' => 3])
                 <div class="switch-list">
                     @foreach ($readiness as $label => $ready)
-                        <label><span><i
-                                    class="bi bi-{{ $ready ? 'check-circle-fill text-success' : 'exclamation-circle text-warning' }} me-2"></i>{{ $label }}</span><strong>{{ $ready ? 'Ready' : 'Missing' }}</strong></label>
+                        <label><span><i class="bi bi-{{ $ready ? 'check-circle-fill text-success' : 'exclamation-circle text-warning' }} me-2"></i>{{ $label }}</span>
+                            @if ($ready)
+                                <strong>Ready</strong>
+                            @else
+                                <a class="btn btn-sm btn-outline-warning" href="{{ route('admin.webinars.edit', $webinar) }}#step-{{ $readinessSteps[$label] ?? 1 }}">Review setup</a>
+                            @endif
+                        </label>
                     @endforeach
                 </div>
             </div>

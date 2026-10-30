@@ -1914,7 +1914,7 @@
         @if ($webinar->exists)
             @method('PUT')
         @endif
-        <input type="hidden" name="wizard_step" id="wizardStepInput" value="{{ old('wizard_step', request('step', '1')) }}">
+        <input type="hidden" name="wizard_step" id="wizardStepInput" value="{{ old('wizard_step', '1') }}">
 
         @if ($errors->any())
             <div class="alert alert-danger shadow-sm border-0 rounded-4 mb-4 p-3 d-flex align-items-start gap-3"
@@ -2322,8 +2322,7 @@
                     <label class="setting-toggle">
                         <span>
                             <strong>Attendee Certificate</strong>
-                            <small>Provide certificate upon meeting attendance rules. Adds dedicated Step for certificate
-                                template & rules.</small>
+                            <small>Provide a downloadable certificate when the attendee meets the eligibility rules.</small>
                         </span>
                         <input type="hidden" name="certificate_enabled" value="0">
                         <span class="form-check form-switch setting-switch"><input class="form-check-input"
@@ -3087,14 +3086,14 @@
                 </section>
             @endif
 
-            <section class="panel-card">
+            <section class="panel-card" id="poll-builder">
                 <div class="panel-title">
                     <div>
                         <h3>Add Live Polls &amp; Quizzes</h3>
                         <p>Create one or more questions for this webinar. Blank poll cards are ignored.</p>
                     </div>
                 </div>
-                @php($newPollRows = old('new_polls', [['question' => '', 'answers' => ['', '', '', ''], 'correct_index' => '', 'answer_reveal' => 'after_webinar', 'status' => 'draft', 'allow_multiple' => '0', 'started_at' => '', 'ended_at' => '']]))
+                @php($newPollRows = old('new_polls', [['type' => 'poll', 'question' => '', 'answers' => ['', '', '', ''], 'correct_index' => '', 'answer_reveal' => 'after_webinar', 'status' => 'draft', 'allow_multiple' => '0']]))
                 <div id="wizardPollsList" class="d-flex flex-column gap-3">
                     @foreach ($newPollRows as $pollIndex => $pollRow)
                         @php($wizardAnswers = $pollRow['answers'] ?? ['', '', '', ''])
@@ -3105,6 +3104,13 @@
                                 </div>
                                 <button type="button" class="btn btn-sm btn-outline-danger" data-remove-wizard-poll><i
                                         class="bi bi-trash3 me-1"></i> Remove poll</button>
+                            </div>
+                            <div class="form-field mb-3"><label class="form-label-custom"><span>Engagement type</span></label>
+                                <select class="form-select" data-poll-field="type" data-poll-type
+                                    name="new_polls[{{ $pollIndex }}][type]">
+                                    <option value="poll" @selected(($pollRow['type'] ?? 'poll') === 'poll')>Poll — audience opinion, no correct answer</option>
+                                    <option value="quiz" @selected(($pollRow['type'] ?? 'poll') === 'quiz')>Quiz — one answer is correct</option>
+                                </select>
                             </div>
                             <div class="form-field mb-3"><label class="form-label-custom"><span>Poll / Quiz
                                         Question</span></label><input class="form-control form-control-lg"
@@ -3130,7 +3136,7 @@
                                 @endforeach
                             </div>
                             <div class="row g-3 mt-1">
-                                <div class="col-md-6"><label class="form-label-custom"><span>Correct
+                                <div class="col-md-6" data-quiz-only><label class="form-label-custom"><span>Correct
                                             answer</span></label><select class="form-select"
                                         data-poll-field="correct_index" data-poll-correct
                                         name="new_polls[{{ $pollIndex }}][correct_index]">
@@ -3141,7 +3147,7 @@
                                             </option>
                                         @endforeach
                                     </select></div>
-                                <div class="col-md-6"><label class="form-label-custom"><span>Correct answer
+                                <div class="col-md-6" data-quiz-only><label class="form-label-custom"><span>Correct answer
                                             visibility</span></label><select class="form-select"
                                         data-poll-field="answer_reveal"
                                         name="new_polls[{{ $pollIndex }}][answer_reveal]">
@@ -3164,14 +3170,6 @@
                                         <option value="0" @selected(($pollRow['allow_multiple'] ?? '0') !== '1')>Single choice</option>
                                         <option value="1" @selected(($pollRow['allow_multiple'] ?? '0') === '1')>Multiple choice</option>
                                     </select></div>
-                                <div class="col-md-6"><label class="form-label-custom"><span>Start time
-                                            (optional)</span></label><input class="form-control" type="datetime-local"
-                                        data-poll-field="started_at" name="new_polls[{{ $pollIndex }}][started_at]"
-                                        value="{{ $pollRow['started_at'] ?? '' }}"></div>
-                                <div class="col-md-6"><label class="form-label-custom"><span>Auto-end time
-                                            (optional)</span></label><input class="form-control" type="datetime-local"
-                                        data-poll-field="ended_at" name="new_polls[{{ $pollIndex }}][ended_at]"
-                                        value="{{ $pollRow['ended_at'] ?? '' }}"></div>
                             </div>
                         </div>
                     @endforeach
@@ -3182,7 +3180,7 @@
         </div>
 
         {{-- ======================================================== --}}
-        {{-- STEP 6 / CERTIFICATE SETTINGS                            --}}
+        {{-- CERTIFICATE SETTINGS                                     --}}
         {{-- ======================================================== --}}
         @php($selectedTemplateId = old('certificate_template_id', data_get($webinar->settings, 'certificate_template_id')))
         @php($activeTemplateDesign = $activeCertificateTemplate?->design ?? [])
@@ -3595,6 +3593,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.ckeditor.com/ckeditor5/41.4.2/classic/ckeditor.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // -------------------------------------------------------------
@@ -3609,9 +3608,25 @@
             const wizardStepInput = document.querySelector('#wizardStepInput');
             const footerIndicator = document.querySelector('#footerStepIndicator');
 
+            const fullDescription = document.querySelector('#fullDescription');
+            if (fullDescription && window.ClassicEditor) {
+                ClassicEditor.create(fullDescription, {
+                    toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList',
+                        'blockQuote', 'undo', 'redo'
+                    ]
+                }).then(editor => {
+                    editor.model.document.on('change:data', () => editor.updateSourceElement());
+                }).catch(() => {});
+            }
+
             const togglePolls = document.querySelector('#togglePollsEnabled');
             const toggleCert = document.querySelector('#toggleCertificateEnabled');
-            let currentStepKey = @json((string) old('wizard_step', request('step', '1')));
+            const requestedFocus = window.location.hash === '#poll-builder' ? 'polls' : '';
+            if (requestedFocus === 'polls' && togglePolls) {
+                togglePolls.checked = true;
+            }
+            const requestedStep = window.location.hash.match(/^#step-([123])$/)?.[1];
+            let currentStepKey = requestedStep || @json((string) old('wizard_step', '1'));
 
             const setupDesignContentSwitches = () => {
                 const hasSavedContent = (content, labelText) => {
@@ -4016,6 +4031,19 @@
                 }
             }
 
+            function syncWizardPollType(card) {
+                if (!card) return;
+                const isQuiz = card.querySelector('[data-poll-type]')?.value === 'quiz';
+                card.querySelectorAll('[data-quiz-only]').forEach(field => field.hidden = !isQuiz);
+                const correct = card.querySelector('[data-poll-correct]');
+                const reveal = card.querySelector('[data-poll-field="answer_reveal"]');
+                if (correct) {
+                    correct.disabled = !isQuiz;
+                    if (!isQuiz) correct.value = '';
+                }
+                if (reveal) reveal.disabled = !isQuiz;
+            }
+
             function reindexWizardPolls() {
                 wizardPollsList?.querySelectorAll('[data-wizard-poll]').forEach((card, pollIndex) => {
                     const number = card.querySelector('[data-poll-number]');
@@ -4028,6 +4056,7 @@
                     if (remove) remove.hidden = wizardPollsList.querySelectorAll('[data-wizard-poll]')
                         .length === 1;
                     reindexPollOptions(card);
+                    syncWizardPollType(card);
                 });
             }
 
@@ -4063,6 +4092,8 @@
                 wizardPollsList.appendChild(card);
                 const reveal = card.querySelector('[data-poll-field="answer_reveal"]');
                 if (reveal) reveal.value = 'after_webinar';
+                const type = card.querySelector('[data-poll-type]');
+                if (type) type.value = 'poll';
                 reindexWizardPolls();
                 card.querySelector('[data-poll-field="question"]')?.focus();
             });
@@ -4088,6 +4119,9 @@
             wizardPollsList?.addEventListener('input', event => {
                 const card = event.target.closest('[data-wizard-poll]');
                 if (card && event.target.matches('[data-poll-answer]')) reindexPollOptions(card);
+            });
+            wizardPollsList?.addEventListener('change', event => {
+                if (event.target.matches('[data-poll-type]')) syncWizardPollType(event.target.closest('[data-wizard-poll]'));
             });
             reindexWizardPolls();
 
@@ -4375,6 +4409,14 @@
                 }
             } else {
                 renderStep(currentStepKey, false);
+            }
+
+            if (requestedFocus === 'polls') {
+                requestAnimationFrame(() => {
+                    const pollBuilder = document.querySelector('#poll-builder');
+                    pollBuilder?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    pollBuilder?.querySelector('[data-poll-field="question"]')?.focus({ preventScroll: true });
+                });
             }
 
             // -------------------------------------------------------------
@@ -5020,7 +5062,7 @@
                     missing: brandingMissing
                 };
 
-                const pollReady = !togglePolls?.checked || [...document.querySelectorAll(
+                const pollReady = !togglePolls?.checked || @json(isset($existingPolls) ? $existingPolls->count() : 0) > 0 || [...document.querySelectorAll(
                     '[data-poll-field="question"]')].some(input => input.value.trim());
                 const certificateReady = !toggleCert?.checked || Boolean(document.querySelector(
                     '[name="certificate_template_id"]')?.value || document.querySelector(

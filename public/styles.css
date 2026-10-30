@@ -131,3 +131,14 @@ footer { background-color:#080f1b; }
 .contact-option em { color:#aeb8c8; font-size:10px; font-style:normal; }
 .contact-option>b { color:#ff6974; font-size:24px; }
 @media (max-width:620px) { .contact-option { grid-template-columns:52px 1fr auto; gap:14px; padding:19px; }.contact-option-icon { width:52px; height:52px; }.contact-option strong { font-size:15px; }.contact-option em { font-size:9px; } }
+
+/* Accessible mobile homepage navigation */
+.home-mobile-nav { display:none; position:relative; margin-left:auto; }
+.home-mobile-nav summary { width:44px; height:44px; display:grid; place-items:center; border:1px solid var(--line); border-radius:10px; color:var(--navy); background:#fff; cursor:pointer; list-style:none; font-size:22px; font-weight:800; }
+.home-mobile-nav summary::-webkit-details-marker { display:none; }
+.home-mobile-nav summary:focus-visible,.nav a:focus-visible,.button:focus-visible { outline:3px solid rgba(238,31,45,.35); outline-offset:3px; }
+.home-mobile-nav>div { position:absolute; top:52px; right:0; width:min(280px,calc(100vw - 24px)); display:grid; padding:12px; border:1px solid var(--line); border-radius:14px; background:#fff; box-shadow:0 20px 45px rgba(9,18,34,.16); }
+.home-mobile-nav a { min-height:44px; display:flex; align-items:center; padding:0 12px; border-radius:9px; color:#334057; font-family:var(--font-display); font-weight:700; }
+.home-mobile-nav a:hover,.home-mobile-nav a:focus-visible { background:#fff1f2; color:var(--red); }
+@media (max-width:960px) { .home-mobile-nav { display:block; } }
+@media (max-width:620px) { .home-mobile-nav { margin-left:auto; }.brand { min-width:0; }.brand small { display:none; } }

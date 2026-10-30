@@ -31,10 +31,6 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class WebinarController extends Controller
 {
-    public function index(): View
-    {
-        return view('pages.user.public_webinar_list', ['webinars' => Webinar::with('creator')->whereNot('status', 'draft')->whereNotNull('published_at')->orderBy('starts_at')->paginate(12)]);
-    }
 
     public function show(Webinar $webinar): View
     {
@@ -44,8 +40,8 @@ class WebinarController extends Controller
         }
         $webinar->syncLifecycleStatus();
         $canPreview = auth()->check() && (auth()->user()->hasRole('super-admin') || auth()->user()->hasRole('sub-admin'));
-        abort_if($webinar->status === 'draft' && ! $canPreview, 404);
-        if ($webinar->status !== 'draft') {
+
+        if ($webinar->status !== 'cancelled') {
             request()->session()->put('frontend_event_slug', $webinar->slug);
         }
         $webinar = $webinar->load(['registrationForm.fields.options', 'speakers', 'creator'])->loadCount('registrations');
@@ -647,7 +643,11 @@ class WebinarController extends Controller
 
     private function authorizeRegistration(Request $request, Webinar $webinar): void
     {
-        abort_unless($webinar->registrations()->where('user_id', $request->user()->id)->exists(), 403);
+        $user = $request->user();
+        $staffPreview = $user->hasRole('super-admin')
+            || ($user->hasRole('sub-admin') && $user->accessibleWebinarIds()->contains($webinar->id));
+
+        abort_unless($staffPreview || $webinar->registrations()->where('user_id', $user->id)->exists(), 403);
     }
 
     private function certificatePdf(string $name, string $title, string $credential, mixed $issuedAt, ?CertificateTemplate $template = null): string

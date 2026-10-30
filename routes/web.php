@@ -3,7 +3,6 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LocationController;
-use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\WebinarAttendanceController;
 use App\Http\Controllers\WebinarController;
 use App\Http\Controllers\WebinarRegistrationController;
@@ -11,6 +10,8 @@ use App\Models\Webinar;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'pages.landing')->name('home');
+Route::view('/privacy-policy', 'pages.privacy-policy')->name('privacy');
+Route::view('/terms-of-use', 'pages.terms-of-use')->name('terms');
 Route::redirect('/admin', '/admin/login');
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
@@ -24,7 +25,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->n
 Route::get('/locations/states', [LocationController::class, 'states'])->name('locations.states');
 Route::get('/locations/cities', [LocationController::class, 'cities'])->name('locations.cities');
 Route::get('/csrf-token', fn () => response()->json(['token' => csrf_token()]))->name('csrf.token');
-Route::get('/webinars', [WebinarController::class, 'index'])->name('webinars.index');
+Route::redirect('/webinars', '/', 301)->name('webinars.index');
 Route::get('/webinars/{webinar:slug}', fn (Webinar $webinar) => redirect()->route('webinars.show', $webinar, 301));
 
 Route::middleware(['auth'])->group(function () {
@@ -52,8 +53,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/recordings', [DashboardController::class, 'recordings'])->name('recordings.index');
     Route::get('/certificates', [DashboardController::class, 'certificates'])->name('certificates.index');
     Route::get('/bookmarks', [DashboardController::class, 'bookmarks'])->name('bookmarks.index');
-    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
-    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
 });
 
 Route::get('/{webinar:slug}', [WebinarController::class, 'show'])->name('webinars.show');

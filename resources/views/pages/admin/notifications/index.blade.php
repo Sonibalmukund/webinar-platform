@@ -39,14 +39,14 @@
                             @endif
                         </td>
                         <td>{{ collect($channels)->map(fn($channel) => Str::headline($channel))->join(', ') }}</td>
-                        <td>{{ $campaign->delivery_mode === 'save_template' ? 'Saved draft' : ($campaign->delivery_mode === 'reminder_now' ? 'Reminder now' : 'After registration') }}
+                        <td>{{ match($campaign->delivery_mode) { 'save_template' => 'Saved draft', 'reminder_now' => 'Reminder now', 'scheduled_reminder' => 'Scheduled reminder', default => 'After registration' } }}
                         </td>
                         <td>{{ Str::headline($campaign->audience) }}</td>
                         <td>{{ $campaign->webinar_title ?: 'All webinars' }}</td>
                         <td><span
                                 class="status-badge {{ in_array($campaign->status, ['sent', 'active']) ? 'active' : 'scheduled' }}">{{ strtoupper($campaign->status) }}</span>
                         </td>
-                        <td>{{ $campaign->sent_at ? Carbon\Carbon::parse($campaign->sent_at)->format('d M Y, h:i A') : ($campaign->delivery_mode === 'after_registration_email' ? 'On registration' : '—') }}<br><small>{{ number_format($campaign->sent_count ?? 0) }}
+                        <td>{{ $campaign->sent_at ? Carbon\Carbon::parse($campaign->sent_at)->timezone($campaign->webinar_timezone ?: config('app.timezone'))->format('d M Y, h:i A') : ($campaign->delivery_mode === 'after_registration_email' ? 'On registration' : ($campaign->scheduled_at ? Carbon\Carbon::parse($campaign->scheduled_at)->timezone($campaign->webinar_timezone ?: config('app.timezone'))->format('d M Y, h:i A').' ('.($campaign->webinar_timezone ?: config('app.timezone')).')' : '—')) }}<br><small>{{ number_format($campaign->sent_count ?? 0) }}
                                 delivered</small></td>
                         <td>
                             @if (in_array('whatsapp', $channels, true) && $campaign->delivery_mode !== 'save_template')

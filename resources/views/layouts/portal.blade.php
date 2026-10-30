@@ -4,7 +4,7 @@
 @section('shell')
     @php($isAdmin = request()->is('admin/*'))
     @php($isSubAdmin = auth()->user()->hasRole('sub-admin'))
-    @php($notificationUrl = $isAdmin ? (auth()->user()->hasPermission('notifications.view') ? route('admin.notifications.index') : route('admin.dashboard')) : route('notifications.index'))
+    @php($notificationUrl = $isAdmin ? (auth()->user()->hasPermission('notifications.view') ? route('admin.notifications.index') : route('admin.dashboard')) : null)
     @php($profileUrl = $isAdmin ? '/admin/profile' : null)
     <style>
         .sidebar-section-title {
@@ -144,14 +144,13 @@
                     <div class="topbar-search"><i class="bi bi-search"></i><input
                             placeholder="Search webinars, speakers and topics"></div>
                 @endunless
-                <div class="ms-auto d-flex align-items-center gap-2">@php(
-    $unreadNotifications = !$isAdmin
-        ? DB::table('user_notifications')->where('user_id', auth()->id())->whereNull('read_at')->count()
-        : 0
-)<a
-                        class="icon-btn position-relative" href="{{ $notificationUrl }}" aria-label="Notifications"><i
-                            class="bi bi-bell"></i><span class="notification-count" data-notification-badge
-                            @if (!$unreadNotifications) hidden @endif>{{ $unreadNotifications }}</span></a>
+                <div class="ms-auto d-flex align-items-center gap-2">
+                    @if ($isAdmin)
+                        <a class="icon-btn position-relative" href="{{ $notificationUrl }}" aria-label="Notifications"><i
+                                class="bi bi-bell"></i></a>
+                    @else
+                        <x-notification-dropdown />
+                    @endif
                     <div class="dropdown"><button class="avatar-menu" data-bs-toggle="dropdown"><span
                                 class="avatar">{{ collect(explode(' ', auth()->user()->name))->map(fn($part) => $part[0])->take(2)->join('') }}</span><span
                                 class="user-meta d-none d-md-flex"><strong>{{ auth()->user()->name }}</strong><small>{{ auth()->user()->job_title ?? ($isSubAdmin ? 'Sub Administrator' : ($isAdmin ? 'Platform Administrator' : 'Registered Attendee')) }}</small></span><i

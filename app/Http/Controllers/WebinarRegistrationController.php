@@ -15,6 +15,7 @@ class WebinarRegistrationController extends Controller
 {
     public function store(Request $request, Webinar $webinar, NotificationCampaignService $campaigns): RedirectResponse
     {
+        abort_if($webinar->status === 'cancelled', 403, 'Registration is not available for this webinar.');
         abort_unless($webinar->registrationForm?->is_active, 403, 'Registration is disabled.');
         $fields = $webinar->registrationForm->fields()->with('options')->where('is_enabled', true)->get();
         $input = $request->all();

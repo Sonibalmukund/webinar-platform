@@ -10,6 +10,7 @@ use App\Models\CertificateTemplate;
 use App\Models\Speaker;
 use App\Models\Webinar;
 use App\Support\AuditTrail;
+use App\Support\RichText;
 use App\Support\VideoEmbed;
 use App\Support\WebinarCertificateTemplate;
 use App\Support\WebinarHealth;
@@ -90,8 +91,17 @@ class WebinarController extends Controller
         return redirect()->route('admin.webinars.index')->with('status', 'Webinar created successfully.');
     }
 
-    public function edit(Webinar $webinar): View
+    public function edit(Request $request, Webinar $webinar): View|RedirectResponse
     {
+        if ($request->hasAny(['return_to', 'step', 'focus', 'wizard_step'])) {
+            $fragment = $request->input('focus') === 'polls'
+                ? '#poll-builder'
+                : (in_array((string) $request->input('step', $request->input('wizard_step')), ['1', '2', '3'], true)
+                    ? '#step-'.$request->input('step', $request->input('wizard_step'))
+                    : '');
+
+            return redirect(route('admin.webinars.edit', $webinar).$fragment);
+        }
         $sessionResourcesText = DB::table('webinar_resources')->where('webinar_id', $webinar->id)->orderBy('display_order')->get()->map(fn ($item) => $item->title.' | '.$item->path_or_url)->join("\n");
         $agendaItems = DB::table('webinar_agenda_items')->where('webinar_id', $webinar->id)->orderBy('display_order')->get();
         $webinarBanners = Banner::where('webinar_id', $webinar->id)->orderBy('display_order')->get();
@@ -115,17 +125,30 @@ class WebinarController extends Controller
         ]);
     }
 
-    public function show(Webinar $webinar): View
+    public function show(Request $request, Webinar $webinar): View|RedirectResponse
     {
+        if ($request->has('return_to')) {
+            return redirect()->route('admin.webinars.show', $webinar);
+        }
         $webinar = $webinar->load(['registrationForm.fields', 'speakers', 'polls'])->loadCount('registrations');
-        $readiness = ['Schedule' => (bool) ($webinar->starts_at && $webinar->ends_at), 'Video player' => (bool) $webinar->live_url, 'Registration form' => (bool) $webinar->registrationForm?->is_active, 'Speaker assigned' => $webinar->speakers->isNotEmpty(), 'Poll configured' => $webinar->polls->isNotEmpty(), 'Certificate' => (bool) data_get($webinar->settings, 'certificate_template_id')];
+        $readiness = [
+            'Schedule' => (bool) ($webinar->starts_at && $webinar->ends_at),
+            'Video player' => blank($webinar->live_provider) || (bool) $webinar->live_url,
+            'Registration form' => (bool) $webinar->registrationForm?->is_active,
+            'Speaker assigned' => $webinar->speakers->isNotEmpty(),
+            'Poll configured' => ! $webinar->polls_enabled || $webinar->polls->isNotEmpty(),
+            'Certificate' => $webinar->certificate_enabled !== 'yes' || (bool) data_get($webinar->settings, 'certificate_template_id'),
+        ];
         $events = DB::table('webinar_attendance_events')->where('webinar_id', $webinar->id)->where('event_type', 'heartbeat')->pluck('occurred_at')->groupBy(fn ($at) => Carbon::parse($at)->format('H'))->map(fn ($items, $hour) => (object) ['hour' => $hour, 'total' => $items->count()])->values();
 
         return view('pages.admin.webinars.show', compact('webinar', 'readiness', 'events'));
     }
 
-    public function live(Webinar $webinar): View
+    public function live(Request $request, Webinar $webinar): View|RedirectResponse
     {
+        if ($request->has('return_to')) {
+            return redirect()->route('admin.webinars.live', $webinar);
+        }
         $liveViewers = DB::table('webinar_attendees')->where('webinar_id', $webinar->id)->whereNull('left_at')->where('last_seen_at', '>=', now()->subSeconds(75))->count();
         $previewImage = data_get($webinar->settings, 'experience.waiting_media_url')
             ?: Banner::where('webinar_id', $webinar->id)
@@ -136,7 +159,7 @@ class WebinarController extends Controller
             ?: ($webinar->banner_path ?: asset('images/default-banner.jpg'));
 
         return view('pages.admin.webinars.live', [
-            'webinar' => $webinar->loadCount('registrations'),
+            'webinar' => $webinar->load(['polls.options'])->loadCount('registrations'),
             'liveViewers' => $liveViewers,
             'previewImage' => $previewImage,
         ]);
@@ -156,7 +179,7 @@ class WebinarController extends Controller
     public function controls(Request $request, Webinar $webinar): RedirectResponse|JsonResponse
     {
         $controlData = $request->validate([
-            'status' => ['required', 'in:scheduled,live,completed,cancelled'],
+            'status' => ['required', 'in:draft,scheduled,live,completed,cancelled'],
             'certificate_min_attendance' => ['nullable', 'integer', 'min:0', 'max:100'],
             'early_entry_minutes' => ['nullable', 'integer', 'min:0', 'max:240'],
         ]);
@@ -174,6 +197,9 @@ class WebinarController extends Controller
             'comments_enabled' => $request->boolean('comments_enabled'),
             'polls_enabled' => $request->boolean('polls_enabled'),
             'feedback_enabled' => $request->boolean('feedback_enabled'),
+            'certificate_enabled' => $request->has('certificate_enabled')
+                ? ($request->boolean('certificate_enabled') ? 'yes' : 'no')
+                : $webinar->certificate_enabled,
             'settings' => $settings,
         ]);
         $this->broadcastRoom($webinar, 'controls');
@@ -264,7 +290,7 @@ class WebinarController extends Controller
                 ? (string) $request->input('wizard_step')
                 : '1';
 
-            return redirect()->route('admin.webinars.edit', ['webinar' => $webinar, 'step' => $step])
+            return redirect(route('admin.webinars.edit', $webinar).'#step-'.$step)
                 ->with('status', 'Changes saved successfully.');
         }
 
@@ -369,6 +395,7 @@ class WebinarController extends Controller
             'ends_at.required' => 'End date and time are required for a scheduled or live webinar.',
             'ends_at.after' => 'The end date and time must be after the start date and time.',
         ]);
+        $data['description'] = RichText::sanitize($data['description'] ?? null);
         $player = $request->validate([
             'live_provider' => ['nullable', 'in:youtube,vimeo,custom'],
             'live_source' => ['nullable', 'required_if:live_provider,youtube,vimeo,custom', 'string', 'max:5000'],
@@ -386,7 +413,9 @@ class WebinarController extends Controller
                 $data[$field] = Carbon::parse($data[$field], $data['timezone'])->utc();
             }
         }
-        $data['certificate_enabled'] = $request->boolean('certificate_enabled') ? 'yes' : 'no';
+        $data['certificate_enabled'] = $request->has('certificate_enabled')
+            ? ($request->boolean('certificate_enabled') ? 'yes' : 'no')
+            : ($webinar?->certificate_enabled ?? 'no');
         $data['chat_enabled'] = $request->boolean('chat_enabled');
         $data['qa_enabled'] = $request->has('qa_enabled') ? $request->boolean('qa_enabled') : ($webinar?->qa_enabled ?? true);
         $data['comments_enabled'] = $request->boolean('comments_enabled');
@@ -436,7 +465,10 @@ class WebinarController extends Controller
             'waiting_message' => $experience['waiting_message'] ?? 'The webinar will begin shortly.', 'waiting_media_url' => $waitingMedia, 'post_message' => $experience['post_message'] ?? 'Thank you for attending.',
             'registration_success_title' => $experience['registration_success_title'] ?? 'You are registered!', 'registration_success_message' => $experience['registration_success_message'] ?? 'Your seat is confirmed. Add the webinar to your calendar and return when the room opens.',
             'agenda_notes' => trim((string) ($experience['agenda_notes'] ?? '')),
-            'certificate_min_attendance' => (int) ($experience['certificate_min_attendance'] ?? data_get($webinar?->settings, 'experience.certificate_min_attendance', 80)), 'certificate_require_poll' => $request->boolean('certificate_require_poll'),
+            'certificate_min_attendance' => (int) ($experience['certificate_min_attendance'] ?? data_get($webinar?->settings, 'experience.certificate_min_attendance', 80)),
+            'certificate_require_poll' => $request->has('certificate_require_poll')
+                ? $request->boolean('certificate_require_poll')
+                : (bool) data_get($webinar?->settings, 'experience.certificate_require_poll', false),
         ];
         $data['settings'] = $settings;
 
@@ -484,7 +516,13 @@ class WebinarController extends Controller
             if (blank($row['question'] ?? null)) {
                 continue;
             }
-            $correctIndex = $row['correct_index'] ?? null;
+            $type = array_key_exists('type', $row)
+                ? (($row['type'] ?? 'poll') === 'quiz' ? 'quiz' : 'poll')
+                : (filled($row['correct_index'] ?? null) ? 'quiz' : 'poll');
+            $correctIndex = $type === 'quiz' ? ($row['correct_index'] ?? null) : null;
+            $status = in_array($row['status'] ?? null, ['draft', 'active'], true) ? $row['status'] : 'draft';
+            $startedAt = filled($row['started_at'] ?? null) ? Carbon::parse($row['started_at']) : ($status === 'active' ? now() : null);
+            $endedAt = filled($row['ended_at'] ?? null) ? Carbon::parse($row['ended_at']) : null;
             $answerReveal = in_array($row['answer_reveal'] ?? null, ['immediate', 'after_webinar', 'never'], true)
                 ? $row['answer_reveal']
                 : 'after_webinar';
@@ -493,9 +531,9 @@ class WebinarController extends Controller
                 'question' => trim($row['question']),
                 'allow_multiple' => ($row['allow_multiple'] ?? '0') === '1',
                 'answer_reveal' => $correctIndex !== null && $correctIndex !== '' ? $answerReveal : 'never',
-                'status' => in_array($row['status'] ?? null, ['draft', 'active'], true) ? $row['status'] : 'draft',
-                'started_at' => filled($row['started_at'] ?? null) ? Carbon::parse($row['started_at']) : null,
-                'ended_at' => filled($row['ended_at'] ?? null) ? Carbon::parse($row['ended_at']) : null,
+                'status' => $status,
+                'started_at' => $startedAt,
+                'ended_at' => $endedAt,
             ]);
             foreach (($row['answers'] ?? []) as $index => $label) {
                 if (filled($label)) {
@@ -658,7 +696,7 @@ class WebinarController extends Controller
                 'settings' => $settings,
                 'certificate_enabled' => 'yes',
             ]);
-        } else {
+        } elseif ($request->has('certificate_enabled')) {
             $webinar->update([
                 'certificate_enabled' => 'no',
             ]);
@@ -716,15 +754,68 @@ class WebinarController extends Controller
         if (! $request->has('agenda_present')) {
             return;
         }
-        $rows = collect($request->input('agenda', []));
-        DB::table('webinar_agenda_items')->where('webinar_id', $webinar->id)->delete();
-        foreach ($rows->values() as $order => $row) {
+
+        $timezone = $webinar->timezone ?: config('app.timezone');
+        $eventStart = $webinar->starts_at?->copy()->timezone($timezone);
+        $eventEnd = $webinar->ends_at?->copy()->timezone($timezone);
+        $validated = collect();
+
+        foreach (collect($request->input('agenda', []))->values() as $index => $row) {
             $title = trim((string) ($row['title'] ?? ''));
             if ($title === '') {
                 continue;
-            }$time = (string) ($row['starts_at'] ?? '');
+            }
+
+            $time = trim((string) ($row['starts_at'] ?? ''));
             $duration = $row['duration_minutes'] ?? null;
-            DB::table('webinar_agenda_items')->insert(['webinar_id' => $webinar->id, 'title' => $title, 'description' => null, 'starts_at' => preg_match('/^\d{2}:\d{2}$/', $time) ? $time : null, 'duration_minutes' => is_numeric($duration) ? max(1, (int) $duration) : null, 'display_order' => $order, 'created_at' => now(), 'updated_at' => now()]);
+            if (! preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $time)) {
+                throw ValidationException::withMessages(["agenda.{$index}.starts_at" => "Enter a valid start time for '{$title}'."]);
+            }
+            if (! is_numeric($duration) || (int) $duration < 1 || (int) $duration > 1440) {
+                throw ValidationException::withMessages(["agenda.{$index}.duration_minutes" => "Enter a duration between 1 and 1440 minutes for '{$title}'."]);
+            }
+
+            [$hour, $minute] = array_map('intval', explode(':', $time));
+            $sessionStart = $eventStart?->copy()->setTime($hour, $minute);
+            if ($sessionStart && $eventEnd && $sessionStart->lt($eventStart) && $eventEnd->isAfter($eventStart->copy()->endOfDay())) {
+                $sessionStart->addDay();
+            }
+            $sessionEnd = $sessionStart?->copy()->addMinutes((int) $duration);
+            if ($eventStart && $eventEnd && ($sessionStart->lt($eventStart) || $sessionEnd->gt($eventEnd))) {
+                throw ValidationException::withMessages(["agenda.{$index}.starts_at" => "Agenda session '{$title}' must fit inside the webinar schedule."]);
+            }
+
+            $validated->push([
+                'input_index' => $index,
+                'title' => $title,
+                'starts_at' => $time,
+                'duration_minutes' => (int) $duration,
+                'session_start' => $sessionStart,
+                'session_end' => $sessionEnd,
+            ]);
+        }
+
+        $ordered = $validated->filter(fn ($row) => $row['session_start'])->sortBy('session_start')->values();
+        for ($index = 1; $index < $ordered->count(); $index++) {
+            $previous = $ordered[$index - 1];
+            $current = $ordered[$index];
+            if ($current['session_start']->lt($previous['session_end'])) {
+                throw ValidationException::withMessages(["agenda.{$current['input_index']}.starts_at" => "Agenda session '{$current['title']}' overlaps '{$previous['title']}'."]);
+            }
+        }
+
+        DB::table('webinar_agenda_items')->where('webinar_id', $webinar->id)->delete();
+        foreach ($validated->values() as $order => $row) {
+            DB::table('webinar_agenda_items')->insert([
+                'webinar_id' => $webinar->id,
+                'title' => $row['title'],
+                'description' => null,
+                'starts_at' => $row['starts_at'],
+                'duration_minutes' => $row['duration_minutes'],
+                'display_order' => $order,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
         }
     }
 

@@ -1,5 +1,7 @@
 @extends('layouts.app')
 @section('shell')
+    @php($targetWebinar = isset($webinar) && $webinar instanceof \App\Models\Webinar ? $webinar : null)
+    @php($frontendAuthEnabled = !$targetWebinar || $targetWebinar->status !== 'cancelled')
     <header class="public-header sticky-top">
         <nav class="navbar navbar-expand-lg">
             <div class="container py-2"><x-site-brand /><button class="navbar-toggler border-0" data-bs-toggle="collapse"
@@ -8,11 +10,17 @@
                     <ul class="navbar-nav mx-auto gap-lg-3">
                         <li><a class="nav-link" href="/">Home</a></li>
                     </ul>
-                    <div class="d-flex gap-2">@guest<button type="button" class="btn btn-ghost" data-bs-toggle="modal"
-                                data-bs-target="#micrositeLoginModal">Log in</button><button type="button"
-                                class="btn btn-gradient" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Get
-                            started</button>@else<a class="btn btn-gradient"
-                            href="{{ route('dashboard') }}">Dashboard</a>@endguest
+                    <div class="d-flex gap-2">
+                        @guest
+                            @if ($frontendAuthEnabled)
+                                <button type="button" class="btn btn-ghost" data-bs-toggle="modal"
+                                    data-bs-target="#micrositeLoginModal">Log in</button>
+                                <button type="button" class="btn btn-gradient" data-bs-toggle="modal"
+                                    data-bs-target="#micrositeRegisterModal">Get started</button>
+                            @endif
+                        @else
+                            <a class="btn btn-gradient" href="{{ route('dashboard') }}">Dashboard</a>
+                        @endguest
                     </div>
                 </div>
             </div>
@@ -466,11 +474,13 @@
     @hasSection('footer')
         @yield('footer')
     @endif
-    @hasSection('auth-modals')
-        @yield('auth-modals')
-    @else
-        @guest
-            @include('components.frontend-auth', ['authWebinar' => null])
-        @endguest
+    @if ($frontendAuthEnabled)
+        @hasSection('auth-modals')
+            @yield('auth-modals')
+        @else
+            @guest
+                @include('components.frontend-auth', ['authWebinar' => null])
+            @endguest
+        @endif
     @endif
 @endsection
