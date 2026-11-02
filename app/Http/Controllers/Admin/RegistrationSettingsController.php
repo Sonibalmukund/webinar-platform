@@ -99,7 +99,7 @@ class RegistrationSettingsController extends Controller
     {
         $field->delete();
 
-        return back()->with('status', 'Custom field removed.');
+        return redirect()->route('admin.registration-settings')->with('status', 'Custom field removed.');
     }
 
     public function updateWebinarForm(Request $request, Webinar $webinar): RedirectResponse
@@ -192,9 +192,10 @@ class RegistrationSettingsController extends Controller
 
     public function destroyWebinarField(RegistrationField $field): RedirectResponse
     {
+        $webinarId = $field->form->webinar_id;
         $field->delete();
 
-        return back()->with('status', 'Webinar field deleted.');
+        return redirect()->route('admin.dynamic-fields.index', ['webinar_id' => $webinarId])->with('status', 'Webinar field deleted.');
     }
 
     public function applyPreset(Request $request, Webinar $webinar): RedirectResponse

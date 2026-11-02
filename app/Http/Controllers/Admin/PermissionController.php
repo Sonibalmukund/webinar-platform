@@ -103,6 +103,6 @@ class PermissionController extends Controller
         abort_unless($user->hasRole('sub-admin'), 404);
         DB::table('user_webinar_permissions')->where('user_id', $user->id)->delete();
 
-        return back()->with('status', 'Role permissions removed. Webinar assignments were kept.');
+        return redirect()->route('admin.permissions.index')->with('status', 'Role permissions removed. Webinar assignments were kept.');
     }
 }

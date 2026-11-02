@@ -6,12 +6,78 @@
             <h1>{{ $title }}</h1>
         </div>
         <div class="d-flex gap-2">
+            @if (auth()->user()->hasRole('super-admin'))
+                <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#attendeeImportModal">
+                    <i class="bi bi-file-earmark-arrow-up"></i> Import Attendees
+                </button>
+            @endif
             @if ($type === 'users' && (auth()->user()->hasRole('super-admin') || auth()->user()->hasPermission('users.export')))
                 <a class="btn btn-light" href="{{ route('admin.users.export', request()->query()) }}"><i
                         class="bi bi-download"></i> Export Excel</a>
             @endif
         </div>
     </div>
+
+    @if (auth()->user()->hasRole('super-admin'))
+        @if ($errors->has('sheet') || $errors->has('webinar_id'))
+            <div class="alert alert-danger">
+                <strong>Import failed.</strong> {{ $errors->first('sheet') ?: $errors->first('webinar_id') }}
+            </div>
+        @endif
+        @if (session('import_warnings'))
+            <div class="alert alert-warning">
+                <strong>Some rows were skipped:</strong>
+                <ul class="mb-0 mt-1">
+                    @foreach (session('import_warnings') as $warning)
+                        <li>{{ $warning }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
+        <div class="modal fade" id="attendeeImportModal" tabindex="-1" aria-labelledby="attendeeImportTitle" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form method="POST" action="{{ route('admin.users.import') }}" enctype="multipart/form-data">
+                        @csrf
+                        <div class="modal-header">
+                            <div>
+                                <h5 class="modal-title" id="attendeeImportTitle">Import attendees</h5>
+                                <small class="text-muted">Super Admin only · CSV or XLSX · maximum 5,000 rows</small>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label" for="importWebinar">Webinar</label>
+                                <select class="form-select" id="importWebinar" name="webinar_id" required>
+                                    <option value="">Select webinar</option>
+                                    @foreach ($webinars as $webinar)
+                                        <option value="{{ $webinar->id }}" @selected((int) old('webinar_id', request('webinar_id')) === $webinar->id)>{{ $webinar->title }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label" for="attendeeSheet">Attendee sheet</label>
+                                <input class="form-control" id="attendeeSheet" type="file" name="sheet" accept=".csv,.txt,.xlsx" required>
+                            </div>
+                            <div class="rounded border p-3 bg-light small">
+                                <strong>Required:</strong> Email. <strong>Supported:</strong> Name, Mobile, Company and Designation.<br>
+                                Extra columns such as <code>emp_id</code>, Department or Branch Code are saved automatically as hidden webinar fields.
+                            </div>
+                            <a class="d-inline-block mt-3" href="{{ route('admin.users.import-template') }}">
+                                <i class="bi bi-download"></i> Download sample CSV
+                            </a>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-upload"></i> Import attendees</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endif
 
     @if ($type === 'users')
         <div class="filter-bar">
@@ -161,6 +227,7 @@
                                                 class="d-inline">
                                                 @csrf
                                                 @method('DELETE')
+                                                <input type="hidden" name="return_to" value="users">
                                                 <button type="submit" class="icon-btn text-danger"
                                                     title="Delete registration"><i class="bi bi-trash3"></i></button>
                                             </form>

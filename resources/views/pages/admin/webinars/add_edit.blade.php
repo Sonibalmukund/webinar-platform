@@ -5,9 +5,13 @@
         .dynamic-field-switches {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 10px;
             flex-wrap: wrap;
-            padding-bottom: 8px
+            padding: 8px 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: #fff;
+            min-height: 48px
         }
 
         .dynamic-field-toggle {
@@ -1131,6 +1135,41 @@
             border-radius: 13px;
             background: #fff;
             cursor: pointer
+        }
+
+        .dynamic-field-toggle.login-id-choice {
+            padding-left: 10px;
+            border-left: 1px solid #e2e8f0;
+            color: #475569
+        }
+
+        .dynamic-field-toggle.login-id-choice input[type="radio"] {
+            width: 1.15rem;
+            min-width: 1.15rem;
+            height: 1.15rem;
+            border-radius: 50%;
+            border: 1.5px solid #94a3b8;
+            background-image: none;
+            box-shadow: none
+        }
+
+        .dynamic-field-toggle.login-id-choice input[type="radio"]:checked {
+            border: 4px solid #16a34a;
+            background: #fff
+        }
+
+        .dynamic-field-toggle.login-id-choice:has(input:checked) {
+            color: #15803d
+        }
+
+        @media (max-width: 1399px) {
+            .dynamic-field-switches {
+                gap: 8px
+            }
+
+            .dynamic-field-toggle {
+                font-size: .74rem
+            }
         }
 
         .brand-style-option:has(input:checked) {
@@ -2949,6 +2988,7 @@
                                         'placeholder' => $field->placeholder,
                                         'is_required' => $field->is_required ? '1' : null,
                                         'is_enabled' => $field->is_enabled ? '1' : null,
+                                        'login_enabled' => $field->login_enabled ? '1' : null,
                                         'options' => $field->options->pluck('label')->join("\n"),
                                     ],
                                 )
@@ -2963,6 +3003,7 @@
                                 'placeholder' => 'Enter your full name',
                                 'is_required' => '1',
                                 'is_enabled' => '1',
+                                'login_enabled' => '1',
                             ],
                             [
                                 'label' => 'Email address',
@@ -2980,6 +3021,7 @@
                         ]);
                     }
                 @endphp
+                <div class="alert alert-info py-2 small"><i class="bi bi-info-circle me-1"></i><strong>Select one login field.</strong> Attendees will use its value—Email, Mobile or Emp ID—to enter this webinar.</div>
                 <div id="dynamicFieldsList" class="d-flex flex-column gap-3">
                     @foreach ($dynamicRows as $index => $field)
                         <div class="p-3 border rounded-3 bg-light" data-dynamic-field>
@@ -3016,7 +3058,10 @@
                                                 type="checkbox" role="switch" data-field-name="is_enabled"
                                                 name="fields[{{ $index }}][is_enabled]" value="1"
                                                 @checked(!empty($field['is_enabled']))
-                                                aria-label="Toggle active field"></span></label></div>
+                                                aria-label="Toggle active field"></span></label><label
+                                        class="dynamic-field-toggle login-id-choice" title="Use this field for attendee login"><span>Login</span><input class="form-check-input"
+                                            type="radio" name="login_field_index" value="{{ $index }}" data-login-field
+                                            @checked(!empty($field['login_enabled'])) aria-label="Use {{ $field['label'] ?? 'this field' }} for login"></label></div>
                                 <div class="col-lg-1 text-end"><button type="button" class="btn btn-outline-danger"
                                         data-remove-dynamic-field title="Remove field"><i
                                             class="bi bi-trash3"></i></button></div>
@@ -4132,6 +4177,11 @@
                 row, index) => {
                 row.querySelectorAll('[data-field-name]').forEach(input => input.name =
                     `fields[${index}][${input.dataset.fieldName}]`);
+                const loginField = row.querySelector('[data-login-field]');
+                if (loginField) {
+                    loginField.name = 'login_field_index';
+                    loginField.value = index;
+                }
             });
             const syncDynamicFieldOptions = row => {
                 const type = row.querySelector('[data-field-name="field_type"]')?.value;
@@ -4150,7 +4200,7 @@
             <div class="col-lg-3"><label class="form-label">Field label</label><input class="form-control" data-field-name="label" placeholder="e.g. Department"></div>
             <div class="col-lg-2"><label class="form-label">Type</label><select class="form-select" data-field-name="field_type"><option value="text">Text</option><option value="dropdown">Dropdown</option><option value="radio">Radio</option><option value="checkbox">Checkboxes</option><option value="country">Country</option><option value="state">State</option><option value="city">City</option></select></div>
             <div class="col-lg-3"><label class="form-label">Placeholder</label><input class="form-control" data-field-name="placeholder"></div>
-            <div class="col-lg-3 dynamic-field-switches"><label class="dynamic-field-toggle"><span>Required</span><span class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" data-field-name="is_required" value="1" aria-label="Toggle required field"></span></label><label class="dynamic-field-toggle"><span>Active</span><span class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" data-field-name="is_enabled" value="1" checked aria-label="Toggle active field"></span></label></div>
+            <div class="col-lg-3 dynamic-field-switches"><label class="dynamic-field-toggle"><span>Required</span><span class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" data-field-name="is_required" value="1" aria-label="Toggle required field"></span></label><label class="dynamic-field-toggle"><span>Active</span><span class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" data-field-name="is_enabled" value="1" checked aria-label="Toggle active field"></span></label><label class="dynamic-field-toggle login-id-choice" title="Use this field for attendee login"><span>Login</span><input class="form-check-input" type="radio" name="login_field_index" data-login-field aria-label="Use this field for login"></label></div>
             <div class="col-lg-1 text-end"><button type="button" class="btn btn-outline-danger" data-remove-dynamic-field><i class="bi bi-trash3"></i></button></div>
             <div class="col-12" data-field-options hidden><label class="form-label">Options <small class="text-muted">(one per line)</small></label><textarea class="form-control" rows="2" data-field-name="options"></textarea></div>
         </div>`;
@@ -4160,9 +4210,14 @@
                 row.querySelector('[data-field-name="label"]')?.focus();
             });
             dynamicFieldsList?.addEventListener('change', event => {
-                if (!event.target.matches('[data-field-name="field_type"]')) return;
                 const row = event.target.closest('[data-dynamic-field]');
-                if (row) syncDynamicFieldOptions(row);
+                if (event.target.matches('[data-field-name="field_type"]') && row) syncDynamicFieldOptions(row);
+                if (event.target.matches('[data-login-field]') && row) {
+                    const required = row.querySelector('[data-field-name="is_required"]');
+                    const active = row.querySelector('[data-field-name="is_enabled"]');
+                    if (required) required.checked = true;
+                    if (active) active.checked = true;
+                }
             });
             dynamicFieldsList?.addEventListener('click', event => {
                 const button = event.target.closest('[data-remove-dynamic-field]');

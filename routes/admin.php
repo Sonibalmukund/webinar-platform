@@ -35,6 +35,11 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::put('/admin/profile', [ProfileController::class, 'update'])->name('admin.profile.update');
     Route::get('/admin/users', [RegistrationController::class, 'users'])->name('admin.users');
     Route::get('/admin/users/export', [RegistrationController::class, 'exportUsers'])->name('admin.users.export');
+    Route::middleware('role:super-admin')->group(function () {
+        Route::post('/admin/users/import', [RegistrationController::class, 'importUsers'])->name('admin.users.import');
+        Route::get('/admin/users/import-template', [RegistrationController::class, 'importTemplate'])->name('admin.users.import-template');
+        Route::delete('/admin/users/{user}', [RegistrationController::class, 'destroyUser'])->name('admin.users.destroy');
+    });
     Route::get('/admin/attendance', [AttendanceController::class, 'index'])->name('admin.attendance');
     Route::get('/admin/attendance/export', [AttendanceController::class, 'export'])->name('admin.attendance.export');
     Route::get('/admin/registrations', [RegistrationController::class, 'index'])->name('admin.registrations');
@@ -65,6 +70,7 @@ Route::middleware(['auth', 'role:super-admin,sub-admin', 'admin.access'])->group
     Route::get('/admin/webinars/{webinar}/preview-room', [PublicWebinarController::class, 'dashboard'])->name('admin.webinars.preview-room');
     Route::get('/admin/webinars/{webinar}/live-viewers', [WebinarController::class, 'liveViewers'])->name('admin.webinars.live-viewers');
     Route::put('/admin/webinars/{webinar}/live-control', [WebinarController::class, 'controls'])->name('admin.webinars.controls');
+    Route::patch('/admin/webinars/{webinar}/registration-visibility', [WebinarController::class, 'registrationVisibility'])->name('admin.webinars.registration-visibility');
     Route::put('/admin/webinars/{webinar}/announcement', [WebinarController::class, 'announcement'])->name('admin.webinars.announcement');
     Route::get('/admin/webinars/{webinar}', [WebinarController::class, 'show'])->name('admin.webinars.show');
     Route::put('/admin/webinars/{webinar}', [WebinarController::class, 'update'])->name('admin.webinars.update');

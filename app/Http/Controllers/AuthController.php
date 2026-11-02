@@ -6,6 +6,7 @@ use App\Models\City;
 use App\Models\Country;
 use App\Models\Registration;
 use App\Models\RegistrationAnswer;
+use App\Models\RegistrationField;
 use App\Models\SignupField;
 use App\Models\SignupFieldAnswer;
 use App\Models\State;
@@ -94,9 +95,22 @@ class AuthController extends Controller
         }
         $credentials = $portal === 'user' ? $this->validateFrontend($request, $rules, 'login') : $request->validate($rules);
         $login = $credentials['login'];
-        $user = User::where('email', $login)->orWhere('mobile', $login)->first();
+        $loginField = null;
+        if ($portal === 'user' && $dashboardWebinar) {
+            $dashboardWebinar->loadMissing('registrationForm.fields');
+            $loginField = $dashboardWebinar->registrationForm?->fields
+                ?->first(fn ($field) => $field->is_enabled && $field->login_enabled);
+        }
+        $user = $portal === 'user' && $dashboardWebinar
+            ? $this->findWebinarAttendeeByLogin($dashboardWebinar, $loginField, $login)
+            : User::where('email', $login)->orWhere('mobile', $login)->first();
         if (! $user) {
             if ($portal === 'user') {
+                if ($dashboardWebinar && ! $dashboardWebinar->registrationForm?->is_active) {
+                    return redirect(FrontendAuth::landing($request, 'login'))
+                        ->withErrors(['login' => 'No registered attendee was found for this login ID. Registration is currently closed.'])
+                        ->onlyInput('login', '_auth_modal', 'return_to', 'webinar_id');
+                }
                 $request->merge(['_auth_modal' => 'register']);
                 $registrationInput = $this->registrationPrefill($request, $dashboardWebinar, $login);
 
@@ -105,7 +119,7 @@ class AuthController extends Controller
                     ->with('registration_prompt', 'No account was found. Please complete your registration.');
             }
 
-            return back()->withErrors(['login' => 'No account was found for this email address.'])->onlyInput('login');
+            return back()->withErrors(['login' => 'No account was found for this login ID.'])->onlyInput('login');
         }
         if ($passwordEnabled && ! Hash::check($credentials['password'], $user->password)) {
             return ($portal === 'user' ? redirect(FrontendAuth::landing($request, 'login')) : back())->withErrors(['password' => 'The password entered is incorrect.'])->onlyInput('login', '_auth_modal', 'return_to', 'webinar_id');
@@ -134,7 +148,7 @@ class AuthController extends Controller
 
                 return redirect(FrontendAuth::landing($request, 'register'))
                     ->withInput($registrationInput)
-                    ->with('registration_prompt', 'This email is not registered for this webinar. Please complete the registration form.');
+                    ->with('registration_prompt', 'This login ID is not registered for this webinar. Please complete the registration form.');
             }
             $request->session()->put('frontend_event_slug', $dashboardWebinar->slug);
             $destination = route('webinars.dashboard', $dashboardWebinar);
@@ -180,6 +194,11 @@ class AuthController extends Controller
 
         // 1. Webinar-specific registration (with or without dynamic fields)
         if ($webinar) {
+            if (! $webinar->registrationForm?->is_active) {
+                return redirect(FrontendAuth::landing($request, 'login'))
+                    ->withErrors(['registration' => 'Registration is currently closed for this webinar.'])
+                    ->withInput($request->only('return_to', 'webinar_id'));
+            }
             $submittedFields = $request->input('fields', []);
             foreach ($registrationFields as $field) {
                 if (! isset($submittedFields[$field->id]) || $submittedFields[$field->id] === '' || $submittedFields[$field->id] === null) {
@@ -485,25 +504,58 @@ class AuthController extends Controller
         $input = $request->only('return_to', 'webinar_id');
         $input['_auth_modal'] = 'register';
 
-        if (! filter_var($login, FILTER_VALIDATE_EMAIL)) {
-            return $input;
-        }
-
-        $input['email'] = $login;
-        $emailField = $webinar?->registrationForm?->fields
-            ?->first(function ($field) {
-                $lowerLabel = strtolower(trim($field->label));
-
-                return $field->is_enabled && ($field->field_type === 'email'
-                    || in_array($lowerLabel, ['email', 'email address'], true)
-                    || str_starts_with($field->field_key, 'email'));
-            });
-
-        if ($emailField) {
-            $input['fields'][$emailField->id] = $login;
+        $loginField = $webinar?->registrationForm?->fields
+            ?->first(fn ($field) => $field->is_enabled && $field->login_enabled);
+        if ($loginField) {
+            $input['fields'][$loginField->id] = $login;
+            if ($this->isEmailLoginField($loginField) && filter_var($login, FILTER_VALIDATE_EMAIL)) {
+                $input['email'] = $login;
+            } elseif ($this->isMobileLoginField($loginField)) {
+                $input['mobile'] = $login;
+            }
+        } elseif (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+            $input['email'] = $login;
         }
 
         return $input;
+    }
+
+    private function findWebinarAttendeeByLogin(Webinar $webinar, ?RegistrationField $loginField, string $login): ?User
+    {
+        $attendeeQuery = fn ($query) => $query->where('webinar_id', $webinar->id)->admitted();
+
+        if (! $loginField || $this->isEmailLoginField($loginField)) {
+            return User::where('email', $login)->whereHas('registrations', $attendeeQuery)->first();
+        }
+        if ($this->isMobileLoginField($loginField)) {
+            return User::where('mobile', $login)->whereHas('registrations', $attendeeQuery)->first();
+        }
+
+        $userId = RegistrationAnswer::query()
+            ->join('registrations', 'registrations.id', '=', 'registration_answers.registration_id')
+            ->where('registrations.webinar_id', $webinar->id)
+            ->whereNotIn('registrations.status', ['waitlisted', 'cancelled', 'rejected'])
+            ->where('registration_answers.registration_field_id', $loginField->id)
+            ->where('registration_answers.value', trim($login))
+            ->value('registrations.user_id');
+
+        return $userId ? User::find($userId) : null;
+    }
+
+    private function isEmailLoginField(RegistrationField $field): bool
+    {
+        $key = Str::lower(trim($field->field_key));
+        $label = Str::lower(trim($field->label));
+
+        return $field->field_type === 'email' || str_starts_with($key, 'email') || in_array($label, ['email', 'email address'], true);
+    }
+
+    private function isMobileLoginField(RegistrationField $field): bool
+    {
+        $key = Str::lower(trim($field->field_key));
+        $label = Str::lower(trim($field->label));
+
+        return str_starts_with($key, 'mobile') || str_starts_with($key, 'phone') || in_array($label, ['mobile', 'mobile number', 'phone', 'phone number'], true);
     }
 
     private function micrositeReturnPath(Request $request): ?string

@@ -73,6 +73,184 @@
             z-index: 2;
             box-shadow: 0 6px 18px rgba(15, 23, 42, .24)
         }
+
+        .control-guide {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 1px;
+            margin-bottom: 18px;
+            overflow: hidden;
+            border: 1px solid #26344a;
+            border-radius: 6px 18px;
+            background: #26344a;
+            box-shadow: 0 12px 30px rgba(9, 18, 34, .1)
+        }
+
+        .control-guide-step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+            padding: 15px 17px;
+            color: #dbe3ee;
+            background: #0b1526
+        }
+
+        .control-guide-step>span {
+            display: grid;
+            place-items: center;
+            flex: 0 0 30px;
+            width: 30px;
+            height: 30px;
+            border-radius: 4px 10px;
+            color: #fff;
+            background: #ee1f2d;
+            font-size: .75rem;
+            font-weight: 800
+        }
+
+        .control-guide-step strong,
+        .control-guide-step small {
+            display: block
+        }
+
+        .control-guide-step strong {
+            color: #fff;
+            font-size: .78rem
+        }
+
+        .control-guide-step small {
+            margin-top: 2px;
+            color: #91a0b5;
+            font-size: .68rem
+        }
+
+        .control-section+.control-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e9f0
+        }
+
+        .control-section-heading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px
+        }
+
+        .control-section-heading i {
+            display: grid;
+            place-items: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 4px 11px;
+            color: #ee1f2d;
+            background: #fff0f1
+        }
+
+        .control-section-heading h4,
+        .control-section-heading p {
+            margin: 0
+        }
+
+        .control-section-heading h4 {
+            font-size: .95rem
+        }
+
+        .control-section-heading p {
+            color: #748096;
+            font-size: .72rem
+        }
+
+        .control-fields-grid,
+        .control-toggle-grid,
+        .live-quick-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px
+        }
+
+        .control-setting-field {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            min-width: 0;
+            padding: 13px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fff
+        }
+
+        .control-setting-field span {
+            min-width: 0
+        }
+
+        .control-setting-field strong,
+        .control-setting-field small {
+            display: block
+        }
+
+        .control-setting-field small {
+            margin-top: 3px;
+            color: #748096;
+            font-size: .68rem
+        }
+
+        .control-setting-field .form-select {
+            width: 150px;
+            flex: 0 0 150px
+        }
+
+        .control-setting-field .form-control {
+            width: 88px;
+            flex: 0 0 88px;
+            text-align: center
+        }
+
+        .control-toggle-grid .live-control-switch {
+            min-height: 72px
+        }
+
+        .control-save-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-top: 18px;
+            padding-top: 16px;
+            border-top: 1px solid #e5e9f0
+        }
+
+        .control-save-bar small {
+            color: #748096
+        }
+
+        .quick-control-card {
+            margin-top: 12px !important
+        }
+
+        @media (max-width: 767px) {
+            .control-guide,
+            .control-fields-grid,
+            .control-toggle-grid,
+            .live-quick-grid {
+                grid-template-columns: 1fr
+            }
+
+            .control-guide-step {
+                padding: 12px 14px
+            }
+
+            .control-save-bar {
+                align-items: stretch;
+                flex-direction: column
+            }
+
+            .control-save-bar .btn {
+                width: 100%
+            }
+        }
     </style>
     <div class="page-heading pt-2">
         <div><span class="eyebrow">LIVE CONTROL</span>
@@ -96,6 +274,11 @@
     @if ($errors->any())
         <div class="alert alert-danger">{{ $errors->first() }}</div>
     @endif
+    <div class="control-guide" aria-label="How to use live controls">
+        <div class="control-guide-step"><span>1</span><div><strong>Set event access</strong><small>Choose status and room opening rules.</small></div></div>
+        <div class="control-guide-step"><span>2</span><div><strong>Choose attendee features</strong><small>Turn chat, polls and feedback on or off.</small></div></div>
+        <div class="control-guide-step"><span>3</span><div><strong>Save and verify</strong><small>Save controls, then preview the attendee room.</small></div></div>
+    </div>
     <div class="control-grid" data-live-viewers data-webinar-id="{{ $webinar->id }}"
         data-live-viewers-url="{{ route('admin.webinars.live-viewers', $webinar) }}">
         <div class="control-stage">
@@ -114,69 +297,60 @@
                     :live="true" data-live-viewer-count /><x-stat-card label="Registered" :value="$webinar->registrations_count"
                     icon="people" /><x-stat-card label="Capacity" :value="$webinar->max_attendees ?: 'Unlimited'" icon="person-check" tone="blue" />
             </div>
-            <form class="panel-card mt-3" id="liveControlsForm" method="POST" action="{{ route('admin.webinars.controls', $webinar) }}"
-                data-admin-live-controls>@csrf @method('PUT')<div class="panel-title">
-                    <h3>Webinar controls</h3>
+            <form class="panel-card mt-3" id="liveControlsForm" method="POST"
+                action="{{ route('admin.webinars.controls', $webinar) }}" data-admin-live-controls>
+                @csrf @method('PUT')
+                <div class="panel-title">
+                    <div><h3>Event Access &amp; Room Features</h3><p>Configure what attendees can access. Changes apply after you press Save controls.</p></div>
+                    <span class="status-badge {{ $webinar->status }}">{{ strtoupper($webinar->status) }}</span>
                 </div>
-                <div class="switch-list"><label
-                        style="display:flex;align-items:center;justify-content:space-between;gap:16px"><span
-                            style="white-space:nowrap;font-weight:600">Status</span><select class="form-select"
-                            name="status"
-                            style="width:auto;min-width:160px;font-weight:650;padding:6px 36px 6px 14px;border-radius:10px">
+
+                <section class="control-section">
+                    <div class="control-section-heading"><i class="bi bi-broadcast"></i><div><h4>Event status &amp; access</h4><p>Control when the room opens and who can enter.</p></div></div>
+                    <div class="control-fields-grid">
+                        <label class="control-setting-field"><span><strong>Event status</strong><small>Use Live only when the session is ready.</small></span><select class="form-select" name="status">
                             @foreach (['draft', 'scheduled', 'live', 'completed', 'cancelled'] as $status)
-                                <option value="{{ $status }}" @selected($webinar->status === $status)>{{ ucfirst($status) }}
-                                </option>
+                                <option value="{{ $status }}" @selected($webinar->status === $status)>{{ ucfirst($status) }}</option>
                             @endforeach
-                        </select></label><label
-                        class="live-control-switch"><span><strong>Live Early Room Access</strong><small
-                                class="text-muted">Open the webinar room immediately for registered attendees, regardless
-                                of the scheduled early-access time.</small></span>
-                        <span class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch"
-                                id="earlyRoomOpen" name="early_room_open" value="1"
-                                @checked(data_get($webinar->settings, 'experience.early_room_open', false))
-                                aria-label="Open early room access now"></span>
-                    </label><label
-                        style="display:flex;align-items:center;justify-content:space-between;gap:16px"><span><strong>Early
-                                Room Access (minutes)</strong><small class="d-block text-muted">How early registered
-                                attendees may enter before the start time.</small></span><input class="form-control"
-                            type="number" name="early_entry_minutes" min="0" max="240"
-                            value="{{ $webinar->early_entry_minutes ?? 30 }}" required style="width:100px"></label><label
-                        style="display:flex;align-items:center;justify-content:space-between;gap:16px"><span><strong>Certificate
-                                Minimum Watch Time (%)</strong><small class="d-block text-muted">Download unlocks after this
-                                attendance percentage.</small></span><input class="form-control" type="number"
-                            name="certificate_min_attendance" min="0" max="100"
-                            value="{{ data_get($webinar->settings, 'experience.certificate_min_attendance', 80) }}"
-                            required style="width:100px"></label>
-                    <div class="live-control-switch"><span><strong>Participants</strong><small class="text-muted">Show the
-                                real-time participant list in the live room and online count on the landing
-                                page.</small></span>
-                        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch"
-                                id="participantsEnabled" name="participants_enabled" value="1"
-                                @checked(data_get($webinar->settings, 'experience.participants_enabled', false)) aria-label="Toggle participants"></div>
+                        </select></label>
+                        <label class="live-control-switch"><span><strong>Open room now</strong><small class="text-muted">Allow registered attendees to enter immediately.</small></span><span class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="earlyRoomOpen" name="early_room_open" value="1" @checked(data_get($webinar->settings, 'experience.early_room_open', false)) aria-label="Open room immediately"></span></label>
+                        <label class="control-setting-field"><span><strong>Scheduled early access</strong><small>Minutes before start time that entry opens.</small></span><input class="form-control" type="number" name="early_entry_minutes" min="0" max="240" value="{{ $webinar->early_entry_minutes ?? 30 }}" required></label>
+                        <label class="control-setting-field"><span><strong>Certificate watch requirement</strong><small>Minimum attendance percentage to unlock.</small></span><input class="form-control" type="number" name="certificate_min_attendance" min="0" max="100" value="{{ data_get($webinar->settings, 'experience.certificate_min_attendance', 80) }}" required></label>
                     </div>
-                    <div class="live-control-switch"><span><strong>Live chat</strong></span>
-                        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch"
-                                id="liveChatEnabled" name="chat_enabled" value="1" @checked($webinar->chat_enabled)
-                                aria-label="Toggle live chat"></div>
+                </section>
+
+                <section class="control-section">
+                    <div class="control-section-heading"><i class="bi bi-people"></i><div><h4>Audience features</h4><p>Choose the tools attendees can see inside the live room.</p></div></div>
+                    <div class="control-toggle-grid">
+                        <label class="live-control-switch"><span><strong>Participant list</strong><small class="text-muted">Show live viewers and participant names.</small></span><span class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="participantsEnabled" name="participants_enabled" value="1" @checked(data_get($webinar->settings, 'experience.participants_enabled', false)) aria-label="Toggle participant list"></span></label>
+                        <label class="live-control-switch"><span><strong>Live chat</strong><small class="text-muted">Allow attendees to send chat messages.</small></span><span class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="liveChatEnabled" name="chat_enabled" value="1" @checked($webinar->chat_enabled) aria-label="Toggle live chat"></span></label>
+                        <label class="live-control-switch"><span><strong>Comments</strong><small class="text-muted">Show the comments section to attendees.</small></span><span class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="commentsEnabled" name="comments_enabled" value="1" @checked($webinar->comments_enabled) aria-label="Toggle comments"></span></label>
+                        <label class="live-control-switch"><span><strong>Polls &amp; quizzes</strong><small class="text-muted">Allow active polls to appear in the room.</small></span><span class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="pollsEnabled" name="polls_enabled" value="1" @checked($webinar->polls_enabled) aria-label="Toggle polls"></span></label>
+                        <label class="live-control-switch"><span><strong>Feedback</strong><small class="text-muted">Let attendees submit session feedback.</small></span><span class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="feedbackEnabled" name="feedback_enabled" value="1" @checked($webinar->feedback_enabled) aria-label="Toggle feedback"></span></label>
                     </div>
-                    <div class="live-control-switch"><span><strong>Comments</strong></span>
-                        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch"
-                                id="commentsEnabled" name="comments_enabled" value="1" @checked($webinar->comments_enabled)
-                                aria-label="Toggle comments"></div>
+                </section>
+
+                <div class="control-save-bar"><small><i class="bi bi-info-circle me-1"></i>Preview the live room after saving to confirm attendee visibility.</small><div class="d-flex gap-2"><a href="{{ route('admin.webinars.index') }}" class="btn btn-light">Back</a><button class="btn btn-gradient"><i class="bi bi-check2-circle me-1"></i>Save controls</button></div></div>
+            </form>
+            <form class="panel-card mt-3" method="POST"
+                action="{{ route('admin.webinars.registration-visibility', $webinar) }}" data-registration-control>
+                @csrf @method('PATCH')
+                <div class="panel-title">
+                    <div>
+                        <h3>Registration Control</h3>
+                        <p>Open or stop new registrations instantly. Existing registered attendees can still log in.</p>
                     </div>
-                    <div class="live-control-switch"><span><strong>Polls</strong></span>
-                        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch"
-                                id="pollsEnabled" name="polls_enabled" value="1" @checked($webinar->polls_enabled)
-                                aria-label="Toggle polls"></div>
-                    </div>
-                    <div class="live-control-switch"><span><strong>Feedback</strong></span>
-                        <div class="form-check form-switch"><input class="form-check-input" type="checkbox"
-                                role="switch" id="feedbackEnabled" name="feedback_enabled" value="1"
-                                @checked($webinar->feedback_enabled) aria-label="Toggle feedback"></div>
-                    </div>
+                    <span class="status-badge {{ ($webinar->registrationForm?->is_active ?? true) ? 'live' : 'draft' }}">
+                        {{ ($webinar->registrationForm?->is_active ?? true) ? 'ON' : 'OFF' }}
+                    </span>
                 </div>
-                <div class="d-flex align-items-center gap-2 mt-3"><button class="btn btn-gradient">Save status &amp;
-                        values</button><a href="{{ route('admin.webinars.index') }}" class="btn btn-light">Back</a>
+                <div class="live-control-switch">
+                    <span><strong>Accept new registrations</strong><small class="text-muted">This switch only controls the public registration form.</small></span>
+                    <input type="hidden" name="enabled" value="0">
+                    <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch"
+                            id="registrationEnabled" name="enabled" value="1"
+                            @checked($webinar->registrationForm?->is_active ?? true)
+                            onchange="this.form.submit()" aria-label="Toggle webinar registration"></div>
                 </div>
             </form>
             <div class="panel-card mt-3" data-live-room-certificate>

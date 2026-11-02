@@ -257,6 +257,28 @@ class WebinarController extends Controller
         return back()->with('status', 'Pinned announcement updated.');
     }
 
+    public function registrationVisibility(Request $request, Webinar $webinar): RedirectResponse|JsonResponse
+    {
+        $request->validate(['enabled' => ['nullable', 'boolean']]);
+        $form = $webinar->registrationForm()->firstOrCreate([], [
+            'title' => 'Registration Form',
+            'is_active' => true,
+            'require_login' => true,
+        ]);
+        $form->update(['is_active' => $request->boolean('enabled')]);
+        $this->broadcastRoom($webinar, 'controls');
+        AuditTrail::record('webinar.registration', $webinar, $form->is_active ? 'Registration opened.' : 'Registration closed.');
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'message' => $form->is_active ? 'Registration enabled.' : 'Registration disabled.',
+                'registration_enabled' => (bool) $form->is_active,
+            ]);
+        }
+
+        return back()->with('status', $form->is_active ? 'Registration enabled.' : 'Registration disabled.');
+    }
+
     public function status(Request $request, Webinar $webinar): RedirectResponse
     {
         $data = $request->validate(['status' => ['required', 'in:draft,scheduled,live,completed,cancelled']]);
@@ -491,11 +513,13 @@ class WebinarController extends Controller
     {
         $form = $webinar->registrationForm()->updateOrCreate([], ['title' => $request->input('form_title', 'Registration Form'), 'description' => $request->input('form_description'), 'is_active' => $request->boolean('registration_enabled'), 'require_login' => true, 'success_message' => $request->input('success_message')]);
         $kept = [];
+        $loginFieldIndex = $request->input('login_field_index');
         foreach ($request->input('fields', []) as $order => $row) {
             if (blank($row['label'] ?? null)) {
                 continue;
             }
-            $field = $form->fields()->updateOrCreate(['id' => $row['id'] ?? null], ['label' => $row['label'], 'field_key' => $row['field_key'] ?? Str::slug($row['label'], '_'), 'field_type' => $row['field_type'] ?? 'text', 'placeholder' => $row['placeholder'] ?? null, 'is_required' => isset($row['is_required']), 'is_enabled' => isset($row['is_enabled']), 'display_order' => $order]);
+            $isLoginField = $loginFieldIndex !== null && (string) $loginFieldIndex === (string) $order;
+            $field = $form->fields()->updateOrCreate(['id' => $row['id'] ?? null], ['label' => $row['label'], 'field_key' => $row['field_key'] ?? Str::slug($row['label'], '_'), 'field_type' => $row['field_type'] ?? 'text', 'placeholder' => $row['placeholder'] ?? null, 'is_required' => $isLoginField || isset($row['is_required']), 'is_enabled' => $isLoginField || isset($row['is_enabled']), 'login_enabled' => $isLoginField, 'display_order' => $order]);
             $kept[] = $field->id;
             $field->options()->delete();
             if (in_array($field->field_type, ['dropdown', 'radio', 'checkbox'])) {

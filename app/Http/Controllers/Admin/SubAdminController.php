@@ -88,6 +88,6 @@ class SubAdminController extends Controller
         abort_unless($subAdmin->hasRole('sub-admin'), 404);
         $subAdmin->delete();
 
-        return back()->with('status', 'Sub admin deleted.');
+        return redirect()->route('admin.subadmins.index')->with('status', 'Sub admin deleted.');
     }
 }

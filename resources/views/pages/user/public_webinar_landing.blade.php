@@ -6,7 +6,7 @@
     $brandDisplayStyle = data_get($webinar->settings, 'experience.brand_display_style', 'cards');
     $brandDisplayStyle = in_array($brandDisplayStyle, ['cards', 'monochrome'], true) ? $brandDisplayStyle : 'cards';
     $pinnedAnnouncement = data_get($webinar->settings, 'pinned_announcement', []);
-    $registrationAvailable = $webinar->status !== 'cancelled';
+    $registrationAvailable = $webinar->status !== 'cancelled' && (bool) $webinar->registrationForm?->is_active;
     $roomOpensText = $opensAt
         ? $opensAt->timezone($webinar->timezone)->format('M d, Y · g:i A').' ('.$webinar->timezone.')'
         : 'soon';
@@ -1249,7 +1249,7 @@
             }
 
             .microsite-logo {
-                max-width: calc(100% - 52px)
+                max-width: 92px
             }
 
             .microsite-logo span {
@@ -1257,7 +1257,38 @@
             }
 
             .microsite-nav-actions {
-                gap: 8px
+                gap: 5px
+            }
+
+            .mobile-header-auth {
+                display: flex !important;
+                align-items: center;
+                gap: 4px
+            }
+
+            .mobile-header-auth button {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 34px;
+                padding: 6px 9px;
+                border-radius: 9px;
+                font-size: .68rem;
+                font-weight: 800;
+                line-height: 1;
+                white-space: nowrap
+            }
+
+            .mobile-header-login {
+                border: 1px solid color-mix(in srgb, var(--webinar-primary) 55%, #cbd5e1);
+                background: #fff;
+                color: var(--webinar-primary)
+            }
+
+            .mobile-header-register {
+                border: 1px solid transparent;
+                background: linear-gradient(135deg, var(--webinar-primary), var(--webinar-secondary));
+                color: #fff
             }
 
             .microsite-nav-actions>.btn-login-unique,
@@ -1354,15 +1385,13 @@
                         Form</button>
                     <a class="btn btn-register-nav" href="{{ route('admin.webinars.edit', $webinar) }}"><i
                             class="bi bi-pencil-square me-1"></i> {{ __('webinar.admin_edit') }}</a>
-                @elseif(!$registrationAvailable)
-                    <span class="badge bg-secondary-subtle text-secondary border px-3 py-2 rounded-pill fw-bold">
-                        {{ $webinar->status === 'completed' ? __('webinar.concluded') : ucfirst($webinar->status) }}
-                    </span>
                 @elseif(!auth()->check())
                     <button type="button" class="btn-login-unique" data-landing-login data-bs-toggle="modal"
                         data-bs-target="#micrositeLoginModal">{{ __('webinar.login') }}</button>
-                    <button type="button" class="btn btn-register-nav" data-bs-toggle="modal"
-                        data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
+                    @if($registrationAvailable)
+                        <button type="button" class="btn btn-register-nav" data-bs-toggle="modal"
+                            data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
+                    @endif
                 @elseif($isRegistered && $canEnter)
                     <a class="btn btn-register-nav"
                         href="{{ route('webinars.dashboard', $webinar) }}">{{ __('webinar.enter') }}</a>
@@ -1371,9 +1400,19 @@
                         data-room-message="Room opens at {{ $roomOpensText }}">
                         <i class="bi bi-clock me-1"></i> Room Opens Soon
                     </button>
-                @else
+                @elseif($registrationAvailable)
                     <button type="button" class="btn btn-register-nav" data-bs-toggle="modal"
                         data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
+                @endif
+                @if (!$isStaffPreview && !auth()->check())
+                    <div class="mobile-header-auth d-none" aria-label="Attendee access">
+                        <button type="button" class="mobile-header-login" data-landing-login data-bs-toggle="modal"
+                            data-bs-target="#micrositeLoginModal">{{ __('webinar.login') }}</button>
+                        @if($registrationAvailable)
+                            <button type="button" class="mobile-header-register" data-bs-toggle="modal"
+                                data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
+                        @endif
+                    </div>
                 @endif
                 <button class="microsite-menu-toggle d-lg-none" type="button" data-bs-toggle="collapse"
                     data-bs-target="#micrositeMobileNav" aria-label="{{ __('webinar.open_navigation') }}"><i
@@ -1402,15 +1441,13 @@
                             data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">Registration Form</button>
                         <a class="btn btn-sm btn-register-nav rounded-pill px-3"
                             href="{{ route('admin.webinars.edit', $webinar) }}">{{ __('webinar.admin_edit') }}</a>
-                    @elseif(!$registrationAvailable)
-                        <span class="badge bg-secondary-subtle text-secondary border px-3 py-2 rounded-pill fw-bold">
-                            {{ $webinar->status === 'completed' ? __('webinar.concluded') : ucfirst($webinar->status) }}
-                        </span>
                     @elseif(!auth()->check())
                         <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" data-landing-login
                             data-bs-toggle="modal" data-bs-target="#micrositeLoginModal">{{ __('webinar.login') }}</button>
-                        <button type="button" class="btn btn-sm btn-register-nav rounded-pill px-3" data-bs-toggle="modal"
-                            data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
+                        @if($registrationAvailable)
+                            <button type="button" class="btn btn-sm btn-register-nav rounded-pill px-3" data-bs-toggle="modal"
+                                data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
+                        @endif
                     @elseif($isRegistered && $canEnter)
                         <a class="btn btn-sm btn-register-nav rounded-pill px-3"
                             href="{{ route('webinars.dashboard', $webinar) }}">{{ __('webinar.enter') }}</a>
@@ -1419,7 +1456,7 @@
                             data-room-waiting data-room-message="Room opens at {{ $roomOpensText }}">
                             <i class="bi bi-clock me-1"></i> Room Opens Soon
                         </button>
-                    @else
+                    @elseif($registrationAvailable)
                         <button type="button" class="btn btn-sm btn-register-nav rounded-pill px-3" data-bs-toggle="modal"
                             data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
                     @endif
@@ -1429,23 +1466,19 @@
     </header>
 
 
-    @unless($isStaffPreview)
+    @if (!$isStaffPreview && auth()->check())
         <div class="event-mobile-cta" aria-label="Primary event action">
-            @if(!$registrationAvailable)
-                <small>{{ ucfirst($webinar->status) }} event</small>
-            @elseif(!auth()->check())
-                <button type="button" class="btn btn-register-nav" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
-            @elseif($isRegistered && $canEnter)
+            @if($isRegistered && $canEnter)
                 <a class="btn btn-register-nav" href="{{ route('webinars.dashboard', $webinar) }}">{{ __('webinar.enter') }}</a>
             @elseif($isRegistered)
                 <button type="button" class="btn btn-register-nav room-waiting-button" data-room-waiting
                     data-room-message="Room opens at {{ $roomOpensText }}"><i class="bi bi-clock me-1"></i>Room Opens
                     Soon</button>
-            @else
+            @elseif($registrationAvailable)
                 <button type="button" class="btn btn-register-nav" data-bs-toggle="modal" data-bs-target="#micrositeRegisterModal">{{ __('webinar.register') }}</button>
             @endif
         </div>
-    @endunless
+    @endif
     <div class="landing-announcement-bar" id="landingAnnouncementBar"
         @if (empty($pinnedAnnouncement['enabled']) || empty($pinnedAnnouncement['message'])) style="display:none;" @endif>
         <div class="landing-announcement-inner">
@@ -2119,7 +2152,8 @@
 @endsection
 
 @section('auth-modals')
-    @if ($registrationAvailable || $isStaffPreview)
-        @include('components.frontend-auth', ['authWebinar' => $webinar])
-    @endif
+    @include('components.frontend-auth', [
+        'authWebinar' => $webinar,
+        'registrationAvailable' => $registrationAvailable || $isStaffPreview,
+    ])
 @endsection

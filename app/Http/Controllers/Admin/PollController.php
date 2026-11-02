@@ -197,7 +197,7 @@ class PollController extends Controller
             report($e);
         }
 
-        return back()->with('status', 'Poll deleted.');
+        return redirect()->route('admin.polls.index', ['webinar_id' => $webinarId])->with('status', 'Poll deleted.');
     }
 
     public function duplicate(Request $request, Poll $poll): RedirectResponse

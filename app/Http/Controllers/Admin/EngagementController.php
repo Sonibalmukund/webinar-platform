@@ -132,7 +132,7 @@ class EngagementController extends Controller
     {
         DB::table('comments')->where('webinar_id', $webinar->id)->where('id', $item)->delete();
 
-        return back()->with('success', 'Comment removed.');
+        return redirect()->route('admin.comments.show', $webinar)->with('success', 'Comment removed.');
     }
 
     public function updateFeedback(Webinar $webinar, int $item): RedirectResponse

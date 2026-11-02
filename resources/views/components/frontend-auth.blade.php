@@ -1,5 +1,8 @@
 @php
     $authReturn = $authWebinar ? route('webinars.show', $authWebinar, false) : route('home', [], false);
+    $loginFieldKey = strtolower((string) ($loginField?->field_key ?? ''));
+    $loginFieldLabel = strtolower(trim((string) ($loginField?->label ?? '')));
+    $loginIsEmail = !$loginField || $loginField?->field_type === 'email' || str_starts_with($loginFieldKey, 'email') || in_array($loginFieldLabel, ['email', 'email address'], true);
 @endphp
 <span hidden data-auth-open="{{ old('_auth_modal', request('auth')) }}">
 </span>
@@ -30,21 +33,24 @@
                             for="frontendLogin">{{ $loginField ? $loginField->label : 'Email address' }} <span
                                 class="text-danger">*</span></label><input id="frontendLogin" class="form-control"
                             name="login"
-                            type="{{ $loginField && $loginField->field_type === 'email' ? 'email' : 'text' }}"
+                            type="{{ $loginIsEmail ? 'email' : 'text' }}"
                             value="{{ old('login') }}"
                             placeholder="{{ $loginField ? ($loginField->placeholder ?: 'Enter your ' . $loginField->label) : 'you@example.com' }}"
                             autocomplete="username" required
-                            @if (!$loginField || $loginField->field_type === 'email') data-rule-email="true" @endif></div>
+                            @if ($loginIsEmail) data-rule-email="true" @endif></div>
                     <div class="col-12"><button class="btn btn-gradient w-100" type="submit">Login <i
                                 class="bi bi-arrow-right"></i></button></div>
-                    <div class="col-12 auth-modal-switch">New here? <button type="button"
-                            class="auth-modal-link" data-bs-toggle="modal"
-                            data-bs-target="#micrositeRegisterModal">Register here</button></div>
+                    @if ($registrationAvailable ?? true)
+                        <div class="col-12 auth-modal-switch">New here? <button type="button"
+                                class="auth-modal-link" data-bs-toggle="modal"
+                                data-bs-target="#micrositeRegisterModal">Register here</button></div>
+                    @endif
                 </form>
             </div>
         </div>
     </div>
 </div>
+@if ($registrationAvailable ?? true)
 <div class="modal fade microsite-auth-modal frontend-auth-modal" id="micrositeRegisterModal" tabindex="-1"
     aria-labelledby="micrositeRegisterTitle">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
@@ -211,6 +217,7 @@
         </div>
     </div>
 </div>
+@endif
 
 <style>
     .frontend-auth-modal .invalid-feedback {

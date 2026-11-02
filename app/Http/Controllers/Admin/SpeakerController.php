@@ -80,7 +80,7 @@ class SpeakerController extends Controller
     {
         $speaker->delete();
 
-        return back()->with('status', 'Speaker deleted.');
+        return redirect()->route('admin.speakers.index')->with('status', 'Speaker deleted.');
     }
 
     public function bulkDelete(Request $request): RedirectResponse
@@ -88,7 +88,7 @@ class SpeakerController extends Controller
         $ids = $request->validate(['ids' => ['required', 'array', 'min:1'], 'ids.*' => ['integer', 'exists:speakers,id']])['ids'];
         Speaker::whereIn('id', $ids)->delete();
 
-        return back()->with('status', count($ids).' speakers deleted.');
+        return redirect()->route('admin.speakers.index')->with('status', count($ids).' speakers deleted.');
     }
 
     public function toggle(Speaker $speaker): RedirectResponse

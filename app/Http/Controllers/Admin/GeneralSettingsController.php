@@ -129,7 +129,7 @@ class GeneralSettingsController extends Controller
     {
         $banner->delete();
 
-        return back()->with('status', 'Banner deleted.');
+        return redirect()->route('admin.general.banners')->with('status', 'Banner deleted.');
     }
 
     public function bulkDeleteBanners(Request $request): RedirectResponse
@@ -137,7 +137,7 @@ class GeneralSettingsController extends Controller
         $ids = $request->validate(['ids' => ['required', 'array', 'min:1'], 'ids.*' => ['integer', 'exists:banners,id']])['ids'];
         Banner::whereIn('id', $ids)->delete();
 
-        return back()->with('status', count($ids).' banners deleted.');
+        return redirect()->route('admin.general.banners')->with('status', count($ids).' banners deleted.');
     }
 
     public function toggleBanner(Banner $banner): RedirectResponse
@@ -208,7 +208,7 @@ class GeneralSettingsController extends Controller
     {
         $brand->delete();
 
-        return back()->with('status', 'Brand deleted.');
+        return redirect()->route('admin.general.brands')->with('status', 'Brand deleted.');
     }
 
     public function bulkDeleteBrands(Request $request): RedirectResponse
@@ -216,7 +216,7 @@ class GeneralSettingsController extends Controller
         $ids = $request->validate(['ids' => ['required', 'array', 'min:1'], 'ids.*' => ['integer', 'exists:brands,id']])['ids'];
         Brand::whereIn('id', $ids)->delete();
 
-        return back()->with('status', count($ids).' brands deleted.');
+        return redirect()->route('admin.general.brands')->with('status', count($ids).' brands deleted.');
     }
 
     public function toggleBrand(Brand $brand): RedirectResponse
